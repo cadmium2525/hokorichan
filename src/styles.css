@@ -1244,3 +1244,129 @@ body {
   font-size: 11px;
   color: var(--ink-soft);
 }
+
+/* 図鑑 */
+.dex__title {
+  display: flex;
+  justify-content: space-between;
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+.dex__title span {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.dex {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.dex__item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: #fffaf4;
+}
+
+.dex__item > :first-child {
+  grid-row: 1 / span 2;
+  justify-self: center;
+}
+
+.dex__item b {
+  font-size: 13px;
+}
+
+.dex__item small {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--ink-soft);
+}
+
+.dex__item--unknown {
+  background: #f4efe9;
+  color: var(--ink-soft);
+}
+
+.dex__swatch,
+.dex__gem {
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #9a86c6;
+}
+
+.dex__gem {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  transform: rotate(45deg);
+  border-color: #6b4a3a;
+}
+
+.dex__q {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #e6ddd3;
+  font-weight: 800;
+}
+
+/* 大掃除大会 */
+.poster {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px dashed #f08a9a;
+  background: #fff6f0;
+  text-align: center;
+}
+
+.poster p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.poster__title {
+  font-weight: 800;
+  font-size: 16px;
+  color: #c95f72;
+}
+
+.ranking {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ranking li {
+  display: grid;
+  grid-template-columns: 3em 1fr auto;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: #fffaf4;
+  border: 2px solid var(--line);
+  font-size: 13px;
+}
+
+.ranking .rank--you {
+  border-color: #f6d55c;
+  background: #fff6cc;
+}

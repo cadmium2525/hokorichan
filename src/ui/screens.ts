@@ -16,6 +16,8 @@ import {
   FRIEND_UNLOCK_XP,
   LAND_PRICE,
   LOST_ITEMS,
+  CONTEST,
+  PEOPLE,
   type Area,
   type DustType,
   type Hero,
@@ -27,6 +29,8 @@ import {
   bagTotal,
   bestTool,
   canBuyLand,
+  contestRanking,
+  dexProgress,
   dietRatios,
   feedableAmount,
   nextHabitat,
@@ -305,7 +309,9 @@ export function boardBody(save: SaveData, minutesToNext: number): string {
     save.habitat >= 4 && nextArea
       ? `<p class="note">★${AREA_REP[nextArea]}になると「${escapeHtml(AREA_NAMES[nextArea])}」を紹介してもらえる</p>`
       : '';
+  const poster = save.events.includes('contestNotice') ? contestPoster(save) : '';
   return `
+    ${poster}
     <div class="rep">評判 <b>★${save.rep}</b></div>
     ${list || '<p class="note">いまは依頼がないみたい</p>'}
     ${next}${unlock}`;
@@ -318,4 +324,63 @@ export function landBody(save: SaveData): string {
     <div class="story"><div class="story__who">${heroSprite(save.hero ?? 'boy', 'sprite sprite--lg')}</div>
       <div class="bubble">「売地」の看板。<br>空き地とコンテナのセットで <b>${LAND_PRICE}コイン</b>。<br>ここなら、ほこりちゃんがのびのび暮らせる！</div></div>
     <p class="note">持っているコイン：${save.coins}${canBuyLand(save) ? '' : `（あと${Math.max(0, LAND_PRICE - save.coins)}）`}</p>`;
+}
+
+// ---- 図鑑 ----
+
+export function dexBody(save: SaveData): string {
+  const p = dexProgress(save);
+  const unknown = '<span class="dex__q">？</span>';
+  const dust = DUST_TYPES.map((t) => {
+    const known = save.dex.dust.includes(t);
+    const d = DUSTS[t];
+    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+      ${known ? `<i class="dex__swatch" style="background:${d.colors[0]};box-shadow:inset -3px -3px 0 ${d.colors[1]}"></i>` : unknown}
+      <b>${known ? escapeHtml(d.name) : '？？？'}</b><small>${known ? `毛並み「${escapeHtml(d.trait)}」` : 'まだ見ていない'}</small></div>`;
+  }).join('');
+  const items = LOST_ITEMS.map((it) => {
+    const known = save.dex.items.includes(it.id);
+    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+      ${known ? `<i class="dex__gem" style="background:${it.color}"></i>` : unknown}
+      <b>${known ? escapeHtml(it.name) : '？？？'}</b><small>${known ? '持ち主に届けた' : '依頼で見つかる'}</small></div>`;
+  }).join('');
+  const people = PEOPLE.map((person) => {
+    const known = save.dex.people.includes(person.id);
+    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+      ${known ? characterSprite(person.id, 'sprite sprite--sm') : unknown}
+      <b>${known ? escapeHtml(person.name) : '？？？'}</b><small>${known ? escapeHtml(person.note) : 'まだ会っていない'}</small></div>`;
+  }).join('');
+  const section = (title: string, [n, max]: [number, number], body: string) =>
+    `<h3 class="dex__title">${title}<span>${n} / ${max}</span></h3><div class="dex">${body}</div>`;
+  const best = save.contestBest > 0 ? `<p class="note">大掃除大会の自己ベスト：${save.contestBest}個${save.events.includes('contestWon') ? '（町の清掃係）' : ''}</p>` : '';
+  return section('ホコリ', p.dust, dust) + section('落とし物', p.items, items) + section('町の人', p.people, people) + best;
+}
+
+// ---- 大掃除大会 ----
+
+export function contestPoster(save: SaveData): string {
+  const won = save.events.includes('contestWon');
+  const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+  return `
+    <div class="poster">
+      <div class="poster__title">町内会 大掃除大会</div>
+      <p>${CONTEST.seconds}秒で、商店街通りのホコリをいちばん多く集めたチームが優勝！<br>風でホコリが次々に飛んでくるよ。ほこりちゃんも一緒に出られる。</p>
+      <p class="note">いちばん強い「${escapeHtml(CONTEST.rivals[CONTEST.rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}</p>
+      <button type="button" class="btn btn--primary" data-action="enterContest"><span class="btn__label">${won ? 'もう一度出る' : '出場する'}</span><span class="btn__sub">${won ? '自己ベストに挑戦' : '何度でも出られる'}</span></button>
+    </div>`;
+}
+
+export function contestResultBody(opts: { hero: Hero; score: number; rank: number; prize: number; won: boolean; best: boolean }): string {
+  const rows = contestRanking(opts.score)
+    .map((e, i) => `<li class="${e.you ? 'rank--you' : ''}"><span>${i + 1}位</span><b>${escapeHtml(e.name)}</b><span>${e.score}個</span></li>`)
+    .join('');
+  return `
+    <div class="allowance">
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: opts.won ? 'joy' : 'idle' })}
+      <div class="allowance__coin">+${opts.prize}</div>
+      ${characterSprite('grandma', 'sprite sprite--lg', { pose: 'give', flip: true })}
+    </div>
+    <div class="bubble bubble--mother">町内会長「${opts.won ? '優勝はほこりちゃんチーム！ おめでとう！' : `${opts.rank}位！ よくがんばったわね。またいつでも出てちょうだい`}」</div>
+    <ol class="ranking">${rows}</ol>
+    ${opts.best ? '<p class="note">自己ベスト更新！</p>' : ''}`;
 }

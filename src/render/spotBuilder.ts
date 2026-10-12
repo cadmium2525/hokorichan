@@ -520,6 +520,145 @@ function shopLayout(kind: 'flower' | 'bakery' | 'grandma', seed: number): SpotLa
   };
 }
 
+// ---- 2章の山場：大掃除大会の会場（商店街通り） ----
+
+function bannerTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(96, 16);
+  ctx.fillStyle = '#fff6e8';
+  ctx.fillRect(0, 0, 96, 16);
+  ctx.fillStyle = '#f08a9a';
+  ctx.fillRect(0, 0, 96, 2);
+  ctx.fillRect(0, 14, 96, 2);
+  ctx.fillStyle = '#6b4a3a';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('町内会 大掃除大会', 48, 8.5);
+  return toTexture(canvas);
+}
+
+function shopFrontTexture(color: string): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(32, 32);
+  ctx.fillStyle = '#f8e3cc';
+  ctx.fillRect(0, 0, 32, 32);
+  // ひさし
+  for (let x = 0; x < 32; x += 4) {
+    ctx.fillStyle = (x / 4) % 2 === 0 ? color : '#fffaf2';
+    ctx.fillRect(x, 6, 4, 5);
+  }
+  // 窓と入口
+  ctx.fillStyle = '#bfe3f6';
+  ctx.fillRect(3, 14, 12, 9);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(4, 15, 3, 1);
+  ctx.fillStyle = '#b8754f';
+  ctx.fillRect(19, 13, 9, 19);
+  ctx.fillStyle = '#a0644a';
+  ctx.fillRect(19, 13, 9, 1);
+  ctx.fillStyle = '#f6d55c';
+  ctx.fillRect(26, 22, 1, 2);
+  return toTexture(canvas);
+}
+
+function contestLayout(seed: number): SpotLayout {
+  const g = new THREE.Group();
+  const half = 4.2;
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, ry = 0) => {
+    obj.position.set(x, 0, z);
+    obj.rotation.y += ry;
+    g.add(obj);
+    blockers.push(blockerOf(obj));
+  };
+  // 石だたみの通り
+  const ground = box(half * 2, 0.3, half * 2, [
+    lambert({ color: '#b8a48e' }),
+    lambert({ color: '#b8a48e' }),
+    lambert({ map: tileFloor(['#e8d6c0', '#dcc6ac'], 8) }),
+    lambert({ color: '#b8a48e' }),
+    lambert({ color: '#b8a48e' }),
+    lambert({ color: '#b8a48e' }),
+  ]);
+  ground.position.y = -0.15;
+  g.add(ground);
+  // 奥と左に商店の並び（低めの壁にして中が見えるように）
+  const colors = ['#f08a9a', '#7fb77e', '#e8a868', '#a9b8f0'];
+  for (let i = 0; i < 4; i++) {
+    const front = frontBox(2.1, 2.2, 0.4, lambert({ color: '#f2cbb0' }), lambert({ map: shopFrontTexture(colors[i]) }));
+    front.position.set(-half + 1.05 + i * 2.1, 1.1, -half - 0.2);
+    g.add(front);
+  }
+  for (let i = 0; i < 4; i++) {
+    const front = frontBox(2.1, 2.2, 0.4, lambert({ color: '#f2cbb0' }), lambert({ map: shopFrontTexture(colors[(i + 2) % 4]) }));
+    front.rotation.y = Math.PI / 2;
+    front.position.set(-half - 0.2, 1.1, -half + 1.05 + i * 2.1);
+    g.add(front);
+  }
+  // 横断幕のアーチ
+  const poleMat = lambert({ color: PALETTE.woodDark });
+  for (const x of [-2.6, 2.6]) {
+    const pole = box(0.12, 2.4, 0.12, poleMat);
+    pole.position.set(x, 1.2, -half + 0.9);
+    const p = new THREE.Group();
+    p.add(pole);
+    place(p, 0, 0);
+  }
+  const banner = box(5.0, 0.6, 0.06, [poleMat, poleMat, poleMat, poleMat, lambert({ map: bannerTexture() }), poleMat]);
+  banner.position.set(0, 2.1, -half + 0.9);
+  g.add(banner);
+  // ベンチ・プランター・審査員のテント
+  const bench = () => {
+    const b = new THREE.Group();
+    const seat = box(1.4, 0.08, 0.45, lambert({ map: woodTexture(seed, PALETTE.wood) }));
+    seat.position.y = 0.42;
+    b.add(seat);
+    for (const x of [-0.55, 0.55]) {
+      const leg = box(0.08, 0.42, 0.4, lambert({ color: '#7d6a5a' }));
+      leg.position.set(x, 0.21, 0);
+      b.add(leg);
+    }
+    return b;
+  };
+  place(bench(), 1.2, -2.6);
+  place(bench(), -2.9, 1.0, Math.PI / 2);
+  for (const [x, z, i] of [[-3.4, -3.4, 0], [3.4, -3.3, 1], [3.3, 3.2, 2]] as const) place(plant(seed + 30 + i).object, x, z);
+  const tent = new THREE.Group();
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.6, 4), lambert({ color: '#f6d55c', flatShading: true }));
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 1.9;
+  tent.add(roof);
+  for (const [x, z] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) {
+    const leg = box(0.06, 1.6, 0.06, lambert({ color: '#ffffff' }));
+    leg.position.set(x, 0.8, z);
+    tent.add(leg);
+  }
+  const table = box(1.2, 0.08, 0.5, lambert({ color: '#ffffff' }));
+  table.position.y = 0.7;
+  tent.add(table);
+  place(tent, 2.6, 1.0);
+  // コーン
+  for (const [x, z] of [[-1.2, 3.4], [0.4, 3.5]]) {
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 8), lambert({ color: '#f2635a' }));
+    cone.position.y = 0.2;
+    const c = new THREE.Group();
+    c.add(cone);
+    place(c, x, z);
+  }
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.4, 0, -half - 0.4), new THREE.Vector3(half, 2.6, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
+/** 大会の会場 */
+export function buildContest(seed: number): SpotLayout {
+  return contestLayout(seed);
+}
+
 export function buildSpot(id: SpotId, seed: number): SpotLayout {
   switch (id) {
     case 'window':

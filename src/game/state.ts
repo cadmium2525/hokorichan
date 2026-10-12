@@ -6,11 +6,15 @@ import {
   AREA_NAMES,
   AREA_REP,
   COLLECT_LINES,
+  CONTEST,
+  CONTEST_REP,
+  CONTEST_XP,
   DUST_TYPES,
   FRIEND_UNLOCK_XP,
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  PERSON_IDS,
   SHAPE_LIMITS,
   SPOT_IDS,
   SPOT_READY_RATIO,
@@ -22,6 +26,7 @@ import {
   type DustType,
   type Habitat,
   type Hero,
+  type PersonId,
   type PetShape,
   type SpotDef,
   type SpotId,
@@ -29,7 +34,7 @@ import {
   type ToolId,
 } from './catalog.ts';
 
-export const SAVE_VERSION = 4 as const;
+export const SAVE_VERSION = 5 as const;
 
 /** 場所ごとの積もり具合。at の時点で fullness（0〜1）だった */
 export type SpotState = { fullness: number; at: number };
@@ -55,7 +60,21 @@ export type Request = {
 };
 
 /** 一度だけ起きる出来事（見たら記録） */
-export type EventId = 'town' | 'friend' | 'board' | 'landMeeting' | 'container' | 'street' | 'together';
+export type EventId =
+  | 'town'
+  | 'friend'
+  | 'board'
+  | 'landMeeting'
+  | 'container'
+  | 'street'
+  | 'together'
+  | 'contestNotice'
+  | 'contestWon';
+
+export const EVENT_IDS: readonly EventId[] = ['town', 'friend', 'board', 'landMeeting', 'container', 'street', 'together', 'contestNotice', 'contestWon'];
+
+/** 図鑑：見つけたホコリ・落とし物・出会った人 */
+export type Dex = { dust: DustType[]; items: string[]; people: PersonId[] };
 
 export type SaveData = {
   version: typeof SAVE_VERSION;
@@ -84,6 +103,9 @@ export type SaveData = {
   requestClock: number;
   requestSeq: number;
   events: EventId[];
+  dex: Dex;
+  /** 大掃除大会の自己ベスト（集めた数） */
+  contestBest: number;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -133,6 +155,8 @@ export function createInitialSave(): SaveData {
     requestClock: 0,
     requestSeq: 0,
     events: [],
+    dex: { dust: [], items: [], people: [] },
+    contestBest: 0,
   };
 }
 
@@ -144,6 +168,57 @@ export function hasEvent(save: SaveData, id: EventId): boolean {
 
 export function addEvent(save: SaveData, id: EventId): SaveData {
   return hasEvent(save, id) ? save : { ...save, events: [...save.events, id] };
+}
+
+// ---- 図鑑 ----
+
+export type DexKind = keyof Dex;
+
+/** 図鑑に記録する。はじめて載ったら added=true */
+export function dexAdd<K extends DexKind>(save: SaveData, kind: K, id: Dex[K][number]): { save: SaveData; added: boolean } {
+  const list = save.dex[kind] as string[];
+  if (list.includes(id)) return { save, added: false };
+  return { save: { ...save, dex: { ...save.dex, [kind]: [...list, id] } }, added: true };
+}
+
+export function dexProgress(save: SaveData): { dust: [number, number]; items: [number, number]; people: [number, number] } {
+  return {
+    dust: [save.dex.dust.length, DUST_TYPES.length],
+    items: [save.dex.items.length, LOST_ITEMS.length],
+    people: [save.dex.people.length, PERSON_IDS.length],
+  };
+}
+
+// ---- 2章の山場：大掃除大会 ----
+
+/** 大会のおしらせを出すころか */
+export function contestDue(save: SaveData): boolean {
+  return chapter(save) === 2 && save.growthXp >= CONTEST_XP && save.rep >= CONTEST_REP && !hasEvent(save, 'contestNotice');
+}
+
+export type ContestEntry = { name: string; score: number; you: boolean };
+
+/** 順位表。同点ならほかのチームが上（追いつくだけでは勝てない） */
+export function contestRanking(score: number, youName = 'ほこりちゃんチーム'): ContestEntry[] {
+  const rivals = CONTEST.rivals.map((r) => ({ name: r.name, score: r.score, you: false }));
+  const list = [...rivals, { name: youName, score, you: true }];
+  return list.sort((a, b) => b.score - a.score || (a.you ? 1 : 0) - (b.you ? 1 : 0));
+}
+
+/** 大会の結果を反映する。賞金・自己ベスト・初優勝（評判と出来事） */
+export function contestResult(
+  save: SaveData,
+  score: number,
+): { save: SaveData; rank: number; prize: number; won: boolean; firstWin: boolean; best: boolean } {
+  const s = Math.max(0, Math.min(Math.floor(score), CONTEST.maxScore));
+  const ranking = contestRanking(s);
+  const rank = ranking.findIndex((e) => e.you) + 1;
+  const prize = CONTEST.prizes[rank - 1] ?? 0;
+  const won = rank === 1;
+  const firstWin = won && !hasEvent(save, 'contestWon');
+  let next: SaveData = { ...save, coins: save.coins + prize, contestBest: Math.max(save.contestBest, s) };
+  if (firstWin) next = addEvent({ ...next, rep: next.rep + CONTEST.winRep }, 'contestWon');
+  return { save: next, rank, prize, won, firstWin, best: s > save.contestBest };
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
@@ -378,7 +453,7 @@ export function finishSpot(save: SaveData, def: SpotDef, remaining: number, now:
 }
 
 /** 場所の割合にしたがって、ホコリ1個ずつの種類を決める */
-export function rollDustTypes(def: SpotDef, count: number, random: () => number): DustType[] {
+export function rollDustTypes(def: Pick<SpotDef, 'dust'>, count: number, random: () => number): DustType[] {
   const entries = DUST_TYPES.filter((t) => (def.dust[t] ?? 0) > 0).map((t) => [t, def.dust[t] as number] as const);
   const total = entries.reduce((s, [, w]) => s + w, 0);
   const out: DustType[] = [];
@@ -555,7 +630,8 @@ export function petDisplaySize(xp: number, habitat: Habitat, damp: boolean): num
 
 export type CleaningSession = {
   id: number;
-  spot: SpotId;
+  /** 'contest' は大掃除大会（場所の積もり具合には数えない） */
+  spot: SpotId | 'contest';
   rewardBase: number;
   total: number;
   /** ホコリ1個ずつの種類 */
@@ -566,7 +642,7 @@ export type CleaningSession = {
   startedAt: number;
 };
 
-export function createSession(id: number, def: SpotDef, types: DustType[], startedAt = 0): CleaningSession {
+export function createSession(id: number, def: { id: SpotId | 'contest'; rewardBase: number }, types: DustType[], startedAt = 0): CleaningSession {
   return {
     id,
     spot: def.id,

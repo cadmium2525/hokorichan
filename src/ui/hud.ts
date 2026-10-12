@@ -40,6 +40,10 @@ const ICONS = {
     ['....a...', '...aa...', 'aaaaab.b', 'aaaaa.b.', 'aaaaa.b.', 'aaaaab.b', '...aa...', '....a...'],
     { a: '#5a4636', b: '#b0a0a0' },
   ),
+  dex: pixelIcon(
+    ['aaaaaaa.', 'abbbbba.', 'abccbba.', 'abbbbba.', 'abccbba.', 'abbbbba.', 'aaaaaaa.', '.dddddd.'],
+    { a: '#5a4636', b: '#f6d55c', c: '#a0644a', d: '#b0a0a0' },
+  ),
   help: pixelIcon(
     ['..aaaa..', '.aa..aa.', '.....aa.', '....aa..', '...aa...', '...aa...', '........', '...aa...'],
     { a: '#5a4636' },
@@ -79,6 +83,7 @@ export class Hud {
             <div class="pill" data-ref="bagPill" aria-label="バッグのホコリ">${ICONS.bag}<span data-ref="bag">0</span></div>
             <div class="spacer"></div>
             <button type="button" class="icon-btn" data-action="sound" data-ref="sound" aria-label="音のON/OFF"></button>
+            <button type="button" class="icon-btn" data-action="dex" aria-label="図鑑">${ICONS.dex}</button>
             <button type="button" class="icon-btn" data-action="help" aria-label="遊び方">${ICONS.help}</button>
           </div>
           <div class="status" data-ref="status"></div>
@@ -129,7 +134,7 @@ export class Hud {
   }
 
   setCleaningStatus(title: string, collected: number, total: number, required: number): void {
-    const pct = total > 0 ? (collected / total) * 100 : 0;
+    const pct = total > 0 ? Math.min(100, (collected / total) * 100) : 0;
     const goal = total > 0 ? (required / total) * 100 : 80;
     const done = collected >= required;
     this.el.status.innerHTML = `

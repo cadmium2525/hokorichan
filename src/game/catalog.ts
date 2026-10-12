@@ -204,3 +204,51 @@ export const SHAPE_PRESETS: ReadonlyArray<{ name: string; shape: PetShape }> = [
   { name: 'たまご', shape: { width: 0.82, height: 1.25, fluff: 0.8 } },
   { name: 'もっふもふ', shape: { width: 1.08, height: 1.05, fluff: 1.8 } },
 ];
+
+// ---- 2章の山場：町内会の大掃除大会 ----
+
+/** 大会のおしらせが来る条件（2章で、ほこりちゃんがこれだけ育ち、評判もたまったら） */
+export const CONTEST_XP = 600;
+export const CONTEST_REP = 8;
+
+export type Rival = { name: string; score: number };
+
+export const CONTEST = {
+  /** 制限時間（秒） */
+  seconds: 75,
+  /** はじめに通りに散らばっているホコリの数 */
+  dust: 30,
+  /** 残りがこれより減ると、風で次のホコリが飛んでくる */
+  refillBelow: 12,
+  refill: 10,
+  /** 点数の上限（保存データの丸め用） */
+  maxScore: 999,
+  mix: { cotton: 4, sand: 3, pollen: 2, fur: 2, flour: 1, lint: 1 } as Partial<Record<DustType, number>>,
+  /** ほかのチーム（点数は制限時間内に集めたホコリの数）。いちばん上を超えれば優勝 */
+  rivals: [
+    { name: '八百屋さんチーム', score: 40 },
+    { name: '小学校のPTA', score: 60 },
+    { name: '町内会 青年部', score: 80 },
+  ] as readonly Rival[],
+  /** 順位ごとの賞金（1位〜4位） */
+  prizes: [300, 120, 80, 50] as const,
+  /** 初優勝でもらえる評判 */
+  winRep: 3,
+};
+
+// ---- 図鑑 ----
+
+/** 図鑑に載る町の人 */
+export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma';
+
+export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }> = [
+  { id: 'mother', name: 'お母さん', note: 'お小遣いをくれる。空き地の購入をすすめた' },
+  { id: 'shopkeeper', name: '店員さん', note: '道具もケースもアクセサリーも売っている' },
+  { id: 'friend', name: '友だち', note: '猫を飼っている。ほこりちゃんに興味しんしん' },
+  { id: 'friendMom', name: '友だちのお母さん', note: '玄関の砂ぼこりに困っている' },
+  { id: 'florist', name: '花屋さん', note: '花粉で新しい品種をつくりたい' },
+  { id: 'baker', name: 'パン屋さん', note: '粉ぼこりはパンのせい' },
+  { id: 'grandma', name: 'おばあちゃん', note: '猫5匹と暮らす。じつは町内会長' },
+];
+
+export const PERSON_IDS: readonly PersonId[] = PEOPLE.map((p) => p.id);

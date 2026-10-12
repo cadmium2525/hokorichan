@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { CONTEST, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
+  contestDue,
+  contestRanking,
+  contestResult,
+  dexAdd,
+  dexProgress,
   bestTool,
   buyAccessory,
   buyHabitat,
@@ -297,4 +302,49 @@ test('依頼は時間で届き最大3件。種類指定はバッグのホコリ�
   assert.equal(done.save.coins, 30);
   assert.equal(done.save.rep, 1);
   assert.equal(done.save.requests.length, 0);
+});
+
+test('大会のおしらせは2章・成長・評判がそろってから一度だけ', () => {
+  const base = { ...createInitialSave(), habitat: 4 as const, growthXp: CONTEST_XP, rep: CONTEST_REP };
+  assert.equal(contestDue(base), true);
+  assert.equal(contestDue({ ...base, habitat: 3 }), false);
+  assert.equal(contestDue({ ...base, growthXp: CONTEST_XP - 1 }), false);
+  assert.equal(contestDue({ ...base, rep: CONTEST_REP - 1 }), false);
+  assert.equal(contestDue(addEvent(base, 'contestNotice')), false);
+});
+
+test('大会：同点ではライバルが上、超えれば優勝。初優勝だけ評判が増える', () => {
+  const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+  assert.equal(contestRanking(top)[0].you, false);
+  assert.equal(contestRanking(top + 1)[0].you, true);
+  const s0 = { ...createInitialSave(), coins: 10, rep: 8 };
+  const lose = contestResult(s0, 0);
+  assert.equal(lose.rank, 4);
+  assert.equal(lose.save.coins, 10 + CONTEST.prizes[3]);
+  assert.equal(lose.won, false);
+  const win = contestResult(s0, top + 1);
+  assert.equal(win.rank, 1);
+  assert.equal(win.firstWin, true);
+  assert.equal(win.save.rep, 8 + CONTEST.winRep);
+  assert.equal(win.save.contestBest, top + 1);
+  assert.ok(win.save.events.includes('contestWon'));
+  const again = contestResult(win.save, top + 2);
+  assert.equal(again.firstWin, false);
+  assert.equal(again.save.rep, win.save.rep);
+  assert.equal(again.best, true);
+  // 範囲外の点数は丸める
+  assert.equal(contestResult(s0, 9999).save.contestBest, CONTEST.maxScore);
+});
+
+test('図鑑は同じものを二度載せない', () => {
+  let s = createInitialSave();
+  const a = dexAdd(s, 'dust', 'pollen');
+  assert.equal(a.added, true);
+  s = a.save;
+  const b = dexAdd(s, 'dust', 'pollen');
+  assert.equal(b.added, false);
+  assert.equal(b.save, s);
+  s = dexAdd(s, 'people', 'grandma').save;
+  assert.deepEqual(dexProgress(s).dust, [1, 6]);
+  assert.equal(dexProgress(s).people[0], 1);
 });

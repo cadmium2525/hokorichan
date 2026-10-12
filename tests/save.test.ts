@@ -47,7 +47,7 @@ test('データなし・壊れたJSON・ストレージ無しは初期値', () =
 test('v1のデータはケース・掃除機を持った状態で引き継ぐ', () => {
   const v1 = { version: 1, coins: 50, dustBag: 3, growthXp: 40, caseLevel: 2, damp: false, cleanedSessions: 4, soundEnabled: false, tutorialDone: true };
   const s = sanitize(v1);
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.equal(s.bag.cotton, 3);
   assert.equal(s.coins, 50);
   assert.equal(s.growthXp, 40);
@@ -60,7 +60,7 @@ test('v1のデータはケース・掃除機を持った状態で引き継ぐ', 
 
 test('v2のデータはまちの説明・友だちイベントを未読にして引き継ぐ', () => {
   const s = sanitize({ version: 2, coins: 7, dustBag: 9, growthXp: 45, habitat: 1, hero: 'boy', tutorialDone: true });
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.equal(s.coins, 7);
   assert.equal(s.growthXp, 45);
   assert.equal(s.hero, 'boy');
@@ -70,7 +70,7 @@ test('v2のデータはまちの説明・友だちイベントを未読にして
 
 test('v3のデータはバッグと食べた量を綿ぼこりとして、既読イベントを引き継ぐ', () => {
   const s = sanitize({ version: 3, coins: 1, dustBag: 12, growthXp: 80, habitat: 2, townIntroDone: true, friendIntroDone: false });
-  assert.equal(s.version, 4);
+  assert.equal(s.version, 5);
   assert.equal(s.bag.cotton, 12);
   assert.equal(s.diet.cotton, 80);
   assert.deepEqual(s.events, ['town']);
@@ -136,4 +136,26 @@ test('読み書きで例外が出てもゲームは止まらない', () => {
   };
   assert.deepEqual(loadSave(throwing), createInitialSave());
   assert.equal(writeSave(createInitialSave(), throwing), false);
+});
+
+test('v4のデータは図鑑を分かっていることから埋め、大会の記録は0から', () => {
+  const s = sanitize({
+    version: 4,
+    tutorialDone: true,
+    bag: { pollen: 2 },
+    diet: { cotton: 40, sand: 3 },
+    rep: 5,
+    events: ['town', 'friend', 'street'],
+  });
+  assert.equal(s.version, 5);
+  assert.deepEqual([...s.dex.dust].sort(), ['cotton', 'pollen', 'sand']);
+  assert.deepEqual(s.dex.people, ['mother', 'shopkeeper', 'friend', 'friendMom', 'florist', 'baker']);
+  assert.deepEqual(s.dex.items, []);
+  assert.equal(s.contestBest, 0);
+});
+
+test('図鑑と大会記録の不正値は捨てる', () => {
+  const s = sanitize({ version: 5, dex: { dust: ['cotton', 'gold', 'cotton'], items: ['ring', 'ufo'], people: 'all' }, contestBest: -3 });
+  assert.deepEqual(s.dex, { dust: ['cotton'], items: ['ring'], people: [] });
+  assert.equal(s.contestBest, 0);
 });

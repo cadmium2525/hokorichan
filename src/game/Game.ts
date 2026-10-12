@@ -4,7 +4,7 @@
 import { petTint } from '../render/hokorichan.ts';
 import type { CharacterId } from '../render/pixelCharacters.ts';
 import { PixelRenderer } from '../render/pixelRenderer.ts';
-import { buildSpot } from '../render/spotBuilder.ts';
+import { buildContest, buildSpot } from '../render/spotBuilder.ts';
 import type { BuildingId } from '../render/townBuilder.ts';
 import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene, type PetView } from '../scenes/PetScene.ts';
@@ -13,6 +13,8 @@ import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
 import {
   boardBody,
+  contestResultBody,
+  dexBody,
   feedBody,
   heroSelectBody,
   landBody,
@@ -29,12 +31,14 @@ import {
   ACCESSORY_IDS,
   AREA_NAMES,
   AREA_REP,
+  CONTEST,
   DUST_TYPES,
   DUSTS,
   FRIEND_UNLOCK_XP,
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  PERSON_IDS,
   SHAPE_PRESETS,
   spotDef,
   SPOT_IDS,
@@ -43,6 +47,7 @@ import {
   type Area,
   type DustType,
   type Hero,
+  type PersonId,
   type PetShape,
   type SpotDef,
   type SpotId,
@@ -66,9 +71,12 @@ import {
   claimReward,
   collectDust,
   completeRequest,
+  contestDue,
+  contestResult,
   createSession,
   dampChance,
   deliverRequest,
+  dexAdd,
   dietRatios,
   dry,
   feed,
@@ -173,6 +181,35 @@ const STREET_INTRO: StoryStep[] = [
   { speaker: 'narration', text: '南の<b>商店街</b>に行けるようになった！<br>掲示板の依頼をこなして評判を上げると、ほかのお店も紹介してもらえるよ。', button: 'わかった' },
 ];
 
+/** 2章の山場：大会のおしらせ（おばあちゃんは町内会長） */
+const CONTEST_NOTICE: StoryStep[] = [
+  {
+    speaker: 'grandma',
+    text: '町内会長のわたしから、おしらせよ。<br>こんど商店街で<b>町内会の大掃除大会</b>をやるの。ほこりちゃんと一緒に出てみない？',
+    button: '出たい！',
+  },
+  {
+    speaker: 'narration',
+    text: '<b>掲示板</b>から大掃除大会に出られるよ。<br>' + CONTEST.seconds + '秒で、いちばん多くホコリを集めたチームが優勝！ 何度でも挑戦できる。',
+    button: 'わかった',
+  },
+];
+
+const CONTEST_WIN: StoryStep[] = [
+  {
+    speaker: 'grandma',
+    text: '優勝はほこりちゃんチーム！<br>町内会長として、あなたを<b>「町の清掃係」</b>に任命します。',
+    button: 'つつしんで！',
+  },
+  { speaker: 'florist', text: '町の清掃係さん、これからもよろしくね。花粉もよろしくね。', button: 'はい！' },
+  { speaker: 'mother', text: 'まあ、清掃係ですって。えらいわね。<br>でも宿題もちゃんとするのよ。', button: 'はーい' },
+  {
+    speaker: 'narration',
+    text: '評判★+' + CONTEST.winRep + '！ <b>町の清掃係</b>になった。<br>（2章 ご近所編 おしまい。3章「まち編」は準備中）',
+    button: 'やったー！',
+  },
+];
+
 const TOOL_HINT: Record<ToolId, string> = {
   hand: '指でなぞってホコリをつまもう',
   rag: 'なぞってぞうきんで拭き取ろう',
@@ -181,6 +218,9 @@ const TOOL_HINT: Record<ToolId, string> = {
 };
 
 /** 掃除場所のある建物 */
+/** お小遣いをくれる人（図鑑用） */
+const RESULT_GIVER: Record<Area, PersonId> = { home: 'mother', friend: 'friendMom', flower: 'florist', bakery: 'baker', grandma: 'grandma' };
+
 const AREA_BUILDING: Record<Area, BuildingId> = { home: 'home', friend: 'friend', flower: 'flower', bakery: 'bakery', grandma: 'grandma' };
 
 const BUILDING_IDS: readonly BuildingId[] = ['home', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma', 'board'];
@@ -189,6 +229,10 @@ export class Game {
   private save: SaveData;
   private mode: Mode = 'BOOT';
   private overlay: Overlay = 'none';
+  /** 大掃除大会の最中なら開始時刻 */
+  private contest: { startedAt: number; lastLeft: number } | null = null;
+  /** 大会で初優勝した（戻ったら任命のお話） */
+  private contestFirstWin = false;
   private readonly hud: Hud;
   private readonly renderer: PixelRenderer;
   private readonly sound: Sound;
@@ -282,11 +326,22 @@ export class Game {
       this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), HABITATS[s.habitat].name, s.damp);
       this.hud.setActions(this.homeButtons());
     } else if (this.mode === 'TOWN') {
-      this.hud.setTownStatus(`評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
+      this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
       this.hud.setActions([
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
         { action: 'walkHome', label: s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
+    } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session && this.contest) {
+      const sess = this.session;
+      const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+      // バーは「優勝ライン（いちばん強いチーム＋1）」までの進み具合
+      this.hud.setCleaningStatus(`大掃除大会 ⏱ のこり${this.contestLeft()}秒`, sess.collected.size, top + 1, top + 1);
+      const buttons: ButtonSpec[] = [];
+      if (this.cleaning?.hasHelper && helperStats(s).sneeze) {
+        buttons.push({ action: 'sneeze', label: 'くしゃみ！', sub: this.sneezeLeft ? '1回だけ広く吸い込む' : 'つかった', variant: 'accent', disabled: !this.sneezeLeft });
+      }
+      buttons.push({ action: 'goHome', label: 'やめる', sub: '賞金なし', variant: 'secondary' });
+      this.hud.setActions(buttons);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
       const sess = this.session;
       const need = requiredCount(sess);
@@ -373,6 +428,7 @@ export class Game {
     const s = this.save;
     if (becameDamp) this.hud.toast('お留守番中に湿気でしっとり…「乾燥させる」でふかふかに！', 3200);
     else if (landMeetingDue(s)) this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
+    else if (contestDue(s)) this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
@@ -410,6 +466,8 @@ export class Game {
       this.runStory(STREET_INTRO, '商店街', () => this.commit(addEvent(this.save, 'street')));
     } else if (landMeetingDue(this.save)) {
       this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
+    } else if (contestDue(this.save)) {
+      this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
     }
   }
 
@@ -548,6 +606,83 @@ export class Game {
     this.refreshHud();
   }
 
+  private contestLeft(): number {
+    if (!this.contest) return 0;
+    return Math.max(0, Math.ceil(CONTEST.seconds - (this.now - this.contest.startedAt) / 1000));
+  }
+
+  /** 大掃除大会：商店街通りで制限時間内にできるだけ集める */
+  private startContest(): void {
+    this.closeModal();
+    this.clearScenes();
+    this.sessionCount++;
+    const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
+    this.pendingDamp = false;
+    this.lostRequestId = null;
+    this.speedRequestId = null;
+    const tool = bestTool(this.save);
+    const types = rollDustTypes({ dust: CONTEST.mix }, CONTEST.dust, createRandom(seed ^ 0x51ed));
+    const together = canCleanTogether(this.save);
+    const stats = helperStats(this.save);
+    this.sneezeLeft = together && stats.sneeze;
+    const view = this.petView();
+    const scene = new CleaningScene({
+      seed,
+      dustCount: CONTEST.dust,
+      dustTypes: types,
+      layout: buildContest(seed),
+      tool,
+      hero: this.hero,
+      element: this.hud.canvas,
+      helper: together ? { accessory: view.accessory, shape: view.shape, tint: view.tint, speedMul: stats.speedMul, radiusMul: stats.radiusMul } : undefined,
+      onCollect: (id) => this.onCollect(id),
+      onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),
+    });
+    this.session = createSession(this.sessionCount, { id: 'contest', rewardBase: 0 }, types.slice(0, scene.dustTotal), this.now);
+    this.spot = null;
+    this.contest = { startedAt: this.now, lastLeft: CONTEST.seconds };
+    this.cleaning = scene;
+    this.mode = 'CLEANING';
+    this.autoFinishTimer = 0;
+    this.setScene(scene);
+    this.syncInput();
+    this.sound.play('happy');
+    this.hud.hint(`よーい、スタート！\n${CONTEST.seconds}秒でたくさん集めよう`);
+    this.refreshHud();
+  }
+
+  /** 風に運ばれて、次のホコリが通りに飛んでくる */
+  private refillContest(): void {
+    const session = this.session;
+    if (!session || !this.cleaning) return;
+    const seed = session.total * 7919 + this.sessionCount;
+    const types = rollDustTypes({ dust: CONTEST.mix }, CONTEST.refill, createRandom(seed));
+    const n = this.cleaning.spawnDust(types, seed);
+    session.types.push(...types.slice(0, n));
+    session.total = session.types.length;
+    if (n > 0 && session.total <= CONTEST.dust + CONTEST.refill) this.hud.toast('風に乗って、ホコリが飛んできた！', 1600);
+  }
+
+  private endContest(): void {
+    const session = this.session;
+    if (!session || this.mode !== 'CLEANING' || !this.contest) return;
+    this.mode = 'RESULT';
+    this.cleaning?.setInputEnabled(false);
+    this.sound.stopHum();
+    this.sound.play('reward');
+    const score = session.collected.size;
+    const r = contestResult(this.save, score);
+    this.contestFirstWin = r.firstWin;
+    this.commit(r.save);
+    this.hud.bump('coins');
+    this.openOverlay('result', {
+      title: r.won ? '優勝！' : '大会おわり',
+      className: 'modal--result',
+      body: contestResultBody({ hero: this.hero, score, rank: r.rank, prize: r.prize, won: r.won, best: r.best }),
+      buttons: [{ action: 'resultHome', label: r.firstWin ? '表彰式へ' : 'もどる', variant: 'primary' }],
+    });
+  }
+
   private onCollect(id: number): void {
     const session = this.session;
     if (!session || this.mode !== 'CLEANING') return;
@@ -555,9 +690,12 @@ export class Game {
     if (!type) return;
     this.hud.hint(null);
     this.sound.play('collect');
-    this.commit({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + 1 } });
+    const dex = dexAdd({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + 1 } }, 'dust', type);
+    this.commit(dex.save);
+    if (dex.added) this.hud.toast(`図鑑に「${DUSTS[type].name}」を記録した！`, 2000);
     this.hud.bump('bag');
-    if (session.collected.size === session.total) this.autoFinishTimer = 0.8;
+    if (!this.contest && session.collected.size === session.total) this.autoFinishTimer = 0.8;
+    if (this.contest) this.refreshHud();
   }
 
   /** 落とし物を見つけた → その場で依頼達成 */
@@ -566,7 +704,7 @@ export class Game {
     const done = completeRequest(this.save, this.lostRequestId);
     this.lostRequestId = null;
     if (!done) return;
-    this.commit(done.save);
+    this.commit(done.request.item ? dexAdd(done.save, 'items', done.request.item).save : done.save);
     this.sound.play('reward');
     this.hud.bump('coins');
     const item = LOST_ITEMS.find((i) => i.id === done.request.item);
@@ -575,6 +713,17 @@ export class Game {
 
   /** 掃除を終えて、取り残しを場所に記録してから戻る */
   private leaveCleaning(): void {
+    if (this.contest) {
+      // 大会の会場からは掲示板の前に戻る。初優勝なら任命式
+      this.contest = null;
+      this.closeModal();
+      this.goTown('board');
+      if (this.contestFirstWin) {
+        this.contestFirstWin = false;
+        this.runStory(CONTEST_WIN, '任命式', () => this.refreshHud());
+      }
+      return;
+    }
     const area = this.spot?.area ?? 'home';
     if (this.session && this.spot) {
       const remaining = this.session.total - this.session.collected.size;
@@ -588,6 +737,10 @@ export class Game {
 
   /** RESULT：お小遣い。報酬確定はここで一度だけ */
   private enterResult(): void {
+    if (this.contest) {
+      this.endContest();
+      return;
+    }
     const session = this.session;
     if (!session || this.mode !== 'CLEANING') return;
     const result = claimReward(this.save, session);
@@ -613,7 +766,8 @@ export class Game {
       }
       this.speedRequestId = null;
     }
-    this.commit(save);
+    const giver = RESULT_GIVER[spotDef(session.spot as SpotId).area];
+    this.commit(dexAdd(save, 'people', giver).save);
     this.hud.bump('coins');
     const got: Partial<Record<DustType, number>> = {};
     for (const id of session.collected) got[session.types[id]] = (got[session.types[id]] ?? 0) + 1;
@@ -623,7 +777,7 @@ export class Game {
       body:
         resultBody({
           hero: this.hero,
-          spot: session.spot,
+          spot: session.spot as SpotId,
           collected: session.collected.size,
           total: session.total,
           reward: result.reward,
@@ -690,6 +844,13 @@ export class Game {
     this.showStoryStep();
   }
 
+  /** 図鑑：お話に出てきた人を記録する */
+  private meet(speaker: string): void {
+    if (!PERSON_IDS.includes(speaker as PersonId)) return;
+    const r = dexAdd(this.save, 'people', speaker as PersonId);
+    if (r.added) this.commit(r.save);
+  }
+
   private showStoryStep(): void {
     const step = this.story[this.storyStep];
     if (!step) {
@@ -700,6 +861,7 @@ export class Game {
       return;
     }
     step.enter?.(this.pet);
+    this.meet(step.speaker);
     this.openOverlay('story', {
       title: step.text === HOW_TO ? 'あそびかた' : this.storyTitle,
       className: 'modal--story',
@@ -721,6 +883,7 @@ export class Game {
   }
 
   private renderShop(open: boolean): void {
+    if (open) this.meet('shopkeeper');
     const body = shopBody(this.save, this.shopTab);
     if (!open) {
       this.hud.updateModalBody(body);
@@ -793,6 +956,16 @@ export class Game {
         this.sound.play('tap');
         return;
       }
+      case 'dex':
+        if (this.hud.blockingModalOpen) return;
+        this.sound.play('tap');
+        this.openOverlay('help', {
+          title: '図鑑',
+          className: 'modal--map',
+          body: dexBody(this.save),
+          buttons: [{ action: 'closeModal', label: 'とじる', variant: 'primary' }],
+        });
+        return;
       case 'help':
         if (this.hud.blockingModalOpen) return;
         this.sound.play('tap');
@@ -842,6 +1015,11 @@ export class Game {
       case 'walkHome':
         this.sound.play('tap');
         this.town?.goToBuilding(this.petBuilding);
+        return;
+      case 'enterContest':
+        if (this.mode !== 'TOWN' || !hasEvent(this.save, 'contestNotice')) return;
+        this.sound.play('tap');
+        this.startContest();
         return;
       case 'openDest':
         if (this.overlay !== 'none') return;
@@ -1045,6 +1223,16 @@ export class Game {
       this.sound.play('dry');
       this.hud.toast(n > 0 ? `はっくしょん！ ホコリを${n}個すいこんだ` : 'はっくしょん！ ……まわりにホコリがなかった', 1800);
       this.refreshHud();
+    } else if (action === 'goHome' && this.contest) {
+      this.sound.play('tap');
+      this.openOverlay('confirm', {
+        title: '大会をやめる？',
+        body: `途中でやめると賞金はもらえないよ。<br>集めたホコリ（${session.collected.size}個）はバッグに入っているよ。`,
+        buttons: [
+          { action: 'closeModal', label: '続ける', variant: 'secondary' },
+          { action: 'leaveNow', label: 'やめる', variant: 'primary' },
+        ],
+      });
     } else if (action === 'goHome') {
       if (canClaimReward(session)) {
         this.enterResult();
@@ -1159,6 +1347,16 @@ export class Game {
     if (this.autoFinishTimer > 0) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
+    }
+    if (this.contest && this.mode === 'CLEANING' && !this.hud.modalOpen) {
+      const left = this.contestLeft();
+      if (left !== this.contest.lastLeft) {
+        this.contest.lastLeft = left;
+        this.refreshHud();
+        if (left <= 5 && left > 0) this.sound.play('tap');
+      }
+      if (left <= 0) this.endContest();
+      else if (this.cleaning && this.session && this.cleaning.idleDust < CONTEST.refillBelow) this.refillContest();
     }
     if (this.cleaning && this.mode === 'CLEANING') {
       const off = this.cleaning.offscreenDust();

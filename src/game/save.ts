@@ -4,12 +4,14 @@ import {
   ACCESSORY_IDS,
   DUST_TYPES,
   LOST_ITEMS,
+  PERSON_IDS,
   SPOT_IDS,
   TOOLS,
   type AccessoryId,
   type DustType,
   type Habitat,
   type Hero,
+  type PersonId,
   type SpotId,
   type ToolId,
 } from './catalog.ts';
@@ -17,8 +19,10 @@ import {
   clampShape,
   createInitialSave,
   emptyBag,
+  EVENT_IDS,
   SAVE_VERSION,
   type Bag,
+  type Dex,
   type EventId,
   type Request,
   type SaveData,
@@ -60,10 +64,19 @@ function toBag(value: unknown): Bag {
   return bag;
 }
 
-const EVENT_IDS: readonly EventId[] = ['town', 'friend', 'board', 'landMeeting', 'container', 'street', 'together'];
-
 function toEvents(value: unknown): EventId[] {
   return Array.isArray(value) ? [...new Set(value.filter((v): v is EventId => EVENT_IDS.includes(v as EventId)))] : [];
+}
+
+function toDex(value: unknown): Dex {
+  const raw = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const list = <T extends string>(v: unknown, valid: readonly T[]): T[] =>
+    Array.isArray(v) ? [...new Set(v.filter((x): x is T => valid.includes(x as T)))] : [];
+  return {
+    dust: list<DustType>(raw.dust, DUST_TYPES),
+    items: list<string>(raw.items, LOST_ITEMS.map((i) => i.id)),
+    people: list<PersonId>(raw.people, PERSON_IDS),
+  };
 }
 
 /** 依頼は形がおかしいものを捨てる（報酬や数は範囲内に丸める） */
@@ -150,6 +163,24 @@ export function migrate(raw: Record<string, unknown>): Record<string, unknown> |
       events,
     };
   }
+  if (data.version === 4) {
+    // v5で図鑑と大掃除大会を追加。これまでに分かっていることから図鑑を埋めておく
+    const bag = (data.bag ?? {}) as Record<string, unknown>;
+    const diet = (data.diet ?? {}) as Record<string, unknown>;
+    const events = Array.isArray(data.events) ? (data.events as string[]) : [];
+    const rep = typeof data.rep === 'number' ? data.rep : 0;
+    const dust = DUST_TYPES.filter((t) => Number(bag[t]) > 0 || Number(diet[t]) > 0);
+    const people: PersonId[] = [];
+    if (data.tutorialDone === true) people.push('mother');
+    if (events.includes('town')) people.push('shopkeeper');
+    if (events.includes('friend')) people.push('friend', 'friendMom');
+    if (events.includes('street')) {
+      people.push('florist');
+      if (rep >= 4) people.push('baker');
+      if (rep >= 8) people.push('grandma');
+    }
+    data = { ...data, version: 5, dex: { dust, items: [], people }, contestBest: 0 };
+  }
   if (data.version === SAVE_VERSION) return data;
   return null;
 }
@@ -186,6 +217,8 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     // 番号が重ならないよう、残っている依頼の番号より大きくしておく
     requestSeq: Math.max(toCount(data.requestSeq, 0), ...toRequests(data.requests).map((r) => r.id)),
     events: toEvents(data.events),
+    dex: toDex(data.dex),
+    contestBest: Math.min(toCount(data.contestBest, 0), 999),
   };
 }
 

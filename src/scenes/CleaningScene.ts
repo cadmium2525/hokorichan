@@ -145,7 +145,7 @@ export class CleaningScene implements GameScene {
   // ---- 生成 ----
 
   /** ホコリを置ける場所を探す（家具の下や陰を避け、間隔をあける） */
-  private findHomes(random: Random, count: number, blockers: Blocker[]): THREE.Vector3[] {
+  private findHomes(random: Random, count: number, blockers: Blocker[], avoid: THREE.Vector3[] = []): THREE.Vector3[] {
     // カメラから見て家具の奥（-X,-Z側）は隠れるので、高さに応じて除外範囲を伸ばす
     const k = this.scale;
     const hidden = blockers.map((b) => ({
@@ -156,6 +156,7 @@ export class CleaningScene implements GameScene {
     }));
     const s = this.surface;
     const homes: THREE.Vector3[] = [];
+    const taken = [...avoid];
     for (let attempt = 0; attempt < 4000 && homes.length < count; attempt++) {
       const x = randRange(random, s.minX, s.maxX);
       const z = randRange(random, s.minZ, s.maxZ);
@@ -163,6 +164,7 @@ export class CleaningScene implements GameScene {
       // 置き場が足りないときは間隔を詰めて個数を確保する
       const spacing = (attempt < 2000 ? 0.5 : 0.3) * k;
       if (homes.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < spacing * spacing)) continue;
+      if (attempt < 3000 && taken.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < spacing * spacing)) continue;
       homes.push(new THREE.Vector3(x, s.y, z));
     }
     return homes;
@@ -188,8 +190,10 @@ export class CleaningScene implements GameScene {
     };
     const shadowMat = new THREE.MeshBasicMaterial({ map: blobShadowTexture(), transparent: true, depthWrite: false });
     const shadowGeo = new THREE.PlaneGeometry(0.5, 0.5);
-    homes.forEach((home, id) => {
-      const type = types[id] ?? 'cotton';
+    const first = this.dusts.length;
+    homes.forEach((home, i) => {
+      const id = first + i;
+      const type = types[i] ?? 'cotton';
       const object = createDustPuff(random, geometry, matsFor(type), type);
       object.scale.setScalar(k);
       const shadow = new THREE.Mesh(shadowGeo, shadowMat);
@@ -257,6 +261,30 @@ export class CleaningScene implements GameScene {
     h.munch = 1.2;
     this.particles.burst(this.sparkle, h.pos.clone().setY(this.surface.y + h.size), 14, 2.4 * this.scale, 0.3 * this.scale);
     return n;
+  }
+
+  /** まだ残っているホコリの数 */
+  get idleDust(): number {
+    return this.dusts.filter((d) => d.state === 'idle').length;
+  }
+
+  /**
+   * 途中からホコリを足す（大会で風に運ばれてくる）。道具のそばと既存のホコリは避ける。
+   * 置けた数を返す（ids は既存の続き番号）
+   */
+  spawnDust(types: DustType[], seed: number): number {
+    const random = createRandom(seed);
+    const avoid = this.dusts.filter((d) => d.state === 'idle').map((d) => d.home);
+    // 道具のまわりには降らせない（少し動かないと拾えない）
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      avoid.push(new THREE.Vector3(this.smoothPoint.x + Math.cos(ang) * 0.5, 0, this.smoothPoint.z + Math.sin(ang) * 0.5), this.smoothPoint.clone());
+    }
+    const homes = this.findHomes(random, types.length, this.opts.layout.blockers, avoid);
+    const before = this.dusts.length;
+    this.placeDust(random, homes, types);
+    for (const d of this.dusts.slice(before)) this.particles.burst(this.sparkle, d.home.clone().setY(this.surface.y + 0.3 * this.scale), 3, 0.8 * this.scale, 0.15 * this.scale);
+    return this.dusts.length - before;
   }
 
   get hasHelper(): boolean {
