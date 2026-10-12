@@ -156,7 +156,7 @@ const LAND_MEETING: StoryStep[] = [
 
 const CONTAINER_STORY: StoryStep[] = [
   { speaker: 'narration', text: 'トラックがやってきて、空き地にコンテナを置いていった。', button: '次へ' },
-  { speaker: 'mother', text: 'これで広々ね。ごはんの時間には帰ってくるのよ。', button: 'はーい' },
+  { speaker: 'mother', text: 'これで広々ね。ごはんの時間には帰ってくるのよ。<br>おうちの掃除も、帰ってきたときにお願いね。', button: 'はーい' },
   {
     speaker: 'narration',
     text: 'ほこりちゃんは<b>おうち級</b>になった！<br>これからは<b>一緒に掃除</b>に行けるよ。掃除のあいだ、ほこりちゃんが転がってホコリを吸い込んでくれる。<br>指でなぞると、ついてくるよ。',
@@ -310,7 +310,8 @@ export class Game {
     const total = bagTotal(s.bag);
     const buttons: ButtonSpec[] = [];
     if (s.damp) buttons.push({ action: 'dry', label: '乾燥させる', sub: '無料', variant: 'water' });
-    buttons.push({ action: 'openMap', label: 'おそうじ', sub: '家の中', variant: 'accent' });
+    // コンテナに住むようになったら、家の掃除はまちの「おうち」へ行ってする
+    if (s.habitat < 4) buttons.push({ action: 'openMap', label: 'おそうじ', sub: '家の中', variant: 'accent' });
     buttons.push({
       action: 'openFeed',
       label: '餌をあげる',
@@ -318,7 +319,7 @@ export class Game {
       variant: 'primary',
       disabled: total === 0,
     });
-    buttons.push({ action: 'goOut', label: 'おでかけ', sub: 'まちへ', variant: 'secondary' });
+    buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
     return buttons;
   }
@@ -415,7 +416,11 @@ export class Game {
     switch (id) {
       case 'home':
         this.sound.play('tap');
-        if (this.save.habitat >= 4) this.hud.toast('ほこりちゃんは空き地のコンテナにいるよ', 2400);
+        if (this.save.habitat >= 4) {
+          // ほこりちゃんはコンテナ。おうちでは家の掃除をする
+          this.openMap('home');
+          return;
+        }
         this.goHome();
         return;
       case 'shop':
@@ -573,8 +578,8 @@ export class Game {
       this.commit(finishSpot(this.save, this.spot, remaining, this.now));
     }
     this.closeModal();
-    // 家の外の掃除が終わったら、その建物の前（まち）に戻る
-    if (area === 'home') this.goHome();
+    // 家の外の掃除（コンテナに引っこした後は家の掃除も）が終わったら、その建物の前（まち）に戻る
+    if (area === 'home' && this.save.habitat < 4) this.goHome();
     else this.goTown(AREA_BUILDING[area]);
   }
 
@@ -705,7 +710,7 @@ export class Game {
   private openMap(area: Area): void {
     this.mapArea = area;
     this.openOverlay('map', {
-      title: area === 'home' ? 'どこを掃除する？' : AREA_NAMES[area],
+      title: area === 'home' ? (this.save.habitat >= 4 ? 'おうち：どこを掃除する？' : 'どこを掃除する？') : AREA_NAMES[area],
       className: 'modal--map',
       body: mapBody(this.save, area, this.now, this.params.speed),
       buttons: [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
@@ -822,6 +827,8 @@ export class Game {
   private onHomeAction(action: string, arg?: string): void {
     switch (action) {
       case 'openMap':
+        // コンテナからは家の掃除に行けない（まちの「おうち」から）
+        if (this.save.habitat >= 4) return;
         this.sound.play('tap');
         this.openMap('home');
         return;
