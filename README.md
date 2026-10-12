@@ -25,6 +25,12 @@ npm test           # ルールとセーブデータのユニットテスト（No
 
 `dist/` は静的ファイルだけなので、GitHub Pages などの無料ホスティングにそのまま置けます（`base: './'`）。
 
+### GitHub Pages で公開する
+
+`.github/workflows/deploy.yml` が main への push ごとにビルドして `dist/` を公開します。
+リポジトリの Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください
+（「Deploy from a branch」のままだとビルド前のソースが配信され、ゲームが起動しません）。
+
 ### テスト用 URL パラメータ
 
 - `?seed=123` … 部屋の配置・ホコリ・湿気判定の乱数を固定
