@@ -163,7 +163,13 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
           `容量 ${HABITATS[next.level].capacity} まで大きく育つ`,
           buy('buyHome', String(next.level), next.price),
         )
-      : `<p class="note">${save.habitat >= 4 ? 'ほこりちゃんは空き地のコンテナで暮らしています' : 'お店でいちばん大きなケースです。もっと大きくなったら……？'}</p>`;
+      : `<p class="note">${
+          save.habitat >= 5
+            ? 'ほこりちゃんは空き地の倉庫で暮らしています'
+            : save.habitat >= 4
+              ? 'ほこりちゃんは空き地のコンテナで暮らしています（倉庫は市役所の許可がいるそうです）'
+              : 'お店でいちばん大きなケースです。もっと大きくなったら……？'
+        }</p>`;
   } else {
     items = ACCESSORIES.map((a) => {
       const has = save.accessories.includes(a.id);
@@ -388,4 +394,21 @@ export function contestResultBody(opts: { hero: Hero; score: number; rank: numbe
     <div class="bubble bubble--mother">町内会長「${opts.won ? '優勝はほこりちゃんチーム！ おめでとう！' : `${opts.rank}位！ よくがんばったわね。また次の大会に出てちょうだい`}」</div>
     <ol class="ranking">${rows}</ol>
     ${opts.best ? '<p class="note">自己ベスト更新！</p>' : ''}`;
+}
+
+// ---- 空のおそうじ（3章） ----
+
+export function skyResultBody(opts: { hero: Hero; clouds: number; reward: number; got: Partial<Record<DustType, number>>; bag: number }): string {
+  const got = DUST_TYPES.filter((t) => (opts.got[t] ?? 0) > 0).map((t) => dustChip(t, opts.got[t])).join('');
+  return `
+    <div class="allowance">
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: 'joy' })}
+      <div class="allowance__coin">+${opts.reward}</div>
+    </div>
+    <div class="bubble bubble--mother">市役所「空の清掃、ごくろうさまです。雲${opts.clouds}こぶんのお礼です」</div>
+    <dl class="result">
+      <dt>吸い込んだ雲</dt><dd>${opts.clouds}こ</dd>
+      <dt>バッグ</dt><dd>${opts.bag}個</dd>
+    </dl>
+    <div class="chips chips--dust">${got}</div>`;
 }

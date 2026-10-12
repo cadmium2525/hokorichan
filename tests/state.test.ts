@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTEST, CONTEST_MAX, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
+  canFly,
+  chapter,
+  nextHabitat,
   contestDue,
+  finishSky,
+  skyClouds,
+  skyRadiusMul,
+  skyReward,
+  warehouseDue,
   contestRanking,
   contestResult,
   contestWaitMinutes,
@@ -366,6 +374,44 @@ test('図鑑は同じものを二度載せない', () => {
   assert.equal(b.added, false);
   assert.equal(b.save, s);
   s = dexAdd(s, 'people', 'grandma').save;
-  assert.deepEqual(dexProgress(s).dust, [1, 6]);
+  assert.deepEqual(dexProgress(s).dust, [1, DUST_TYPES.length]);
   assert.equal(dexProgress(s).people[0], 1);
+});
+
+test('3章：清掃係になってコンテナがいっぱいになると倉庫の手紙。手紙のあとでだけ倉庫を買える', () => {
+  const base = { ...createInitialSave(), habitat: 4 as const, growthXp: HABITATS[4].capacity, coins: 5000 };
+  assert.equal(warehouseDue(base), false);
+  const won = addEvent(base, 'contestWon');
+  assert.equal(warehouseDue(won), true);
+  assert.equal(warehouseDue({ ...won, growthXp: HABITATS[4].capacity - 1 }), false);
+  assert.equal(nextHabitat(won), null);
+  const letter = addEvent(won, 'warehouseLetter');
+  assert.equal(warehouseDue(letter), false);
+  assert.deepEqual(nextHabitat(letter), { level: 5, price: HABITATS[5].price });
+  const bought = buyHabitat(letter);
+  assert.equal(bought.ok, true);
+  assert.equal(bought.save.habitat, 5);
+  assert.equal(bought.save.coins, 5000 - HABITATS[5].price);
+  assert.equal(chapter(bought.save), 3);
+  assert.equal(canFly(bought.save), true);
+  assert.equal(nextHabitat(bought.save), null);
+});
+
+test('空の雲は飛ぶと減り、時間で満タンまで戻る', () => {
+  const MIN = 60_000;
+  const s0 = { ...createInitialSave(), habitat: 5 as const };
+  assert.equal(skyClouds(s0, 0), SKY.maxClouds);
+  const s1 = finishSky(s0, 0, 100 * MIN);
+  assert.equal(skyClouds(s1, 100 * MIN), 0);
+  assert.equal(skyClouds(s1, (100 + SKY.regenMinutes / 2) * MIN), SKY.maxClouds / 2);
+  assert.equal(skyClouds(s1, (100 + SKY.regenMinutes * 3) * MIN), SKY.maxClouds);
+  assert.equal(skyReward(3), 3 * SKY.coinPerCloud);
+  assert.equal(skyReward(-1), 0);
+});
+
+test('黄砂をたくさん食べると空で吸い込む範囲が広がる', () => {
+  const s0 = createInitialSave();
+  assert.equal(skyRadiusMul(s0), 1);
+  const s1 = { ...s0, diet: { ...s0.diet, cotton: 60, kosa: 40 } };
+  assert.ok(skyRadiusMul(s1) > 1);
 });

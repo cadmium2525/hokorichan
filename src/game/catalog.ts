@@ -32,7 +32,7 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- ホコリの種類 ----
 
-export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa';
 
 export type DustDef = {
   id: DustType;
@@ -53,9 +53,10 @@ export const DUSTS: Record<DustType, DustDef> = {
   fur: { id: 'fur', name: '猫の毛', colors: ['#f2c38f', '#ffffff', '#e8a868', '#d9d2c8'], tint: '#f4c08e', trait: 'もふもふ', traitDesc: '一緒の掃除で吸い寄せる範囲が広がる' },
   pollen: { id: 'pollen', name: '花粉', colors: ['#f6dd6a', '#f3cf4c', '#fbe9a0', '#e9c44a'], tint: '#ffe06a', trait: 'くしゃみ', traitDesc: '一緒の掃除で一度だけ「くしゃみ」で広く吸い込む' },
   flour: { id: 'flour', name: '粉ぼこり', colors: ['#fbf8f2', '#efe9df', '#f6f1e6', '#e6ddd0'], tint: '#ffffff', trait: 'さらさら', traitDesc: '湿気に強くなる' },
+  kosa: { id: 'kosa', name: '黄砂', colors: ['#e8c27a', '#d9ad5c', '#f2d699', '#c99a4a'], tint: '#f0cf8a', trait: 'ずっしり', traitDesc: '空のおそうじで吸い込む範囲が広がる' },
 };
 
-export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour'];
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa'];
 
 // ---- 掃除場所 ----
 
@@ -131,17 +132,18 @@ export const SPOT_READY_RATIO = 0.3;
 
 // ---- ほこりちゃんの住まい ----
 
-export type Habitat = 0 | 1 | 2 | 3 | 4;
+export type Habitat = 0 | 1 | 2 | 3 | 4 | 5;
 
 export type HabitatDef = { name: string; capacity: number; price: number; inner: number };
 
-/** 0 は勉強机の上（出会いの場所）。1〜3 はショップで買うケース。4 は空き地に置くコンテナ（2章） */
+/** 0 は勉強机の上（出会いの場所）。1〜3 はショップで買うケース。4 は空き地に置くコンテナ（2章）。5 は倉庫（3章） */
 export const HABITATS: Record<Habitat, HabitatDef> = {
   0: { name: '勉強机の上', capacity: 10, price: 0, inner: 1.0 },
   1: { name: 'ケース（小）', capacity: 30, price: 40, inner: 1.8 },
   2: { name: 'ケース（中）', capacity: 100, price: 120, inner: 2.5 },
   3: { name: 'ケース（大）', capacity: 300, price: 300, inner: 3.3 },
   4: { name: '空き地のコンテナ', capacity: 1000, price: 0, inner: 4.6 },
+  5: { name: '空き地の倉庫', capacity: 5000, price: 1500, inner: 9.0 },
 };
 
 /** 1章の山場で買う空き地（コンテナ付き）の値段 */
@@ -168,6 +170,7 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
   fur: { client: 'おばあちゃん', line: '猫の毛でフェルトの人形をつくるのよ' },
   pollen: { client: '花屋さん', line: '花粉を集めて新しい品種を育てたいの' },
   flour: { client: 'パン屋さん', line: '粉ぼこり……捨てるのはもったいなくてね' },
+  kosa: { client: '市役所の人', line: '黄砂のサンプルを研究所に送りたいんです' },
 };
 
 // ---- アクセサリー ----
@@ -259,3 +262,20 @@ export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }>
 ];
 
 export const PERSON_IDS: readonly PersonId[] = PEOPLE.map((p) => p.id);
+
+// ---- 3章：空のおそうじ（ほこりちゃんに乗って） ----
+
+export const SKY = {
+  /** 満タンのときに浮かんでいる雲の数 */
+  maxClouds: 12,
+  /** 空から満タンまで（実時間・分） */
+  regenMinutes: 45,
+  /** 雲1つで集まるホコリの数 */
+  perCloud: 6,
+  /** 雲1つあたりのお礼（市役所から） */
+  coinPerCloud: 6,
+  /** 雲の種類と割合 */
+  mix: { kosa: 6, pollen: 3, sand: 1 } as Partial<Record<DustType, number>>,
+  /** 飛べる時間（秒） */
+  seconds: 40,
+};

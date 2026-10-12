@@ -195,7 +195,30 @@ function containerOnLot(): THREE.Group {
   return g;
 }
 
-export type TownOptions = { lotOwned: boolean };
+/** 3章：空き地に建てた倉庫 */
+function warehouseOnLot(): THREE.Group {
+  const g = new THREE.Group();
+  const dirt = box(3.4, 0.04, 2.8, lambert({ color: '#d9b98c' }));
+  dirt.position.y = 0.02;
+  const body = box(3.0, 2.0, 2.2, lambert({ color: '#f2e2c6' }));
+  body.position.set(0, 1.0, -0.2);
+  // 切妻屋根（2枚の板）
+  const roofMat = lambert({ color: '#a0644a' });
+  for (const side of [-1, 1]) {
+    const r = box(3.2, 0.1, 1.35, roofMat);
+    r.position.set(0, 2.3, -0.2 + side * 0.55);
+    r.rotation.x = side * 0.5;
+    g.add(r);
+  }
+  const door = box(1.3, 1.5, 0.04, lambert({ color: '#b8754f' }));
+  door.position.set(0, 0.76, 0.92);
+  const heart = new THREE.Mesh(new THREE.CircleGeometry(0.18, 12), new THREE.MeshBasicMaterial({ color: PALETTE.pink }));
+  heart.position.set(0, 1.75, 0.92);
+  g.add(dirt, body, door, heart);
+  return g;
+}
+
+export type TownOptions = { lotOwned: boolean; warehouse?: boolean };
 
 /** 建物どうしの間隔の倍率（建物の大きさは変えない） */
 const SPACING = 1.3;
@@ -257,7 +280,7 @@ export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
   group.add(awning);
   const friendObj = house({ w: 2.8, d: 2.4, h: 1.9, wall: '#e6f4ee', roof: '#6fb7a0', door: '#f3d27a' });
   placeHouse(friendObj, 3.6 * K, -1.2 * K, 2.8, 2.4, mainZ);
-  const lotObj = opts.lotOwned ? containerOnLot() : vacantLot();
+  const lotObj = opts.warehouse ? warehouseOnLot() : opts.lotOwned ? containerOnLot() : vacantLot();
   // 空き地は柵ごと当たり判定（入口は南の通り側）
   const lotX = 2.0 * K;
   const lotZ = 4.6 * K;
@@ -307,7 +330,7 @@ export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
       home: building('home', homeObj, 1.2, 3.4),
       shop: building('shop', shopObj, 1.1, 3.2),
       friend: building('friend', friendObj, 1.2, 3.4),
-      lot: building('lot', lotObj, 1.4, opts.lotOwned ? 2.6 : 1.6),
+      lot: building('lot', lotObj, 1.4, opts.warehouse ? 3.2 : opts.lotOwned ? 2.6 : 1.6),
       flower: building('flower', flowerObj, 1.0, 3.0),
       bakery: building('bakery', bakeryObj, 1.0, 3.0),
       grandma: building('grandma', grandmaObj, 1.2, 3.2),

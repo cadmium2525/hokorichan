@@ -17,6 +17,7 @@ import {
   LOST_ITEMS,
   PERSON_IDS,
   SHAPE_LIMITS,
+  SKY,
   SPOT_IDS,
   SPOT_READY_RATIO,
   SPOTS,
@@ -70,9 +71,25 @@ export type EventId =
   | 'street'
   | 'together'
   | 'contestNotice'
-  | 'contestWon';
+  | 'contestWon'
+  | 'warehouseLetter'
+  | 'warehouse'
+  | 'sky';
 
-export const EVENT_IDS: readonly EventId[] = ['town', 'friend', 'board', 'landMeeting', 'container', 'street', 'together', 'contestNotice', 'contestWon'];
+export const EVENT_IDS: readonly EventId[] = [
+  'town',
+  'friend',
+  'board',
+  'landMeeting',
+  'container',
+  'street',
+  'together',
+  'contestNotice',
+  'contestWon',
+  'warehouseLetter',
+  'warehouse',
+  'sky',
+];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
 export type Dex = { dust: DustType[]; items: string[]; people: PersonId[] };
@@ -109,6 +126,8 @@ export type SaveData = {
   contestBest: number;
   /** 最後に大会に出た時刻（次の大会まで待つ） */
   contestAt: number;
+  /** 空の雲の積もり具合（3章） */
+  sky: SpotState;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -120,7 +139,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -161,6 +180,7 @@ export function createInitialSave(): SaveData {
     dex: { dust: [], items: [], people: [] },
     contestBest: 0,
     contestAt: 0,
+    sky: { fullness: 1, at: 0 },
   };
 }
 
@@ -239,8 +259,8 @@ export function contestResult(
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
-export function chapter(save: SaveData): 1 | 2 {
-  return save.habitat >= 4 ? 2 : 1;
+export function chapter(save: SaveData): 1 | 2 | 3 {
+  return save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
 }
 
 // ---- まちと場所の解禁 ----
@@ -344,6 +364,8 @@ export function canCleanTogether(save: SaveData): boolean {
 
 /** ショップで買えるのはケース（大）まで。その先は空き地 */
 export function nextHabitat(save: SaveData): { level: Habitat; price: number } | null {
+  // 3章の倉庫は、市役所の許可（手紙）が届いてからショップで注文できる
+  if (save.habitat === 4 && hasEvent(save, 'warehouseLetter')) return { level: 5, price: HABITATS[5].price };
   if (save.habitat >= 3) return null;
   const level = (save.habitat + 1) as Habitat;
   return { level, price: HABITATS[level].price };
@@ -353,6 +375,42 @@ export function buyHabitat(save: SaveData): { save: SaveData; ok: boolean } {
   const next = nextHabitat(save);
   if (!next || save.coins < next.price) return { save, ok: false };
   return { save: { ...save, coins: save.coins - next.price, habitat: next.level }, ok: true };
+}
+
+// ---- 3章：倉庫と空のおそうじ ----
+
+/** 町の清掃係になり、コンテナがいっぱいになったら市役所から倉庫の許可が届く */
+export function warehouseDue(save: SaveData): boolean {
+  return save.habitat === 4 && hasEvent(save, 'contestWon') && save.growthXp >= HABITATS[4].capacity && !hasEvent(save, 'warehouseLetter');
+}
+
+/** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
+export function canFly(save: SaveData): boolean {
+  return save.habitat >= 5;
+}
+
+/** いま空に浮かんでいる雲の数 */
+export function skyClouds(save: SaveData, now: number, speed = 1): number {
+  const elapsed = Math.max(0, now - save.sky.at) * speed;
+  const fullness = Math.min(1, save.sky.fullness + elapsed / (SKY.regenMinutes * MINUTE));
+  return Math.floor(SKY.maxClouds * fullness + 1e-9);
+}
+
+/** 飛び終えたら、残った雲の数を記録する */
+export function finishSky(save: SaveData, remaining: number, now: number): SaveData {
+  const fullness = Math.max(0, Math.min(1, remaining / SKY.maxClouds));
+  return { ...save, sky: { fullness, at: now } };
+}
+
+/** 空のお礼（市役所から） */
+export function skyReward(clouds: number): number {
+  return Math.max(0, Math.floor(clouds)) * SKY.coinPerCloud;
+}
+
+/** 空で雲を吸い込む範囲の倍率（黄砂の毛並み「ずっしり」で広がる） */
+export function skyRadiusMul(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('kosa') ? 1 + r.kosa * 1.5 : 1;
 }
 
 export function buyTool(save: SaveData, id: ToolId): { save: SaveData; ok: boolean } {
@@ -620,6 +678,7 @@ export const RANKS: readonly Rank[] = [
   { name: 'ぬいぐるみ級', min: 50 },
   { name: 'お部屋級', min: 100 },
   { name: 'おうち級', min: 300 },
+  { name: 'ビル級', min: 1500 },
 ];
 
 export function rankFor(xp: number): Rank {

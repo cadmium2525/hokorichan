@@ -30,6 +30,8 @@ export type TownOptions = {
   startAt: BuildingId;
   /** 空き地を買ってコンテナを置いたか */
   lotOwned: boolean;
+  /** 空き地に倉庫を建てたか（3章） */
+  warehouse?: boolean;
   /** 建物の前に立っている町の人 */
   npcs?: Array<{ id: CharacterId; at: BuildingId }>;
   onArrive: (id: BuildingId) => void;
@@ -64,7 +66,7 @@ export class TownScene implements GameScene {
   constructor(opts: TownOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene);
-    this.town = buildTown({ lotOwned: opts.lotOwned });
+    this.town = buildTown({ lotOwned: opts.lotOwned, warehouse: opts.warehouse });
     this.scene.add(this.town.group);
     this.hero = new CharacterSprite(opts.hero);
     // 入口の少し手前（道側）に立ち、こちらを向いている

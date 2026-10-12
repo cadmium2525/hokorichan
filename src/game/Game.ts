@@ -8,6 +8,7 @@ import { buildContest, buildSpot } from '../render/spotBuilder.ts';
 import type { BuildingId } from '../render/townBuilder.ts';
 import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene, type PetView } from '../scenes/PetScene.ts';
+import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
@@ -16,6 +17,7 @@ import {
   contestResultBody,
   dexBody,
   feedBody,
+  skyResultBody,
   heroSelectBody,
   landBody,
   mapBody,
@@ -34,6 +36,7 @@ import {
   CONTEST,
   CONTEST_MAX,
   DUST_TYPES,
+  SKY,
   DUSTS,
   FRIEND_UNLOCK_XP,
   HABITATS,
@@ -72,6 +75,7 @@ import {
   claimReward,
   collectDust,
   completeRequest,
+  canFly,
   contestDue,
   contestResult,
   contestWaitMinutes,
@@ -81,6 +85,11 @@ import {
   deliverRequest,
   dexAdd,
   dietRatios,
+  finishSky,
+  skyClouds,
+  skyRadiusMul,
+  skyReward,
+  warehouseDue,
   dry,
   feed,
   feedableAmount,
@@ -104,7 +113,7 @@ import {
   type SaveData,
 } from './state.ts';
 
-export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'RESULT';
+export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'RESULT';
 
 type Overlay = 'none' | 'dest' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
@@ -223,6 +232,26 @@ const CONTEST_WIN: StoryStep[] = [
   },
 ];
 
+/** 3章の入口：市役所から倉庫の許可 */
+const WAREHOUSE_LETTER: StoryStep[] = [
+  { speaker: 'narration', text: 'ほこりちゃんがコンテナいっぱいに大きくなった。<br>そこへ、<b>市役所</b>から手紙が届いた。', button: '読む' },
+  {
+    speaker: 'narration',
+    text: '「町の清掃係さんへ。<br>空き地に<b>倉庫</b>を建てることを許可します。<br>大きくなった相棒さんと、町の空もきれいにしてください。　市役所」',
+    button: '次へ',
+  },
+  { speaker: 'mother', text: 'あら、市役所から。倉庫なら<b>ショップ</b>で注文できるそうよ。<br>お小遣い、ちゃんと貯めてる？', button: 'うん！' },
+];
+
+const WAREHOUSE_STORY: StoryStep[] = [
+  { speaker: 'narration', text: '空き地に<b>倉庫</b>が建った！ ほこりちゃんはまだまだ大きくなれる。', button: '次へ' },
+  {
+    speaker: 'narration',
+    text: 'ほこりちゃんの背中に乗れるようになった！<br>「<b>空へ</b>」で町の上を飛んで、<b>黄砂</b>や花粉の雲を吸い込もう。<br>指でさした方へ飛んでいくよ。',
+    button: '乗ってみる！',
+  },
+];
+
 const TOOL_HINT: Record<ToolId, string> = {
   hand: '指でなぞってホコリをつまもう',
   rag: 'なぞってぞうきんで拭き取ろう',
@@ -244,6 +273,9 @@ export class Game {
   private overlay: Overlay = 'none';
   /** 大掃除大会の最中なら開始時刻 */
   private contest: { startedAt: number; lastLeft: number; wave: number; seed: number; missed: number } | null = null;
+  private sky: SkyScene | null = null;
+  /** 空で吸い込んだ雲の数と種類 */
+  private skyGot: { clouds: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
   /** 大会で初優勝した（戻ったら任命のお話） */
   private contestFirstWin = false;
   private readonly hud: Hud;
@@ -342,8 +374,13 @@ export class Game {
       this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
       this.hud.setActions([
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
-        { action: 'walkHome', label: s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
+        { action: 'walkHome', label: s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
+    } else if ((this.mode === 'SKY' || this.mode === 'RESULT') && this.skyGot && this.sky) {
+      const left = Math.max(0, Math.ceil((this.skyGot.endsAt - this.now) / 1000));
+      const all = this.skyGot.clouds + this.sky.remaining;
+      this.hud.setCleaningStatus(`空のおそうじ ⏱ のこり${left}秒`, this.skyGot.clouds, all, all);
+      this.hud.setActions([{ action: 'skyEnd', label: 'おりる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session && this.contest) {
       const sess = this.session;
       const top = Math.max(...CONTEST.rivals.map((r) => r.score));
@@ -387,6 +424,10 @@ export class Game {
       variant: 'primary',
       disabled: total === 0,
     });
+    if (canFly(s)) {
+      const clouds = skyClouds(s, this.now, this.params.speed);
+      buttons.push({ action: 'goSky', label: '空へ', sub: clouds > 0 ? `雲 ${clouds}こ` : '雲を待っている', variant: 'water', disabled: clouds === 0 });
+    }
     buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
     return buttons;
@@ -402,6 +443,8 @@ export class Game {
 
   private clearScenes(): void {
     this.cleaning = null;
+    this.sky = null;
+    this.skyGot = null;
     this.town = null;
     this.pet = null;
     this.session = null;
@@ -439,6 +482,8 @@ export class Game {
     if (becameDamp) this.hud.toast('お留守番中に湿気でしっとり…「乾燥させる」でふかふかに！', 3200);
     else if (landMeetingDue(s)) this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
     else if (contestDue(s)) this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
+    else if (warehouseDue(s)) this.runStory(WAREHOUSE_LETTER, '市役所から', () => this.commit(addEvent(this.save, 'warehouseLetter')));
+    else if (s.habitat >= 5 && !hasEvent(s, 'warehouse')) this.runStory(WAREHOUSE_STORY, 'お引っこし', () => this.commit(addEvent(this.save, 'warehouse')));
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
@@ -464,6 +509,7 @@ export class Game {
       hero: this.hero,
       startAt,
       lotOwned: this.save.habitat >= 4,
+      warehouse: this.save.habitat >= 5,
       npcs: this.townNpcs(),
       onArrive: (id) => this.onArrive(id),
     });
@@ -614,6 +660,65 @@ export class Game {
     this.hud.hint(lines.join('\n'));
     if (together && !hasEvent(this.save, 'together')) this.save = addEvent(this.save, 'together');
     this.refreshHud();
+  }
+
+  /** 空のおそうじ：ほこりちゃんに乗って、黄砂や花粉の雲を吸い込む */
+  private startSky(): void {
+    const n = skyClouds(this.save, this.now, this.params.speed);
+    if (n <= 0) return;
+    this.sound.play('happy');
+    this.clearScenes();
+    this.sessionCount++;
+    const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
+    const types = rollDustTypes({ dust: SKY.mix }, n, createRandom(seed ^ 0x5c1));
+    const view = this.petView();
+    const scene = new SkyScene({
+      element: this.hud.canvas,
+      seed,
+      hero: this.hero,
+      clouds: types,
+      pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
+      radiusMul: skyRadiusMul(this.save),
+      onCloud: (type) => this.onCloud(type),
+    });
+    this.sky = scene;
+    this.skyGot = { clouds: 0, got: {}, endsAt: this.now + SKY.seconds * 1000, lastLeft: SKY.seconds };
+    this.mode = 'SKY';
+    this.setScene(scene);
+    this.syncInput();
+    this.hud.hint('指でさした方へ飛ぶよ\n雲にふれると吸い込む');
+    if (!hasEvent(this.save, 'sky')) this.save = addEvent(this.save, 'sky');
+    this.refreshHud();
+  }
+
+  private onCloud(type: DustType): void {
+    const g = this.skyGot;
+    if (!g || this.mode !== 'SKY') return;
+    g.clouds++;
+    g.got[type] = (g.got[type] ?? 0) + SKY.perCloud;
+    this.hud.hint(null);
+    this.sound.play('collect');
+    const dex = dexAdd({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + SKY.perCloud } }, 'dust', type);
+    this.commit(dex.save);
+    this.hud.bump('bag');
+    if (dex.added) this.hud.toast(`図鑑に「${DUSTS[type].name}」を記録した！`, 2000);
+  }
+
+  private endSky(): void {
+    const g = this.skyGot;
+    if (!g || !this.sky || this.mode !== 'SKY') return;
+    this.mode = 'RESULT';
+    this.sky.setInputEnabled(false);
+    const reward = skyReward(g.clouds);
+    this.commit({ ...finishSky(this.save, this.sky.remaining, this.now), coins: this.save.coins + reward });
+    this.hud.bump('coins');
+    this.sound.play('reward');
+    this.openOverlay('result', {
+      title: '空のおそうじ完了！',
+      className: 'modal--result',
+      body: skyResultBody({ hero: this.hero, clouds: g.clouds, reward, got: g.got, bag: bagTotal(this.save.bag) }),
+      buttons: [{ action: 'resultHome', label: 'ただいま！', variant: 'primary' }],
+    });
   }
 
   private contestLeft(): number {
@@ -1051,7 +1156,13 @@ export class Game {
 
     if (this.mode === 'HOME' || this.mode === 'TOWN') this.onHomeAction(action, arg);
     else if (this.mode === 'CLEANING') this.onCleaningAction(action);
-    else if (this.mode === 'RESULT' && action === 'resultHome') this.leaveCleaning();
+    else if (this.mode === 'SKY' && action === 'skyEnd') this.endSky();
+    else if (this.mode === 'RESULT' && action === 'resultHome') {
+      if (this.skyGot) {
+        this.closeModal();
+        this.goHome();
+      } else this.leaveCleaning();
+    }
   }
 
   private onHomeAction(action: string, arg?: string): void {
@@ -1069,6 +1180,10 @@ export class Game {
       case 'walkHome':
         this.sound.play('tap');
         this.town?.goToBuilding(this.petBuilding);
+        return;
+      case 'goSky':
+        if (this.mode !== 'HOME' || !canFly(this.save)) return;
+        this.startSky();
         return;
       case 'enterContest':
         if (this.mode !== 'TOWN' || !hasEvent(this.save, 'contestNotice')) return;
@@ -1237,7 +1352,12 @@ export class Game {
       const before = this.save.habitat;
       result = buyHabitat(this.save);
       const h = result.save.habitat;
-      message = before === 0 ? `${HABITATS[h].name}を買った！ 帰ってお引っこししよう` : `${HABITATS[h].name}を買った！容量 ${HABITATS[h].capacity}`;
+      message =
+        before === 0
+          ? `${HABITATS[h].name}を買った！ 帰ってお引っこししよう`
+          : h === 5
+            ? '倉庫を注文した！ 空き地に建ったよ。帰ってみよう'
+            : `${HABITATS[h].name}を買った！容量 ${HABITATS[h].capacity}`;
     } else if (action === 'buyAccessory' && ACCESSORY_IDS.includes(arg as AccessoryId)) {
       result = buyAccessory(this.save, arg as AccessoryId);
       message = '買った！ ほこりちゃんにつけてあげよう';
@@ -1311,6 +1431,7 @@ export class Game {
     this.cleaning?.setInputEnabled(this.mode === 'CLEANING' && !this.hud.modalOpen);
     this.pet?.setInputEnabled(this.mode === 'HOME' && (this.overlay === 'none' || this.overlay === 'play' || this.overlay === 'feed'));
     this.town?.setInputEnabled(this.mode === 'TOWN' && this.overlay === 'none');
+    this.sky?.setInputEnabled(this.mode === 'SKY' && !this.hud.modalOpen);
   }
 
   private bindLifecycle(): void {
@@ -1383,7 +1504,7 @@ export class Game {
       case 'board':
         return s.requests.length > 0 ? `掲示板（${s.requests.length}）` : '掲示板';
       case 'lot':
-        return s.habitat >= 4 ? 'コンテナ' : '空き地';
+        return s.habitat >= 5 ? '倉庫' : s.habitat >= 4 ? 'コンテナ' : '空き地';
       case 'friend':
         return friendUnlocked(s) ? '友だちの家' : '？？？の家';
       case 'flower':
@@ -1401,6 +1522,14 @@ export class Game {
     if (this.autoFinishTimer > 0) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
+    }
+    if (this.skyGot && this.sky && this.mode === 'SKY' && !this.hud.modalOpen) {
+      const left = Math.max(0, Math.ceil((this.skyGot.endsAt - this.now) / 1000));
+      if (left !== this.skyGot.lastLeft) {
+        this.skyGot.lastLeft = left;
+        this.refreshHud();
+      }
+      if (left <= 0 || this.sky.remaining === 0) this.endSky();
     }
     if (this.contest && this.mode === 'CLEANING' && !this.hud.modalOpen) {
       const left = this.contestLeft();
@@ -1430,6 +1559,8 @@ export class Game {
     if (this.refreshTimer <= 0) {
       this.refreshTimer = 1;
       this.tickRequests(true);
+      // 空の雲がたまっていく様子をボタンに出す
+      if (this.mode === 'HOME' && canFly(this.save) && this.overlay === 'none') this.hud.setActions(this.homeButtons());
       if (this.overlay === 'map') this.hud.updateModalBody(mapBody(this.save, this.mapArea, this.now, this.params.speed));
       if (this.overlay === 'board') this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest(), contestWaitMinutes(this.save, this.now, this.params.speed)));
     }

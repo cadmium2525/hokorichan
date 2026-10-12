@@ -301,7 +301,7 @@ export function dropTexture(): THREE.CanvasTexture {
 
 /** 綿のような小さな塊。リアルな汚れではなく、ふわっとした灰色の玉にする */
 /** ホコリの見た目の種類（catalog の DustType と同じ名前） */
-export type DustShape = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour';
+export type DustShape = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa';
 
 let threadGeometry: THREE.BufferGeometry | null = null;
 
@@ -326,7 +326,8 @@ export function createDustPuff(
     return m;
   };
   switch (shape) {
-    case 'sand': {
+    case 'sand':
+    case 'kosa': {
       const n = 9 + Math.floor(random() * 5);
       for (let i = 0; i < n; i++) {
         const a = random() * Math.PI * 2;

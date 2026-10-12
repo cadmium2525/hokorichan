@@ -57,6 +57,38 @@ function glassTexture(): THREE.CanvasTexture {
 }
 
 const CONTAINER_HEIGHT = 3.2;
+const WAREHOUSE_HEIGHT = 5.4;
+
+/** 空き地のすみか（4=コンテナ、5=倉庫）の壁の高さ */
+function yardHeight(habitat: Habitat): number {
+  return habitat === 5 ? WAREHOUSE_HEIGHT : CONTAINER_HEIGHT;
+}
+
+/** 倉庫の板壁（クリームの羽目板に木の枠） */
+function warehouseTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#f2e2c6';
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = '#e2cca8';
+    for (let y = 3; y < 16; y += 4) ctx.fillRect(0, y, 16, 1);
+    ctx.fillStyle = '#b8754f';
+    ctx.fillRect(0, 0, 1, 16);
+    ctx.fillRect(15, 0, 1, 16);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 2);
+  return tex;
+}
 
 function corrugatedTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
@@ -82,20 +114,21 @@ function corrugatedTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-/** 空き地に置いたコンテナ。正面（ローカル+Z）を開けて中が見えるようにする */
-function buildContainerYard(): THREE.Group {
+/** 空き地に置いたコンテナ（4）・倉庫（5）。正面（ローカル+Z）を開けて中が見えるようにする */
+function buildContainerYard(habitat: 4 | 5): THREE.Group {
   const g = new THREE.Group();
-  const grass = new THREE.Mesh(new THREE.BoxGeometry(18, 0.3, 18), new THREE.MeshLambertMaterial({ color: '#a9d68f' }));
+  const k = habitat === 5 ? 1.9 : 1;
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(18 * k, 0.3, 18 * k), new THREE.MeshLambertMaterial({ color: '#a9d68f' }));
   grass.position.set(0, -0.16, 0);
-  const dirt = new THREE.Mesh(new THREE.BoxGeometry(9, 0.04, 9), new THREE.MeshLambertMaterial({ color: '#d9b98c' }));
+  const dirt = new THREE.Mesh(new THREE.BoxGeometry(9 * k, 0.04, 9 * k), new THREE.MeshLambertMaterial({ color: '#d9b98c' }));
   dirt.position.set(CASE_CENTER.x, 0.0, CASE_CENTER.z);
   g.add(grass, dirt);
 
-  const w = HABITATS[4].inner;
-  const h = CONTAINER_HEIGHT;
+  const w = HABITATS[habitat].inner;
+  const h = yardHeight(habitat);
   const box = new THREE.Group();
-  const wall = new THREE.MeshLambertMaterial({ map: corrugatedTexture() });
-  const edge = new THREE.MeshLambertMaterial({ color: '#5f93aa' });
+  const wall = new THREE.MeshLambertMaterial({ map: habitat === 5 ? warehouseTexture() : corrugatedTexture() });
+  const edge = new THREE.MeshLambertMaterial({ color: habitat === 5 ? '#a0644a' : '#5f93aa' });
   const floor = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.2, w + 0.3), edge);
   floor.position.y = 0.1;
   const mat = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, w), new THREE.MeshLambertMaterial({ color: '#fbdbe4' }));
@@ -128,15 +161,15 @@ function buildContainerYard(): THREE.Group {
 
   // まわりの柵と木
   const wood = new THREE.MeshLambertMaterial({ color: '#e0a86c' });
-  for (let i = -4; i <= 4; i += 1.6) {
-    for (const [x, z] of [[i, -4.6], [-4.6, i]]) {
+  for (let i = -4 * k; i <= 4 * k; i += 1.6) {
+    for (const [x, z] of [[i, -4.6 * k], [-4.6 * k, i]]) {
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), wood);
       post.position.set(CASE_CENTER.x + x, 0.3, CASE_CENTER.z + z);
       g.add(post);
     }
   }
   const leaves = new THREE.MeshLambertMaterial({ color: '#7fb77e', flatShading: true });
-  for (const [x, z] of [[-4.2, 2.2], [2.6, -4.4]]) {
+  for (const [x, z] of [[-4.2 * k, 2.2 * k], [2.6 * k, -4.4 * k]]) {
     const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0), leaves);
     t.position.set(CASE_CENTER.x + x, 1.4, CASE_CENTER.z + z);
     const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.0, 6), new THREE.MeshLambertMaterial({ color: '#9c6438' }));
@@ -261,9 +294,9 @@ export class PetScene implements GameScene {
       disposeHierarchy(this.habitatGroup);
     }
     // コンテナは空き地（屋外）。部屋は隠す
-    this.room.visible = habitat !== 4;
-    if (habitat === 4) {
-      this.habitatGroup = buildContainerYard();
+    this.room.visible = habitat < 4;
+    if (habitat >= 4) {
+      this.habitatGroup = buildContainerYard(habitat as 4 | 5);
       this.seat.set(CASE_CENTER.x, CASE_FLOOR_Y, CASE_CENTER.z);
     } else if (habitat === 0) {
       const desk = studyDesk(9);
@@ -292,13 +325,13 @@ export class PetScene implements GameScene {
       // ケース・コンテナの実際の角（45°回転済み）とその上の余白を画面に収める
       const w = HABITATS[this.view.habitat].inner;
       const r = (w / 2 + 0.2) * Math.SQRT2;
-      const top = this.view.habitat === 4 ? CONTAINER_HEIGHT + 0.4 : 0.2 + w * 0.78 + 0.5;
+      const top = this.view.habitat >= 4 ? yardHeight(this.view.habitat) + 0.4 : 0.2 + w * 0.78 + 0.5;
       for (const [dx, dz] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
         points.push(new THREE.Vector3(CASE_CENTER.x + dx, 0, CASE_CENTER.z + dz));
         points.push(new THREE.Vector3(CASE_CENTER.x + dx, top, CASE_CENTER.z + dz));
       }
     }
-    fitOrthoToBox(this.camera, points, this.aspect, this.view.habitat === 4 ? 1.4 : 1.22);
+    fitOrthoToBox(this.camera, points, this.aspect, this.view.habitat >= 4 ? 1.4 : 1.22);
     let { left, right, top, bottom } = this.camera;
     if (this.bottomInset > 0) {
       // 少し引いて、見えている上側の中央に来るよう下へずらす

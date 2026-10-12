@@ -55,7 +55,7 @@ function toBool(value: unknown, fallback: boolean): boolean {
 }
 
 function toHabitat(value: unknown): Habitat {
-  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 ? value : 0;
+  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 || value === 5 ? value : 0;
 }
 
 function toBag(value: unknown): Bag {
@@ -117,6 +117,13 @@ function toHero(value: unknown): Hero | null {
 function toIdList<T extends string>(value: unknown, valid: readonly T[], always: T): T[] {
   const list = Array.isArray(value) ? value.filter((v): v is T => valid.includes(v as T)) : [];
   return [...new Set<T>([always, ...list])];
+}
+
+function toSpotState(value: unknown, now: number): SpotState {
+  const s = (typeof value === 'object' && value !== null ? value : {}) as { fullness?: unknown; at?: unknown };
+  const fullness = typeof s.fullness === 'number' && Number.isFinite(s.fullness) ? Math.min(1, Math.max(0, s.fullness)) : 1;
+  const at = typeof s.at === 'number' && Number.isFinite(s.at) && s.at >= 0 ? Math.min(s.at, now) : 0;
+  return { fullness, at };
 }
 
 function toSpots(value: unknown, now: number): Record<string, SpotState> {
@@ -220,6 +227,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     events: toEvents(data.events),
     dex: toDex(data.dex),
     contestBest: Math.min(toCount(data.contestBest, 0), CONTEST_MAX),
+    sky: toSpotState(data.sky, now),
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }
