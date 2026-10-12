@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   canFly,
   chapter,
@@ -10,6 +10,7 @@ import {
   skyClouds,
   skyRadiusMul,
   skyReward,
+  speedSeconds,
   warehouseDue,
   contestRanking,
   contestResult,
@@ -442,4 +443,12 @@ test('章が進むとアクセサリーが入荷する（前の章では買え�
   assert.equal(buyAccessory({ ...rich, habitat: 4 as const }, 'bandana').ok, true);
   assert.equal(buyAccessory({ ...rich, habitat: 4 as const }, 'goggles').ok, false);
   assert.equal(buyAccessory({ ...rich, habitat: 5 as const }, 'goggles').ok, true);
+});
+
+test('早さの依頼の制限時間は15秒前後（短すぎず長すぎず）', () => {
+  for (const spot of SPOTS) {
+    const vac = speedSeconds(spot, TOOLS.vacuum);
+    assert.ok(vac >= 12 && vac <= 18, `${spot.id}: ${vac}`);
+    assert.ok(speedSeconds(spot, TOOLS.hand) > vac);
+  }
 });

@@ -573,6 +573,15 @@ export function availableSpots(save: SaveData): SpotDef[] {
   return SPOTS.filter((d) => areaUnlocked(save, d.area) && bestTool(save).tier >= d.minTier);
 }
 
+/**
+ * 「○秒以内に掃除」の制限時間。13〜18秒くらい（広い場所ほど少し長い）。
+ * 素手・ぞうきんしかないときは少しおまけする。
+ */
+export function speedSeconds(spot: SpotDef, tool: ToolDef): number {
+  const base = 10 + Math.round(spot.maxDust / 4);
+  return tool.tier <= 1 ? base + 5 : base;
+}
+
 /** 新しい依頼を1件つくる。行ける場所と手に入るホコリの中から選ぶ */
 export function makeRequest(save: SaveData, id: number, random: () => number): Request {
   const spots = availableSpots(save);
@@ -586,7 +595,7 @@ export function makeRequest(save: SaveData, id: number, random: () => number): R
     return { id, kind: 'collect', client: c.client, line: c.line, dust, count, reward: 10 + count * 4, rep: 1 };
   }
   if (roll < 0.75) {
-    const seconds = spot.maxDust * 4 + 10;
+    const seconds = speedSeconds(spot, bestTool(save));
     return {
       id,
       kind: 'speed',
