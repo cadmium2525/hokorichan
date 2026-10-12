@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { HABITATS, SPOT_READY_RATIO, spotDef, TOOLS } from '../src/game/catalog.ts';
+import { FRIEND_UNLOCK_XP, HABITATS, SPOT_READY_RATIO, spotDef, TOOLS } from '../src/game/catalog.ts';
 import {
   bestTool,
   buyAccessory,
@@ -15,6 +15,7 @@ import {
   dry,
   feed,
   finishSpot,
+  friendUnlocked,
   petDisplaySize,
   rankFor,
   requiredCount,
@@ -185,4 +186,16 @@ test('ランクの境界値', () => {
   assert.equal(rankFor(20).name, '手のひら級');
   assert.equal(rankFor(50).name, 'ぬいぐるみ級');
   assert.equal(rankFor(100).name, 'お部屋級');
+});
+
+test('友だちの家は成長が規定値に達すると解禁され、それまでは掃除できない', () => {
+  const room = spotDef('friendRoom');
+  const before = save({ growthXp: FRIEND_UNLOCK_XP - 1, habitat: 1 });
+  assert.equal(friendUnlocked(before), false);
+  assert.equal(spotStatus(before, room, 0).locked, true);
+  assert.equal(startSpot(before, room, 0), null);
+  const after = save({ growthXp: FRIEND_UNLOCK_XP, habitat: 1 });
+  assert.equal(friendUnlocked(after), true);
+  assert.equal(spotStatus(after, room, 0).locked, false);
+  assert.ok(startSpot(after, room, 0));
 });

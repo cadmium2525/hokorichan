@@ -32,10 +32,14 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- 掃除場所（一軒家の中） ----
 
-export type SpotId = 'window' | 'washer' | 'myroom' | 'shelf' | 'living';
+export type SpotId = 'window' | 'washer' | 'myroom' | 'shelf' | 'living' | 'friendEntrance' | 'friendRoom';
+
+/** 掃除場所がある建物 */
+export type Area = 'home' | 'friend';
 
 export type SpotDef = {
   id: SpotId;
+  area: Area;
   name: string;
   desc: string;
   /** 満タン時のホコリの数 */
@@ -49,12 +53,19 @@ export type SpotDef = {
 };
 
 export const SPOTS: readonly SpotDef[] = [
-  { id: 'window', name: '窓のさん', desc: 'レールのすみに綿ぼこり', maxDust: 10, rewardBase: 10, regenMinutes: 20, minTier: 0 },
-  { id: 'washer', name: '洗濯機のフィルター', desc: 'ドラム式の乾燥フィルター', maxDust: 12, rewardBase: 12, regenMinutes: 30, minTier: 0 },
-  { id: 'myroom', name: '自分の部屋', desc: '床いっぱいのホコリ', maxDust: 20, rewardBase: 20, regenMinutes: 45, minTier: 0 },
-  { id: 'shelf', name: '本棚の上', desc: '手が届かない高いところ', maxDust: 14, rewardBase: 30, regenMinutes: 40, minTier: 2 },
-  { id: 'living', name: 'リビング', desc: '家族みんなの広い部屋', maxDust: 30, rewardBase: 40, regenMinutes: 60, minTier: 3 },
+  { id: 'window', area: 'home', name: '窓のさん', desc: 'レールのすみに綿ぼこり', maxDust: 10, rewardBase: 10, regenMinutes: 20, minTier: 0 },
+  { id: 'washer', area: 'home', name: '洗濯機のフィルター', desc: 'ドラム式の乾燥フィルター', maxDust: 12, rewardBase: 12, regenMinutes: 30, minTier: 0 },
+  { id: 'myroom', area: 'home', name: '自分の部屋', desc: '床いっぱいのホコリ', maxDust: 20, rewardBase: 20, regenMinutes: 45, minTier: 0 },
+  { id: 'shelf', area: 'home', name: '本棚の上', desc: '手が届かない高いところ', maxDust: 14, rewardBase: 30, regenMinutes: 40, minTier: 2 },
+  { id: 'living', area: 'home', name: 'リビング', desc: '家族みんなの広い部屋', maxDust: 30, rewardBase: 40, regenMinutes: 60, minTier: 3 },
+  { id: 'friendEntrance', area: 'friend', name: '友だちの家の玄関', desc: 'くつのまわりに砂ぼこり', maxDust: 14, rewardBase: 20, regenMinutes: 30, minTier: 0 },
+  { id: 'friendRoom', area: 'friend', name: '友だちの部屋', desc: 'おもちゃのすきまにホコリ', maxDust: 24, rewardBase: 30, regenMinutes: 50, minTier: 0 },
 ];
+
+export const AREA_NAMES: Record<Area, string> = { home: '自分の家', friend: '友だちの家' };
+
+/** ほこりちゃんがこの成長に達すると、友だちから声がかかって友だちの家に行けるようになる */
+export const FRIEND_UNLOCK_XP = 30;
 
 export const SPOT_IDS: readonly SpotId[] = SPOTS.map((s) => s.id);
 

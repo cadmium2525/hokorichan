@@ -74,11 +74,13 @@ export function floorTexture(seed: number, repeat: number): THREE.CanvasTexture 
   return toTexture(canvas, [repeat, repeat]);
 }
 
-export function wallTexture(width: number): THREE.CanvasTexture {
+export type WallColors = { base: string; stripe: string };
+
+export function wallTexture(width: number, colors: WallColors = { base: PALETTE.wall, stripe: PALETTE.wallStripe }): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(16, 32);
-  ctx.fillStyle = PALETTE.wall;
+  ctx.fillStyle = colors.base;
   ctx.fillRect(0, 0, 16, 32);
-  ctx.fillStyle = PALETTE.wallStripe;
+  ctx.fillStyle = colors.stripe;
   ctx.fillRect(6, 0, 3, 28);
   ctx.fillStyle = '#e8dcf2';
   ctx.fillRect(13, 6, 1, 1);

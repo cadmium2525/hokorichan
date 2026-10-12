@@ -87,6 +87,7 @@ export class Hud {
           <canvas class="game-canvas" data-ref="canvas"></canvas>
           <div class="edge edge--left" data-ref="edgeLeft" hidden></div>
           <div class="edge edge--right" data-ref="edgeRight" hidden></div>
+          <div class="labels" data-ref="labels"></div>
           <div class="hint" data-ref="hint" hidden></div>
           <div class="toast" data-ref="toast" hidden></div>
         </main>
@@ -174,6 +175,41 @@ export class Hud {
     };
     set(this.el.edgeLeft, left, '◀');
     set(this.el.edgeRight, right, '▶');
+  }
+
+  /** 3Dの建物の上に出す名札。位置は stage に対する割合（0〜1） */
+  setLabels(items: Array<{ id: string; text: string; x: number; y: number; action?: string }>): void {
+    const layer = this.el.labels;
+    const seen = new Set<string>();
+    for (const it of items) {
+      seen.add(it.id);
+      let el = layer.querySelector<HTMLElement>(`[data-label="${it.id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'label';
+        el.dataset.label = it.id;
+        layer.appendChild(el);
+      }
+      if (el.textContent !== it.text) el.textContent = it.text;
+      // 画面外の建物の札はタップするとそこへ歩いていく
+      if (it.action) {
+        el.dataset.action = it.action;
+        el.dataset.arg = it.id;
+        el.classList.add('label--button');
+      } else {
+        delete el.dataset.action;
+        el.classList.remove('label--button');
+      }
+      el.style.left = `${(it.x * 100).toFixed(2)}%`;
+      el.style.top = `${(it.y * 100).toFixed(2)}%`;
+    }
+    layer.querySelectorAll<HTMLElement>('[data-label]').forEach((el) => {
+      if (!seen.has(el.dataset.label as string)) el.remove();
+    });
+  }
+
+  setTownStatus(text: string): void {
+    this.el.status.innerHTML = `<div class="status__line"><span class="status__title">まち</span></div><div class="town-note">${escapeHtml(text)}</div>`;
   }
 
   hint(text: string | null): void {

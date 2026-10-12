@@ -74,6 +74,10 @@ export function migrate(raw: Record<string, unknown>): Record<string, unknown> |
       hero: null,
     };
   }
+  if (data.version === 2) {
+    // v3でまちを追加。説明やイベントは未読から始める
+    data = { ...data, version: 3, townIntroDone: false, friendIntroDone: false };
+  }
   if (data.version === SAVE_VERSION) return data;
   return null;
 }
@@ -103,6 +107,8 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     equippedAccessory: equipped,
     shape: clampShape({ width: Number(shape.width ?? 1), height: Number(shape.height ?? 1), fluff: Number(shape.fluff ?? 1) }),
     spots: toSpots(data.spots, now) as SaveData['spots'],
+    townIntroDone: toBool(data.townIntroDone, init.townIntroDone),
+    friendIntroDone: toBool(data.friendIntroDone, init.friendIntroDone),
   };
 }
 

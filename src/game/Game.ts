@@ -5,6 +5,8 @@ import { PixelRenderer } from '../render/pixelRenderer.ts';
 import { buildSpot } from '../render/spotBuilder.ts';
 import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene } from '../scenes/PetScene.ts';
+import { TownScene } from '../scenes/TownScene.ts';
+import type { BuildingId } from '../render/townBuilder.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
 import {
@@ -20,12 +22,14 @@ import {
 import { Sound } from './audio.ts';
 import {
   ACCESSORY_IDS,
+  FRIEND_UNLOCK_XP,
   HABITATS,
   SHAPE_PRESETS,
   spotDef,
   SPOT_IDS,
   TOOLS,
   type AccessoryId,
+  type Area,
   type Hero,
   type PetShape,
   type SpotDef,
@@ -49,6 +53,7 @@ import {
   feed,
   feedableAmount,
   finishSpot,
+  friendUnlocked,
   isFull,
   rankFor,
   REWARD_PER_DUST,
@@ -61,9 +66,9 @@ import {
   type SaveData,
 } from './state.ts';
 
-export type Mode = 'BOOT' | 'HOME' | 'CLEANING' | 'RESULT';
+export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'RESULT';
 
-type Overlay = 'none' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'confirm' | 'result' | 'help';
+type Overlay = 'none' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'confirm' | 'result' | 'help' | 'lot';
 
 /** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
 type DebugParams = { seed: number | null; damp: boolean | null; speed: number };
@@ -83,9 +88,23 @@ function readParams(): DebugParams {
 type StoryStep = { speaker: Speaker; text: string; button: string; enter?: (scene: PetScene | null) => void };
 
 const HOW_TO =
-  '「おそうじへ」で家の中の場所をえらんで、指でなぞってホコリを集めよう。<br>' +
-  '最初は<b>素手</b>。お小遣いで<b>掃除用具</b>や<b>ケース</b>を買えるよ。<br>' +
+  '「おそうじ」で家の中の場所をえらんで、指でなぞってホコリを集めよう。<br>' +
+  '最初は<b>素手</b>。「おでかけ」して<b>ショップ</b>に行くと、お小遣いで掃除用具やケースを買えるよ。<br>' +
   'ホコリは時間がたつとまた積もるから、待つ間は「あそぶ」でなでたり着せかえたりしよう！';
+
+const TOWN_INTRO: StoryStep[] = [
+  {
+    speaker: 'narration',
+    text: 'ここは家のまわりの<b>まち</b>。<br>行きたい場所をタップすると歩いていくよ。<br>ショップでは掃除用具やケースが買えるよ。',
+    button: 'わかった',
+  },
+];
+
+const FRIEND_INTRO: StoryStep[] = [
+  { speaker: 'friend', text: 'いらっしゃい！ うわさの「ほこりちゃん」、そんなに大きくなったんだ！', button: 'えへへ' },
+  { speaker: 'friendMom', text: 'うちも最近ホコリがたまって困ってたの。おそうじしてくれたら、<b>お小遣い</b>をあげるわね。', button: 'まかせて！' },
+  { speaker: 'hero', text: '自分の家のホコリが積もるまでは、友だちの家をおそうじしよう！', button: '次へ' },
+];
 
 const INTRO: StoryStep[] = [
   { speaker: 'narration', text: 'ある日、勉強机の上に<b>小さなホコリ</b>を見つけた。', button: 'そっと見る', enter: (p) => p?.setSleeping(true) },
@@ -126,6 +145,10 @@ export class Game {
   private pendingDamp = false;
   private autoFinishTimer = 0;
   private storyStep = 0;
+  private story: StoryStep[] = INTRO;
+  private storyDone: (() => void) | null = null;
+  private town: TownScene | null = null;
+  private mapArea: Area = 'home';
   private shopTab: ShopTab = 'tools';
   private lastPetSound = 0;
   private mapRefresh = 0;
@@ -181,6 +204,9 @@ export class Game {
     if (this.mode === 'HOME') {
       this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), HABITATS[s.habitat].name, s.damp);
       this.hud.setActions(this.homeButtons());
+    } else if (this.mode === 'TOWN') {
+      this.hud.setTownStatus('行きたい場所をタップしよう');
+      this.hud.setActions([{ action: 'walkHome', label: 'おうちに帰る', variant: 'accent' }]);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
       const sess = this.session;
       const need = requiredCount(sess);
@@ -204,7 +230,7 @@ export class Game {
     const feedable = feedableAmount(s);
     const buttons: ButtonSpec[] = [];
     if (s.damp) buttons.push({ action: 'dry', label: '乾燥させる', sub: '無料', variant: 'water' });
-    buttons.push({ action: 'openMap', label: 'おそうじへ', variant: 'accent' });
+    buttons.push({ action: 'openMap', label: 'おそうじ', sub: '家の中', variant: 'accent' });
     buttons.push({
       action: 'feed',
       label: '餌をあげる',
@@ -212,7 +238,7 @@ export class Game {
       variant: 'primary',
       disabled: feedable === 0,
     });
-    buttons.push({ action: 'openShop', label: 'ショップ', variant: 'secondary' });
+    buttons.push({ action: 'goOut', label: 'おでかけ', sub: friendUnlocked(s) ? 'ショップ・友だちの家' : 'ショップ', variant: 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
     return buttons;
   }
@@ -227,9 +253,11 @@ export class Game {
 
   private goHome(): void {
     this.cleaning = null;
+    this.town = null;
     this.session = null;
     this.spot = null;
     this.mode = 'HOME';
+    this.hud.setLabels([]);
     this.hud.hint(null);
     this.hud.setEdgeArrows(0, 0);
     this.sound.stopHum();
@@ -258,6 +286,70 @@ export class Game {
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
+  /** まちへ。startAt の建物の入口の前から歩き出す */
+  private goTown(startAt: BuildingId): void {
+    this.cleaning = null;
+    this.pet = null;
+    this.session = null;
+    this.spot = null;
+    this.mode = 'TOWN';
+    this.hud.hint(null);
+    this.hud.setEdgeArrows(0, 0);
+    this.sound.stopHum();
+    this.town = new TownScene({
+      element: this.hud.canvas,
+      hero: this.hero,
+      startAt,
+      onArrive: (id) => this.onArrive(id),
+    });
+    this.setScene(this.town);
+    this.refreshHud();
+    this.syncInput();
+    if (!this.save.townIntroDone) {
+      this.runStory(TOWN_INTRO, 'まち', () => this.commit({ ...this.save, townIntroDone: true }));
+    }
+  }
+
+  /** まちで建物の入口に着いた */
+  private onArrive(id: BuildingId): void {
+    if (this.mode !== 'TOWN') return;
+    switch (id) {
+      case 'home':
+        this.sound.play('tap');
+        this.goHome();
+        return;
+      case 'shop':
+        this.sound.play('tap');
+        this.renderShop(true);
+        return;
+      case 'friend':
+        if (!friendUnlocked(this.save)) {
+          this.sound.play('deny');
+          this.hud.toast(`まだ知らない家だ…（ほこりちゃんが成長${FRIEND_UNLOCK_XP}になったら？）`, 2800);
+          return;
+        }
+        this.sound.play('tap');
+        if (!this.save.friendIntroDone) {
+          this.runStory(FRIEND_INTRO, '友だちの家', () => {
+            this.commit({ ...this.save, friendIntroDone: true });
+            this.openMap('friend');
+          });
+        } else {
+          this.openMap('friend');
+        }
+        return;
+      case 'lot':
+        this.sound.play('tap');
+        this.openOverlay('lot', {
+          title: '空き地',
+          className: 'modal--story',
+          body: storyBody('narration', this.hero, '草がのびた広い空き地。<br>「売地」の看板が立っている……。<br>いつかここに、ほこりちゃんのための<b>倉庫</b>を建てられるかも？<br><small>（準備中）</small>'),
+          buttons: [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
+        });
+        return;
+    }
+  }
+
   private startCleaning(def: SpotDef, dust: number): void {
     this.pet = null;
     this.sessionCount++;
@@ -277,6 +369,8 @@ export class Game {
       onCollect: (id) => this.onCollect(id),
       onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),
     });
+    this.hud.setLabels([]);
+    this.town = null;
     this.session = createSession(this.sessionCount, def, scene.dustTotal);
     this.spot = def;
     this.cleaning = scene;
@@ -302,12 +396,15 @@ export class Game {
 
   /** 掃除を終えて、取り残しを場所に記録してから帰宅する */
   private leaveCleaning(): void {
+    const area = this.spot?.area ?? 'home';
     if (this.session && this.spot) {
       const remaining = this.session.total - this.session.collected.size;
       this.commit(finishSpot(this.save, this.spot, remaining, this.now));
     }
     this.closeModal();
-    this.goHome();
+    // 友だちの家の掃除が終わったら、友だちの家の前（まち）に戻る
+    if (area === 'friend') this.goTown('friend');
+    else this.goHome();
   }
 
   /** RESULT：お母さんからお小遣い。報酬確定はここで一度だけ */
@@ -343,6 +440,7 @@ export class Game {
 
   private openOverlay(overlay: Overlay, spec: Parameters<Hud['showModal']>[0]): void {
     this.overlay = overlay;
+    this.town?.stop();
     this.hud.showModal(spec);
     this.syncInput();
     this.syncSheetInset();
@@ -365,20 +463,36 @@ export class Game {
   }
 
   private startStory(): void {
+    this.runStory(INTRO, 'であい', () => {
+      if (!this.save.tutorialDone) this.commit({ ...this.save, tutorialDone: true });
+    });
+  }
+
+  /** 吹き出しのお話を順に見せ、最後に done を呼ぶ */
+  private runStory(steps: StoryStep[], title: string, done: () => void): void {
+    this.story = steps;
+    this.storyTitle = title;
+    this.storyDone = done;
     this.storyStep = 0;
+    this.town?.stop();
     this.showStoryStep();
   }
 
+  private storyTitle = '';
+
   private showStoryStep(): void {
-    const step = INTRO[this.storyStep];
+    const step = this.story[this.storyStep];
     if (!step) {
+      const done = this.storyDone;
+      this.storyDone = null;
       this.closeModal();
-      if (!this.save.tutorialDone) this.commit({ ...this.save, tutorialDone: true });
+      done?.();
       return;
     }
     step.enter?.(this.pet);
+    const isHowTo = this.story === INTRO && this.storyStep === INTRO.length - 1;
     this.openOverlay('story', {
-      title: this.storyStep === INTRO.length - 1 ? 'あそびかた' : 'であい',
+      title: isHowTo ? 'あそびかた' : this.storyTitle,
       className: 'modal--story',
       // 下のパネルに出して、机の上のほこりちゃんが目を覚ますところを見せる
       sheet: true,
@@ -387,11 +501,12 @@ export class Game {
     });
   }
 
-  private openMap(): void {
+  private openMap(area: Area): void {
+    this.mapArea = area;
     this.openOverlay('map', {
       title: 'どこを掃除する？',
       className: 'modal--map',
-      body: mapBody(this.save, this.now, this.params.speed),
+      body: mapBody(this.save, area, this.now, this.params.speed),
       buttons: [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
     });
   }
@@ -461,7 +576,7 @@ export class Game {
         return;
     }
 
-    if (this.mode === 'HOME') this.onHomeAction(action, arg);
+    if (this.mode === 'HOME' || this.mode === 'TOWN') this.onHomeAction(action, arg);
     else if (this.mode === 'CLEANING') this.onCleaningAction(action);
     else if (this.mode === 'RESULT' && action === 'resultHome') this.leaveCleaning();
   }
@@ -470,7 +585,22 @@ export class Game {
     switch (action) {
       case 'openMap':
         this.sound.play('tap');
-        this.openMap();
+        this.openMap('home');
+        return;
+      case 'goOut':
+        this.sound.play('tap');
+        this.goTown('home');
+        return;
+      case 'walkHome':
+        this.sound.play('tap');
+        this.town?.goToBuilding('home');
+        return;
+      case 'walkTo':
+        if (this.overlay !== 'none') return;
+        if (arg === 'home' || arg === 'shop' || arg === 'friend' || arg === 'lot') {
+          this.sound.play('tap');
+          this.town?.goToBuilding(arg);
+        }
         return;
       case 'goSpot': {
         if (!SPOT_IDS.includes(arg as SpotId)) return;
@@ -486,10 +616,6 @@ export class Game {
         this.startCleaning(def, started.dust);
         return;
       }
-      case 'openShop':
-        this.sound.play('tap');
-        this.renderShop(true);
-        return;
       case 'shopTab':
         if (arg === 'tools' || arg === 'home' || arg === 'accessories') {
           this.shopTab = arg;
@@ -542,7 +668,9 @@ export class Game {
         this.sound.play('feed');
         window.setTimeout(() => this.sound.play('happy'), 1600);
         const after = rankFor(save.growthXp);
-        if (after !== before) this.hud.toast(`${after.name}に成長した！`);
+        if (friendUnlocked(save) && !friendUnlocked({ ...save, growthXp: save.growthXp - fed })) {
+          this.hud.toast('友だちから電話！「うちに遊びにおいでよ」 おでかけしてみよう', 3600);
+        } else if (after !== before) this.hud.toast(`${after.name}に成長した！`);
         else if (isFull(save)) {
           this.hud.toast(
             save.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : save.habitat < 3 ? 'ケースがいっぱい！ショップで大きくしよう' : 'ケースがいっぱい！（今の上限）',
@@ -627,6 +755,7 @@ export class Game {
   private syncInput(): void {
     this.cleaning?.setInputEnabled(this.mode === 'CLEANING' && !this.hud.modalOpen);
     this.pet?.setInputEnabled(this.mode === 'HOME' && (this.overlay === 'none' || this.overlay === 'play'));
+    this.town?.setInputEnabled(this.mode === 'TOWN' && this.overlay === 'none');
   }
 
   private bindLifecycle(): void {
@@ -669,12 +798,26 @@ export class Game {
       const off = this.cleaning.offscreenDust();
       this.hud.setEdgeArrows(off.left, off.right);
     }
+    if (this.town && this.mode === 'TOWN') {
+      const unlocked = friendUnlocked(this.save);
+      const names: Record<BuildingId, string> = { home: 'おうち', shop: 'ショップ', friend: unlocked ? '友だちの家' : '？？？の家', lot: '空き地' };
+      const arrow = { left: '◀ ', right: '', up: '▲ ', down: '▼ ' };
+      this.hud.setLabels(
+        this.town.labels().map((l) => ({
+          id: l.id,
+          text: l.off ? `${arrow[l.off]}${names[l.id]}${l.off === 'right' ? ' ▶' : ''}` : names[l.id],
+          x: l.x,
+          y: l.y,
+          action: l.off ? 'walkTo' : undefined,
+        })),
+      );
+    }
     // マップを開いている間は積もり具合を1秒ごとに更新する
     if (this.overlay === 'map') {
       this.mapRefresh -= dt;
       if (this.mapRefresh <= 0) {
         this.mapRefresh = 1;
-        this.hud.updateModalBody(mapBody(this.save, this.now, this.params.speed));
+        this.hud.updateModalBody(mapBody(this.save, this.mapArea, this.now, this.params.speed));
       }
     }
     if (this.scene) {

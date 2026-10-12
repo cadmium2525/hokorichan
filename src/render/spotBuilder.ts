@@ -3,7 +3,18 @@
 import * as THREE from 'three';
 import type { SpotId } from '../game/catalog.ts';
 import { makeCanvas, PALETTE, toTexture, wallTexture, woodTexture, booksTexture, frameTexture } from './proceduralArt.ts';
-import { blockerOf, box, buildCleaningRoom, buildLivingRoom, frontBox, lambert, plant, type Blocker } from './roomBuilder.ts';
+import {
+  blockerOf,
+  box,
+  buildCleaningRoom,
+  buildFriendRoom,
+  buildLivingRoom,
+  frontBox,
+  lambert,
+  plant,
+  type Blocker,
+  type Room,
+} from './roomBuilder.ts';
 
 /** ホコリが積もる水平な面（この中に置き、指の位置もこの面に投影する） */
 export type Surface = { minX: number; maxX: number; minZ: number; maxZ: number; y: number };
@@ -85,8 +96,7 @@ function blockerOnSurface(object: THREE.Object3D, surfaceY: number): Blocker {
 
 // ---- 部屋（床） ----
 
-function roomLayout(seed: number, living: boolean): SpotLayout {
-  const room = living ? buildLivingRoom(seed) : buildCleaningRoom(seed);
+function roomLayout(room: Room): SpotLayout {
   const h = room.half;
   return {
     group: room.group,
@@ -239,6 +249,83 @@ function shelfLayout(seed: number): SpotLayout {
   };
 }
 
+// ---- 友だちの家の玄関 ----
+
+function stoneTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(16, 16);
+  ctx.fillStyle = '#d6d0c8';
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#c4bdb3';
+  ctx.fillRect(0, 7, 16, 1);
+  ctx.fillRect(7, 0, 1, 7);
+  ctx.fillRect(15, 8, 1, 8);
+  ctx.fillStyle = '#e2ddd6';
+  ctx.fillRect(3, 3, 1, 1);
+  ctx.fillRect(11, 12, 1, 1);
+  return toTexture(canvas, [3, 2]);
+}
+
+function entranceLayout(): SpotLayout {
+  const g = new THREE.Group();
+  const wallFace = lambert({ map: wallTexture(4, { base: '#e6f4ee', stripe: '#cfe9df' }) });
+  const wallSide = lambert({ color: '#d7e8e0' });
+  // 一段低い土間（ここにホコリがたまる）
+  const stone = lambert({ map: stoneTexture() });
+  const genkan = box(3.4, 0.3, 1.8, stone);
+  genkan.position.set(0, -0.15, 0.7);
+  // 上がり框と廊下
+  const wood = lambert({ map: woodTexture(14, PALETTE.woodLight) });
+  const step = box(3.4, 0.38, 2.2, wood);
+  step.position.set(0, 0.19, -1.3);
+  const backWall = box(3.6, 2.6, 0.2, [wallSide, wallSide, wallSide, wallSide, wallFace, wallSide]);
+  backWall.position.set(0, 1.3, -2.5);
+  const leftWall = box(0.2, 2.6, 4.4, [wallFace, wallSide, wallSide, wallSide, wallSide, wallSide]);
+  leftWall.position.set(-1.8, 1.3, -0.4);
+  g.add(genkan, step, backWall, leftWall);
+  // 玄関ドア（左の壁）
+  const door = box(0.06, 1.9, 1.0, lambert({ color: '#9cc9e6' }));
+  door.position.set(-1.68, 0.95, 0.75);
+  const knob = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 0), lambert({ color: '#f2c94c' }));
+  knob.position.set(-1.63, 0.95, 1.12);
+  g.add(door, knob);
+  // げた箱（右手前、土間の外）
+  const cabinet = frontBox(1.2, 1.0, 0.5, lambert({ map: woodTexture(15, PALETTE.wood) }), lambert({ map: woodTexture(16, PALETTE.wood, 2) }));
+  cabinet.position.set(1.0, 0.88, -1.0);
+  g.add(cabinet);
+
+  // 土間に脱いだくつと傘立て（障害物）
+  const blockers: Blocker[] = [];
+  const shoes: Array<[number, number, string]> = [[-0.6, 0.35, PALETTE.pinkDeep], [0.5, 0.15, '#8ec1ea'], [0.1, 1.0, '#f3d27a']];
+  for (const [x, z, color] of shoes) {
+    const pair = new THREE.Group();
+    for (const dx of [-0.09, 0.09]) {
+      const shoe = box(0.14, 0.1, 0.32, lambert({ color }));
+      shoe.position.set(dx, 0.05, 0);
+      pair.add(shoe);
+    }
+    pair.position.set(x, 0, z);
+    pair.rotation.y = x * 0.6;
+    g.add(pair);
+    blockers.push(blockerOf(pair));
+  }
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.5, 8), lambert({ color: PALETTE.lavenderDeep }));
+  stand.position.set(-1.35, 0.25, 1.35);
+  const umbrella = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 6), lambert({ color: PALETTE.pink }));
+  umbrella.position.set(-1.35, 0.6, 1.35);
+  umbrella.rotation.z = 0.15;
+  g.add(stand, umbrella);
+  blockers.push(blockerOf(stand));
+
+  return {
+    group: g,
+    surface: { minX: -1.45, maxX: 1.45, minZ: 0.0, maxZ: 1.5, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-1.8, 0, -1.2), new THREE.Vector3(1.8, 1.2, 1.6)),
+    scale: 0.6,
+    lint: false,
+  };
+}
+
 export function buildSpot(id: SpotId, seed: number): SpotLayout {
   switch (id) {
     case 'window':
@@ -248,8 +335,12 @@ export function buildSpot(id: SpotId, seed: number): SpotLayout {
     case 'shelf':
       return shelfLayout(seed);
     case 'living':
-      return roomLayout(seed, true);
+      return roomLayout(buildLivingRoom(seed));
     case 'myroom':
-      return roomLayout(seed, false);
+      return roomLayout(buildCleaningRoom(seed));
+    case 'friendRoom':
+      return roomLayout(buildFriendRoom(seed));
+    case 'friendEntrance':
+      return entranceLayout();
   }
 }

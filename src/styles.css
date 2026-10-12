@@ -315,6 +315,52 @@ body {
   }
 }
 
+.labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.label {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(255, 253, 249, 0.92);
+  border: 2px solid var(--line);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.label--button {
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 4px 10px;
+  border-color: var(--lavender);
+  color: var(--lavender-deep);
+  cursor: pointer;
+  animation: nudge 1.4s ease-in-out infinite;
+}
+
+.town-note {
+  min-height: 24px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.story--shop {
+  margin-bottom: 8px;
+}
+
+.story--shop .bubble {
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
 [hidden] {
   display: none !important;
 }

@@ -3,6 +3,7 @@
 
 import {
   ACCESSORIES,
+  FRIEND_UNLOCK_XP,
   HABITATS,
   SHAPE_LIMITS,
   SPOT_IDS,
@@ -19,7 +20,7 @@ import {
   type ToolId,
 } from './catalog.ts';
 
-export const SAVE_VERSION = 2 as const;
+export const SAVE_VERSION = 3 as const;
 
 /** 場所ごとの積もり具合。at の時点で fullness（0〜1）だった */
 export type SpotState = { fullness: number; at: number };
@@ -41,6 +42,10 @@ export type SaveData = {
   equippedAccessory: AccessoryId | null;
   shape: PetShape;
   spots: Record<SpotId, SpotState>;
+  /** まちの説明を見た */
+  townIntroDone: boolean;
+  /** 友だちから声をかけられた（友だちの家の解禁イベントを見た） */
+  friendIntroDone: boolean;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -74,7 +79,16 @@ export function createInitialSave(): SaveData {
     equippedAccessory: null,
     shape: defaultShape(),
     spots: fullSpots(),
+    townIntroDone: false,
+    friendIntroDone: false,
   };
+}
+
+// ---- まち ----
+
+/** 友だちの家に行けるか */
+export function friendUnlocked(save: SaveData): boolean {
+  return save.growthXp >= FRIEND_UNLOCK_XP;
 }
 
 // ---- 飼育 ----
@@ -180,11 +194,12 @@ export type SpotStatus = {
 
 export function spotStatus(save: SaveData, def: SpotDef, now: number, speed = 1): SpotStatus {
   const fullness = spotFullness(save.spots[def.id], def, now, speed);
+  const areaLocked = def.area === 'friend' && !friendUnlocked(save);
   const perMinute = 1 / def.regenMinutes;
   return {
     fullness,
     dust: Math.round(fullness * def.maxDust),
-    locked: bestTool(save).tier < def.minTier,
+    locked: areaLocked || bestTool(save).tier < def.minTier,
     ready: fullness >= SPOT_READY_RATIO - 1e-9,
     minutesToReady: Math.max(0, Math.ceil((SPOT_READY_RATIO - fullness) / perMinute / speed)),
     minutesToFull: Math.max(0, Math.ceil((1 - fullness) / perMinute / speed)),

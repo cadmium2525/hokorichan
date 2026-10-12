@@ -116,6 +116,19 @@ export function motherSprite(className = 'sprite'): string {
   return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#8a5a3c', a: '#b9a6dc', p: '#f4b6c6', f: '#8a5a3c' }, className);
 }
 
+/** 友だち（ミント色の服の男の子） */
+export function friendSprite(className = 'sprite'): string {
+  return pixelArt(BOY, { ...FACE, k: '#4a3328', h: '#b5652d', a: '#9fd8c4', b: '#6fb7a0', f: '#f3d27a' }, className);
+}
+
+export function friendMomSprite(className = 'sprite'): string {
+  return pixelArt(MOTHER, { ...FACE, k: '#3b2a2a', h: '#3b2a2a', a: '#9fd8c4', p: '#f3d27a', f: '#3b2a2a' }, className);
+}
+
+export function shopkeeperSprite(className = 'sprite'): string {
+  return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#7a5a8c', a: '#f3d27a', p: '#e98aa6', f: '#7a5a8c' }, className);
+}
+
 // ---- アイコン（9×9） ----
 
 const SPOT_ICONS: Record<SpotId, [string[], Record<string, string>]> = {
@@ -139,6 +152,14 @@ const SPOT_ICONS: Record<SpotId, [string[], Record<string, string>]> = {
     ['.........', '.........', '.aaaaaaa.', '.aaaaaaa.', 'babbbbbab', 'bbbbbbbbb', 'bbbbbbbbb', 'k.......k', '.........'],
     { a: '#cdbdea', b: '#b9a6dc', k: '#7d6aa8' },
   ],
+  friendEntrance: [
+  ['.........', '.........', '.........', '.aaa.bbb.', 'aaaa.bbbb', 'aaaa.bbbb', '.........', 'sssssssss', 'kkkkkkkkk'],
+  { a: '#e98aa6', b: '#8ec1ea', s: '#d6d0c8', k: '#b0a89e' },
+],
+  friendRoom: [
+  ['.........', 'k........', 'kww......', 'kwwbbbbbb', 'kbbbbbbbb', 'kbbbbbbbb', 'kkkkkkkkk', 'k.......k', '.........'],
+  { k: '#c98b55', w: '#fffaf3', b: '#9fd8c4' },
+],
 };
 
 const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {

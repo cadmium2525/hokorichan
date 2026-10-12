@@ -3,20 +3,48 @@
 
 import {
   ACCESSORIES,
+  AREA_NAMES,
   HABITATS,
   SHAPE_LIMITS,
   SHAPE_PRESETS,
   SPOTS,
   TOOL_ORDER,
   TOOLS,
+  type Area,
   type Hero,
   type SpotId,
 } from '../game/catalog.ts';
 import { bestTool, nextHabitat, spotStatus, type SaveData } from '../game/state.ts';
 import { buttonHtml, escapeHtml } from './hud.ts';
-import { accessoryIcon, heroSprite, motherSprite, spotIcon, toolIcon } from './sprites.ts';
+import {
+  accessoryIcon,
+  friendMomSprite,
+  friendSprite,
+  heroSprite,
+  motherSprite,
+  shopkeeperSprite,
+  spotIcon,
+  toolIcon,
+} from './sprites.ts';
 
-export type Speaker = 'hero' | 'mother' | 'narration';
+export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'narration';
+
+function speakerOf(speaker: Speaker, hero: Hero, className: string): { name: string; sprite: string } {
+  switch (speaker) {
+    case 'hero':
+      return { name: hero === 'boy' ? 'ぼく' : 'わたし', sprite: heroSprite(hero, className) };
+    case 'mother':
+      return { name: 'お母さん', sprite: motherSprite(className) };
+    case 'friend':
+      return { name: '友だち', sprite: friendSprite(className) };
+    case 'friendMom':
+      return { name: '友だちのお母さん', sprite: friendMomSprite(className) };
+    case 'shopkeeper':
+      return { name: '店員さん', sprite: shopkeeperSprite(className) };
+    case 'narration':
+      return { name: '', sprite: '' };
+  }
+}
 
 // ---- 主人公選択 ----
 
@@ -32,8 +60,7 @@ export function heroSelectBody(): string {
 // ---- お話（吹き出し） ----
 
 export function storyBody(speaker: Speaker, hero: Hero, text: string): string {
-  const name = speaker === 'mother' ? 'お母さん' : speaker === 'hero' ? (hero === 'boy' ? 'ぼく' : 'わたし') : '';
-  const sprite = speaker === 'mother' ? motherSprite('sprite sprite--lg') : speaker === 'hero' ? heroSprite(hero, 'sprite sprite--lg') : '';
+  const { name, sprite } = speakerOf(speaker, hero, 'sprite sprite--lg');
   return `
     <div class="story ${speaker === 'narration' ? 'story--narration' : ''}">
       ${sprite ? `<div class="story__who">${sprite}<span>${name}</span></div>` : ''}
@@ -48,9 +75,9 @@ function minutesText(min: number): string {
   return `${Math.max(1, min)}分`;
 }
 
-export function mapBody(save: SaveData, now: number, speed: number): string {
+export function mapBody(save: SaveData, area: Area, now: number, speed: number): string {
   const tool = bestTool(save);
-  const cards = SPOTS.map((def) => {
+  const cards = SPOTS.filter((def) => def.area === area).map((def) => {
     const st = spotStatus(save, def, now, speed);
     let note: string;
     let cls = '';
@@ -78,7 +105,7 @@ export function mapBody(save: SaveData, now: number, speed: number): string {
       </button>`;
   }).join('');
   return `
-    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite')}<span>道具：${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
+    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite')}<span>${escapeHtml(AREA_NAMES[area])}</span><span>${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
     <div class="spots">${cards}</div>
     <p class="note">ホコリは時間がたつと少しずつ積もるよ</p>`;
 }
@@ -126,7 +153,8 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
       return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
     }).join('');
   }
-  return `<div class="tabs">${tabHtml}</div><div class="items">${items}</div>`;
+  const greet = `<div class="story story--shop"><div class="story__who">${shopkeeperSprite('sprite')}</div><div class="bubble">いらっしゃいませ！</div></div>`;
+  return `${greet}<div class="tabs">${tabHtml}</div><div class="items">${items}</div>`;
 }
 
 // ---- あそぶ ----
@@ -166,14 +194,17 @@ export function resultBody(opts: {
   bag: number;
 }): string {
   const spot = SPOTS.find((s) => s.id === opts.spot);
+  // 友だちの家では友だちのお母さんがお小遣いをくれる
+  const giver = speakerOf(spot?.area === 'friend' ? 'friendMom' : 'mother', opts.hero, 'sprite sprite--xl');
+  const place = spot?.area === 'friend' ? spot.name.replace(/^友だちの(家の)?/, '') : (spot?.name ?? '');
   const pct = Math.round((opts.collected / opts.total) * 100);
   return `
     <div class="allowance">
       ${heroSprite(opts.hero, 'sprite sprite--lg')}
       <div class="allowance__coin">+${opts.reward}</div>
-      ${motherSprite('sprite sprite--xl')}
+      ${giver.sprite}
     </div>
-    <div class="bubble bubble--mother">お母さん「${escapeHtml(spot?.name ?? '')}、きれいになったね！ はい、お小遣い」</div>
+    <div class="bubble bubble--mother">${giver.name}「${escapeHtml(place)}、きれいになったね！ はい、お小遣い」</div>
     <dl class="result">
       <dt>集めたホコリ</dt><dd>${opts.collected} / ${opts.total}（${pct}%）</dd>
       <dt class="result__note">内訳</dt><dd class="result__note">基本${opts.base} ＋ ${opts.collected}個×${opts.perDust}</dd>

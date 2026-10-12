@@ -10,6 +10,7 @@ import {
   quiltTexture,
   rugTexture,
   wallTexture,
+  type WallColors,
   windowTexture,
   woodTexture,
 } from './proceduralArt.ts';
@@ -37,14 +38,14 @@ export function frontBox(w: number, h: number, d: number, side: THREE.Material, 
 
 // ---- 床と壁 ----
 
-export function buildShell(group: THREE.Group, half: number, seed: number): void {
+export function buildShell(group: THREE.Group, half: number, seed: number, wall?: WallColors): void {
   const floorTop = lambert({ map: floorTexture(seed, half) });
   const floorSide = lambert({ color: PALETTE.woodDark });
   const floor = box(half * 2, 0.3, half * 2, [floorSide, floorSide, floorTop, floorSide, floorSide, floorSide]);
   floor.position.y = -0.15;
   group.add(floor);
 
-  const wallFace = lambert({ map: wallTexture(half * 2) });
+  const wallFace = lambert({ map: wallTexture(half * 2, wall) });
   const wallTop = lambert({ color: '#f3dcc6' });
   const wallSide = lambert({ color: '#ead1bd' });
   const back = box(half * 2 + 0.2, WALL_HEIGHT, 0.2, [wallSide, wallSide, wallTop, wallSide, wallFace, wallSide]);
@@ -292,7 +293,8 @@ export function studyDesk(seed: number): { object: THREE.Group; topY: number; wi
 
 export function blockerOf(object: THREE.Object3D): Blocker {
   object.updateMatrixWorld(true);
-  const b = new THREE.Box3().setFromObject(object);
+  // precise: 回転した屋根などでも頂点から正確に求める（ゆるい外接箱だと大きくなりすぎる）
+  const b = new THREE.Box3().setFromObject(object, true);
   return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z, height: b.max.y };
 }
 
@@ -353,9 +355,14 @@ export function buildLivingRoom(seed: number): Room {
   return furnishRoom(seed, createRandom(seed), 4.5, 'living');
 }
 
-function furnishRoom(seed: number, random: Random, half: number, theme: 'bedroom' | 'living'): Room {
+/** 友だちの部屋：ミント色の壁の寝室 */
+export function buildFriendRoom(seed: number): Room {
+  return furnishRoom(seed, createRandom(seed), 3.8, 'bedroom', { base: '#e6f4ee', stripe: '#cfe9df' });
+}
+
+function furnishRoom(seed: number, random: Random, half: number, theme: 'bedroom' | 'living', wall?: WallColors): Room {
   const room: Room = { group: new THREE.Group(), blockers: [], half };
-  buildShell(room.group, half, seed);
+  buildShell(room.group, half, seed, wall);
 
   // 角に観葉植物
   const corner = plant(seed + 5);

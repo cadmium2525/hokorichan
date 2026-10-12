@@ -41,7 +41,8 @@ test('データなし・壊れたJSON・ストレージ無しは初期値', () =
 test('v1のデータはケース・掃除機を持った状態で引き継ぐ', () => {
   const v1 = { version: 1, coins: 50, dustBag: 3, growthXp: 40, caseLevel: 2, damp: false, cleanedSessions: 4, soundEnabled: false, tutorialDone: true };
   const s = sanitize(v1);
-  assert.equal(s.version, 2);
+  assert.equal(s.version, 3);
+  assert.equal(s.townIntroDone, false);
   assert.equal(s.coins, 50);
   assert.equal(s.growthXp, 40);
   assert.equal(s.habitat, 2);
@@ -49,6 +50,16 @@ test('v1のデータはケース・掃除機を持った状態で引き継ぐ', 
   assert.equal(s.hero, null);
   assert.equal(s.tutorialDone, true);
   assert.equal(s.soundEnabled, false);
+});
+
+test('v2のデータはまちの説明・友だちイベントを未読にして引き継ぐ', () => {
+  const s = sanitize({ version: 2, coins: 7, growthXp: 45, habitat: 1, hero: 'boy', tutorialDone: true });
+  assert.equal(s.version, 3);
+  assert.equal(s.coins, 7);
+  assert.equal(s.growthXp, 45);
+  assert.equal(s.hero, 'boy');
+  assert.equal(s.townIntroDone, false);
+  assert.equal(s.friendIntroDone, false);
 });
 
 test('未知のバージョンは初期化する', () => {
