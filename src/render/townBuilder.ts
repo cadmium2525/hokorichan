@@ -5,7 +5,7 @@ import { createRandom, randRange } from '../game/rng.ts';
 import { makeCanvas, PALETTE, toTexture } from './proceduralArt.ts';
 import { blockerOf, box, lambert, type Blocker } from './roomBuilder.ts';
 
-export type BuildingId = 'home' | 'shop' | 'friend' | 'lot';
+export type BuildingId = 'home' | 'shop' | 'friend' | 'lot' | 'flower' | 'bakery' | 'grandma' | 'board';
 
 export type Building = {
   id: BuildingId;
@@ -60,10 +60,10 @@ function windowTile(): THREE.CanvasTexture {
   return toTexture(canvas);
 }
 
-function awningTexture(): THREE.CanvasTexture {
+function awningTexture(color: string = PALETTE.lavenderDeep): THREE.CanvasTexture {
   const [canvas, ctx] = makeCanvas(16, 4);
   for (let x = 0; x < 16; x += 4) {
-    ctx.fillStyle = PALETTE.lavenderDeep;
+    ctx.fillStyle = color;
     ctx.fillRect(x, 0, 2, 4);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(x + 2, 0, 2, 4);
@@ -150,8 +150,55 @@ function vacantLot(): THREE.Group {
   return g;
 }
 
-export function buildTown(): Town {
-  const half = 8;
+/** 依頼の掲示板 */
+function board(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = lambert({ color: PALETTE.wood });
+  for (const x of [-0.45, 0.45]) {
+    const post = box(0.1, 1.2, 0.1, wood);
+    post.position.set(x, 0.6, 0);
+    g.add(post);
+  }
+  const panel = box(1.1, 0.7, 0.08, lambert({ color: PALETTE.woodLight }));
+  panel.position.set(0, 1.05, 0);
+  const roof = box(1.3, 0.08, 0.3, lambert({ color: '#a58fd0' }));
+  roof.position.set(0, 1.45, 0);
+  g.add(panel, roof);
+  const papers = ['#ffffff', '#fff3c4', '#ffe4ec'];
+  papers.forEach((c, i) => {
+    const p = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.32), new THREE.MeshBasicMaterial({ color: c }));
+    p.position.set(-0.32 + i * 0.32, 1.05, 0.05);
+    p.rotation.z = (i - 1) * 0.08;
+    g.add(p);
+  });
+  return g;
+}
+
+/** 空き地に置いたほこりちゃんのコンテナ（2章） */
+function containerOnLot(): THREE.Group {
+  const g = new THREE.Group();
+  const dirt = box(3.4, 0.04, 2.8, lambert({ color: '#d9b98c' }));
+  dirt.position.y = 0.02;
+  const body = box(2.6, 1.6, 1.6, lambert({ color: '#86bcd1' }));
+  body.position.set(0, 0.84, -0.2);
+  const stripes = lambert({ color: '#6fa6bd' });
+  for (let i = -1.1; i <= 1.11; i += 0.37) {
+    const rib = box(0.06, 1.5, 1.62, stripes);
+    rib.position.set(i, 0.84, -0.2);
+    g.add(rib);
+  }
+  const door = box(1.0, 1.3, 0.04, lambert({ color: '#5f93aa' }));
+  door.position.set(0, 0.7, 0.62);
+  const heart = new THREE.Mesh(new THREE.CircleGeometry(0.16, 12), new THREE.MeshBasicMaterial({ color: PALETTE.pink }));
+  heart.position.set(0, 1.15, 0.65);
+  g.add(dirt, body, door, heart);
+  return g;
+}
+
+export type TownOptions = { lotOwned: boolean };
+
+export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
+  const half = 10;
   const group = new THREE.Group();
   const blockers: Blocker[] = [];
 
@@ -162,7 +209,16 @@ export function buildTown(): Town {
   const path = lambert({ map: pathTexture() });
   // 横の大通りと、ショップ・友だちの家への小道
   // （カメラは +X+Z 側から見るので、建物は手前の建物が入口を隠さない並びにしてある）
-  for (const [x, z, w, d] of [[0, 1.8, 15, 1.2], [-0.8, -0.5, 1.0, 3.4], [3.6, 0.95, 1.0, 0.7], [2.0, 2.85, 1.0, 0.9]]) {
+  // 南の商店街通り（z=8.6）と、大通りから降りる2本の道
+  for (const [x, z, w, d] of [
+    [0, 1.8, 19, 1.2],
+    [-0.8, -0.5, 1.0, 3.4],
+    [3.6, 0.95, 1.0, 0.7],
+    [0, 8.6, 19, 1.2],
+    [-4.2, 5.2, 0.9, 5.6],
+    [4.4, 5.2, 0.9, 5.6],
+    [2.0, 7.3, 1.0, 1.4],
+  ]) {
     const p = box(w, 0.02, d, path);
     p.position.set(x, 0.01, z);
     group.add(p);
@@ -190,13 +246,35 @@ export function buildTown(): Town {
   group.add(awning);
   const friendObj = house({ w: 2.8, d: 2.4, h: 1.9, wall: '#e6f4ee', roof: '#6fb7a0', door: '#f3d27a' });
   placeHouse(friendObj, 3.6, -1.2, 2.8, 2.4);
-  const lotObj = vacantLot();
-  place(lotObj, 2.0, 4.6);
+  const lotObj = opts.lotOwned ? containerOnLot() : vacantLot();
+  // 空き地は柵ごと当たり判定（入口は南の通り側）
+  lotObj.position.set(2.0, 0, 4.6);
+  group.add(lotObj);
+  blockers.push({ minX: 0.3, maxX: 3.7, minZ: 3.2, maxZ: 6.0, height: 2 });
+
+  // 商店街（南の通りに面している）
+  const flowerObj = house({ w: 2.6, d: 2.0, h: 1.7, wall: '#fbfbf4', roof: '#7fb77e', door: PALETTE.pink });
+  placeHouse(flowerObj, -6.0, 7.0, 2.6, 2.0);
+  const bakeryObj = house({ w: 2.6, d: 2.0, h: 1.7, wall: '#fff1dc', roof: '#c98a4b', door: '#9c6438' });
+  placeHouse(bakeryObj, -2.4, 7.0, 2.6, 2.0);
+  const grandmaObj = house({ w: 2.8, d: 2.4, h: 1.8, wall: '#efe4cf', roof: '#5f6f86', door: '#9c6438' });
+  placeHouse(grandmaObj, 6.4, 6.6, 2.8, 2.4);
+  for (const [x, z, color] of [[-6.0, 7.0, PALETTE.pink], [-2.4, 7.0, '#f3d27a']] as const) {
+    const a = box(2.7, 0.08, 0.55, lambert({ map: awningTexture(color) }));
+    a.position.set(x, 1.2, z + 1.0 + 0.28);
+    a.rotation.x = 0.3;
+    group.add(a);
+  }
+  const boardObj = board();
+  place(boardObj, -2.2, 3.0);
 
   // 木と花（端と建物のすき間）
-  const trees: Array<[number, number]> = [[-6.5, -6.5], [-6.8, 3.6], [6.6, -6.2], [6.6, 4.0], [-3.6, -6.6], [6.8, 6.8], [-6.4, 6.4], [-1.6, 6.6], [3.2, -6.4]];
+  const trees: Array<[number, number]> = [
+    [-6.5, -6.5], [-6.8, 3.6], [6.6, -6.2], [6.6, 4.0], [-3.6, -6.6], [8.8, 4.4], [-8.6, 5.0], [-0.2, 9.6], [3.2, -6.4],
+    [-8.8, -8.8], [8.8, -8.6], [-8.8, -2.5], [8.9, 0.5], [4.5, -8.6], [-4.5, -8.8], [8.6, 9.4], [-8.6, 9.4],
+  ];
   trees.forEach(([x, z], i) => place(tree(i + 3), x, z));
-  const flowers: Array<[number, number]> = [[-2.4, 3.4], [1.6, -4.6], [-5.6, 3.9], [5.6, 3.9], [-3.0, 5.5], [-2.6, -1.4]];
+  const flowers: Array<[number, number]> = [[1.6, -4.6], [-5.6, 3.9], [5.6, 3.9], [-3.0, 5.5], [-2.6, -1.4], [1.0, 9.6], [-7.6, 9.6]];
   flowers.forEach(([x, z], i) => place(flowerPatch(i + 20), x, z, false));
 
   /** 入口は +Z 側。front=-1 なら -Z 側（空き地は道に面した奥側から入る） */
@@ -214,7 +292,11 @@ export function buildTown(): Town {
       home: building('home', homeObj, 1.2, 3.4),
       shop: building('shop', shopObj, 1.1, 3.2),
       friend: building('friend', friendObj, 1.2, 3.4),
-      lot: building('lot', lotObj, 1.4, 1.6, -1),
+      lot: building('lot', lotObj, 1.4, opts.lotOwned ? 2.6 : 1.6),
+      flower: building('flower', flowerObj, 1.0, 3.0),
+      bakery: building('bakery', bakeryObj, 1.0, 3.0),
+      grandma: building('grandma', grandmaObj, 1.2, 3.2),
+      board: building('board', boardObj, 0.1, 1.9),
     },
   };
 }

@@ -1,10 +1,26 @@
 // セーブデータの読み書き。不正データは項目単位で初期値に戻し、例外は外に出さない。
 
-import { ACCESSORY_IDS, SPOT_IDS, TOOLS, type AccessoryId, type Habitat, type Hero, type ToolId } from './catalog.ts';
+import {
+  ACCESSORY_IDS,
+  DUST_TYPES,
+  LOST_ITEMS,
+  SPOT_IDS,
+  TOOLS,
+  type AccessoryId,
+  type DustType,
+  type Habitat,
+  type Hero,
+  type SpotId,
+  type ToolId,
+} from './catalog.ts';
 import {
   clampShape,
   createInitialSave,
+  emptyBag,
   SAVE_VERSION,
+  type Bag,
+  type EventId,
+  type Request,
   type SaveData,
   type SpotState,
 } from './state.ts';
@@ -34,7 +50,50 @@ function toBool(value: unknown, fallback: boolean): boolean {
 }
 
 function toHabitat(value: unknown): Habitat {
-  return value === 0 || value === 1 || value === 2 || value === 3 ? value : 0;
+  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 ? value : 0;
+}
+
+function toBag(value: unknown): Bag {
+  const raw = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const bag = emptyBag();
+  for (const t of DUST_TYPES) bag[t] = toCount(raw[t], 0);
+  return bag;
+}
+
+const EVENT_IDS: readonly EventId[] = ['town', 'friend', 'board', 'landMeeting', 'container', 'street', 'together'];
+
+function toEvents(value: unknown): EventId[] {
+  return Array.isArray(value) ? [...new Set(value.filter((v): v is EventId => EVENT_IDS.includes(v as EventId)))] : [];
+}
+
+/** 依頼は形がおかしいものを捨てる（報酬や数は範囲内に丸める） */
+function toRequests(value: unknown): Request[] {
+  if (!Array.isArray(value)) return [];
+  const out: Request[] = [];
+  for (const v of value.slice(0, 3)) {
+    if (typeof v !== 'object' || v === null) continue;
+    const r = v as Record<string, unknown>;
+    const kind = r.kind;
+    if (kind !== 'collect' && kind !== 'speed' && kind !== 'lost') continue;
+    const id = toCount(r.id, -1);
+    if (id < 0 || typeof r.client !== 'string' || typeof r.line !== 'string') continue;
+    const req: Request = { id, kind, client: r.client, line: r.line, reward: Math.min(toCount(r.reward, 0), 10_000), rep: Math.min(toCount(r.rep, 0), 10) };
+    if (kind === 'collect') {
+      if (!DUST_TYPES.includes(r.dust as DustType)) continue;
+      req.dust = r.dust as DustType;
+      req.count = Math.max(1, Math.min(toCount(r.count, 1), 999));
+    } else {
+      if (!SPOT_IDS.includes(r.spot as SpotId)) continue;
+      req.spot = r.spot as SpotId;
+      if (kind === 'speed') req.seconds = Math.max(10, Math.min(toCount(r.seconds, 60), 600));
+      else {
+        if (!LOST_ITEMS.some((i) => i.id === r.item)) continue;
+        req.item = r.item as string;
+      }
+    }
+    out.push(req);
+  }
+  return out;
 }
 
 function toHero(value: unknown): Hero | null {
@@ -78,6 +137,19 @@ export function migrate(raw: Record<string, unknown>): Record<string, unknown> |
     // v3でまちを追加。説明やイベントは未読から始める
     data = { ...data, version: 3, townIntroDone: false, friendIntroDone: false };
   }
+  if (data.version === 3) {
+    // v4でホコリに種類ができた。これまでのバッグと食べた量は綿ぼこりとして引き継ぐ
+    const events: EventId[] = [];
+    if (data.townIntroDone === true) events.push('town');
+    if (data.friendIntroDone === true) events.push('friend');
+    data = {
+      ...data,
+      version: 4,
+      bag: { cotton: data.dustBag },
+      diet: { cotton: data.growthXp },
+      events,
+    };
+  }
   if (data.version === SAVE_VERSION) return data;
   return null;
 }
@@ -94,7 +166,8 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
   return {
     version: SAVE_VERSION,
     coins: toCount(data.coins, init.coins),
-    dustBag: toCount(data.dustBag, init.dustBag),
+    bag: toBag(data.bag),
+    diet: toBag(data.diet),
     growthXp: toCount(data.growthXp, init.growthXp),
     habitat: toHabitat(data.habitat),
     damp: toBool(data.damp, init.damp),
@@ -107,8 +180,12 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     equippedAccessory: equipped,
     shape: clampShape({ width: Number(shape.width ?? 1), height: Number(shape.height ?? 1), fluff: Number(shape.fluff ?? 1) }),
     spots: toSpots(data.spots, now) as SaveData['spots'],
-    townIntroDone: toBool(data.townIntroDone, init.townIntroDone),
-    friendIntroDone: toBool(data.friendIntroDone, init.friendIntroDone),
+    rep: toCount(data.rep, 0),
+    requests: toRequests(data.requests),
+    requestClock: typeof data.requestClock === 'number' && Number.isFinite(data.requestClock) ? Math.max(0, data.requestClock) : 0,
+    // 番号が重ならないよう、残っている依頼の番号より大きくしておく
+    requestSeq: Math.max(toCount(data.requestSeq, 0), ...toRequests(data.requests).map((r) => r.id)),
+    events: toEvents(data.events),
   };
 }
 

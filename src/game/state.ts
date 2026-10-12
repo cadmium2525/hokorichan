@@ -3,14 +3,23 @@
 
 import {
   ACCESSORIES,
+  AREA_NAMES,
+  AREA_REP,
+  COLLECT_LINES,
+  DUST_TYPES,
   FRIEND_UNLOCK_XP,
   HABITATS,
+  LAND_PRICE,
+  LOST_ITEMS,
   SHAPE_LIMITS,
   SPOT_IDS,
   SPOT_READY_RATIO,
+  SPOTS,
   TOOL_ORDER,
   TOOLS,
   type AccessoryId,
+  type Area,
+  type DustType,
   type Habitat,
   type Hero,
   type PetShape,
@@ -20,17 +29,43 @@ import {
   type ToolId,
 } from './catalog.ts';
 
-export const SAVE_VERSION = 3 as const;
+export const SAVE_VERSION = 4 as const;
 
 /** 場所ごとの積もり具合。at の時点で fullness（0〜1）だった */
 export type SpotState = { fullness: number; at: number };
 
+/** ホコリの種類ごとの数 */
+export type Bag = Record<DustType, number>;
+
+export type RequestKind = 'collect' | 'speed' | 'lost';
+
+/** 掲示板の依頼 */
+export type Request = {
+  id: number;
+  kind: RequestKind;
+  client: string;
+  line: string;
+  reward: number;
+  rep: number;
+  spot?: SpotId;
+  dust?: DustType;
+  count?: number;
+  seconds?: number;
+  item?: string;
+};
+
+/** 一度だけ起きる出来事（見たら記録） */
+export type EventId = 'town' | 'friend' | 'board' | 'landMeeting' | 'container' | 'street' | 'together';
+
 export type SaveData = {
   version: typeof SAVE_VERSION;
   coins: number;
-  dustBag: number;
+  /** バッグのホコリ（種類別） */
+  bag: Bag;
+  /** これまでに食べたホコリ（種類別）。毛並みが決まる */
+  diet: Bag;
   growthXp: number;
-  /** 0=勉強机の上、1〜3=ケース */
+  /** 0=勉強机の上、1〜3=ケース、4=空き地のコンテナ */
   habitat: Habitat;
   damp: boolean;
   cleanedSessions: number;
@@ -42,17 +77,30 @@ export type SaveData = {
   equippedAccessory: AccessoryId | null;
   shape: PetShape;
   spots: Record<SpotId, SpotState>;
-  /** まちの説明を見た */
-  townIntroDone: boolean;
-  /** 友だちから声をかけられた（友だちの家の解禁イベントを見た） */
-  friendIntroDone: boolean;
+  /** 評判（★）。依頼で上がり、新しい場所を紹介してもらえる */
+  rep: number;
+  requests: Request[];
+  /** 次の依頼が届く時刻 */
+  requestClock: number;
+  requestSeq: number;
+  events: EventId[];
 };
 
 export const REWARD_PER_DUST = 2;
 export const CLEAR_RATIO = 0.8;
 export const DAMP_CHANCE = 0.2;
 export const DAMP_SCALE = 0.7;
+export const REQUEST_MAX = 3;
+export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
+
+export function emptyBag(): Bag {
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0 };
+}
+
+export function bagTotal(bag: Bag): number {
+  return DUST_TYPES.reduce((sum, t) => sum + bag[t], 0);
+}
 
 export function defaultShape(): PetShape {
   return { width: 1, height: 1, fluff: 1 };
@@ -66,7 +114,8 @@ export function createInitialSave(): SaveData {
   return {
     version: SAVE_VERSION,
     coins: 0,
-    dustBag: 0,
+    bag: emptyBag(),
+    diet: emptyBag(),
     growthXp: 0,
     habitat: 0,
     damp: false,
@@ -79,16 +128,40 @@ export function createInitialSave(): SaveData {
     equippedAccessory: null,
     shape: defaultShape(),
     spots: fullSpots(),
-    townIntroDone: false,
-    friendIntroDone: false,
+    rep: 0,
+    requests: [],
+    requestClock: 0,
+    requestSeq: 0,
+    events: [],
   };
 }
 
-// ---- まち ----
+// ---- 出来事・章 ----
+
+export function hasEvent(save: SaveData, id: EventId): boolean {
+  return save.events.includes(id);
+}
+
+export function addEvent(save: SaveData, id: EventId): SaveData {
+  return hasEvent(save, id) ? save : { ...save, events: [...save.events, id] };
+}
+
+/** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
+export function chapter(save: SaveData): 1 | 2 {
+  return save.habitat >= 4 ? 2 : 1;
+}
+
+// ---- まちと場所の解禁 ----
 
 /** 友だちの家に行けるか */
 export function friendUnlocked(save: SaveData): boolean {
   return save.growthXp >= FRIEND_UNLOCK_XP;
+}
+
+export function areaUnlocked(save: SaveData, area: Area): boolean {
+  if (area === 'home') return true;
+  if (area === 'friend') return friendUnlocked(save);
+  return chapter(save) >= 2 && save.rep >= (AREA_REP[area] ?? 0);
 }
 
 // ---- 飼育 ----
@@ -97,28 +170,87 @@ export function capacityOf(habitat: Habitat): number {
   return HABITATS[habitat].capacity;
 }
 
-/** 今あげられる量。容量の残りとバッグの少ない方。 */
-export function feedableAmount(save: SaveData): number {
-  const room = capacityOf(save.habitat) - save.growthXp;
-  return Math.max(0, Math.min(save.dustBag, room));
-}
-
 export function isFull(save: SaveData): boolean {
   return save.growthXp >= capacityOf(save.habitat);
 }
 
-/** バッグのホコリを与える。容量を超える分はバッグに残る。 */
-export function feed(save: SaveData): { save: SaveData; fed: number } {
-  const fed = feedableAmount(save);
-  if (fed <= 0) return { save, fed: 0 };
+/** 今あげられる量。容量の残りと（その種類の）バッグの少ない方 */
+export function feedableAmount(save: SaveData, type: DustType | 'all' = 'all'): number {
+  const room = capacityOf(save.habitat) - save.growthXp;
+  const have = type === 'all' ? bagTotal(save.bag) : save.bag[type];
+  return Math.max(0, Math.min(have, room));
+}
+
+/**
+ * バッグのホコリを与える。type='all' なら多い種類から順に。
+ * 容量を超える分はバッグに残る。食べた種類は diet に記録する。
+ */
+export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: SaveData; fed: number } {
+  let room = capacityOf(save.habitat) - save.growthXp;
+  if (room <= 0) return { save, fed: 0 };
+  const bag = { ...save.bag };
+  const diet = { ...save.diet };
+  const order = type === 'all' ? [...DUST_TYPES].sort((a, b) => bag[b] - bag[a]) : [type];
+  let fed = 0;
+  for (const t of order) {
+    const n = Math.min(bag[t], room);
+    if (n <= 0) continue;
+    bag[t] -= n;
+    diet[t] += n;
+    room -= n;
+    fed += n;
+  }
+  if (fed === 0) return { save, fed: 0 };
+  return { save: { ...save, bag, diet, growthXp: save.growthXp + fed }, fed };
+}
+
+// ---- 毛並み（食べ合わせ） ----
+
+/** 食べたホコリの割合（0〜1） */
+export function dietRatios(diet: Bag): Bag {
+  const total = bagTotal(diet);
+  const r = emptyBag();
+  if (total === 0) return r;
+  for (const t of DUST_TYPES) r[t] = diet[t] / total;
+  return r;
+}
+
+/** これだけの割合を食べると毛並みとして現れる */
+export const TRAIT_RATIO = 0.15;
+const TRAIT_MIN_EATEN = 20;
+
+/** 現れている毛並み（綿ぼこりは基本なので除く） */
+export function activeTraits(diet: Bag): DustType[] {
+  if (bagTotal(diet) < TRAIT_MIN_EATEN) return [];
+  const r = dietRatios(diet);
+  return DUST_TYPES.filter((t) => t !== 'cotton' && r[t] >= TRAIT_RATIO);
+}
+
+/** 一緒に掃除するときの能力 */
+export function helperStats(save: SaveData): { speedMul: number; radiusMul: number; sneeze: boolean } {
+  const traits = activeTraits(save.diet);
+  const r = dietRatios(save.diet);
   return {
-    save: { ...save, dustBag: save.dustBag - fed, growthXp: save.growthXp + fed },
-    fed,
+    speedMul: traits.includes('sand') ? 1 + r.sand * 2 : 1,
+    radiusMul: traits.includes('fur') ? 1 + r.fur * 1.5 : 1,
+    sneeze: traits.includes('pollen'),
   };
+}
+
+/** 粉ぼこりを食べていると湿気にくい */
+export function dampChance(save: SaveData): number {
+  if (!activeTraits(save.diet).includes('flour')) return DAMP_CHANCE;
+  return DAMP_CHANCE * Math.max(0.25, 1 - dietRatios(save.diet).flour * 3);
+}
+
+/** 一緒に掃除できるのは、おうち級（コンテナ）になってから */
+export function canCleanTogether(save: SaveData): boolean {
+  return save.habitat >= 4;
 }
 
 // ---- ショップ ----
 
+/** ショップで買えるのはケース（大）まで。その先は空き地 */
 export function nextHabitat(save: SaveData): { level: Habitat; price: number } | null {
   if (save.habitat >= 3) return null;
   const level = (save.habitat + 1) as Habitat;
@@ -168,6 +300,22 @@ export function clampShape(shape: PetShape): PetShape {
   return { width: c('width'), height: c('height'), fluff: c('fluff') };
 }
 
+// ---- 1章の山場：空き地とコンテナ ----
+
+/** ケース（大）がいっぱいになったら家族会議が開かれる */
+export function landMeetingDue(save: SaveData): boolean {
+  return save.habitat === 3 && isFull(save) && !hasEvent(save, 'landMeeting');
+}
+
+export function canBuyLand(save: SaveData): boolean {
+  return save.habitat === 3 && hasEvent(save, 'landMeeting') && save.coins >= LAND_PRICE;
+}
+
+export function buyLand(save: SaveData): { save: SaveData; ok: boolean } {
+  if (!canBuyLand(save)) return { save, ok: false };
+  return { save: { ...save, coins: save.coins - LAND_PRICE, habitat: 4 }, ok: true };
+}
+
 // ---- 掃除場所とホコリの復活 ----
 
 /**
@@ -182,7 +330,7 @@ export function spotFullness(state: SpotState, def: SpotDef, now: number, speed 
 export type SpotStatus = {
   fullness: number;
   dust: number;
-  /** 道具が足りずに入れない */
+  /** 道具が足りない・まだ紹介されていないなどで入れない */
   locked: boolean;
   /** 掃除できるだけ積もっている */
   ready: boolean;
@@ -194,12 +342,11 @@ export type SpotStatus = {
 
 export function spotStatus(save: SaveData, def: SpotDef, now: number, speed = 1): SpotStatus {
   const fullness = spotFullness(save.spots[def.id], def, now, speed);
-  const areaLocked = def.area === 'friend' && !friendUnlocked(save);
   const perMinute = 1 / def.regenMinutes;
   return {
     fullness,
     dust: Math.round(fullness * def.maxDust),
-    locked: areaLocked || bestTool(save).tier < def.minTier,
+    locked: !areaUnlocked(save, def.area) || bestTool(save).tier < def.minTier,
     ready: fullness >= SPOT_READY_RATIO - 1e-9,
     minutesToReady: Math.max(0, Math.ceil((SPOT_READY_RATIO - fullness) / perMinute / speed)),
     minutesToFull: Math.max(0, Math.ceil((1 - fullness) / perMinute / speed)),
@@ -230,15 +377,145 @@ export function finishSpot(save: SaveData, def: SpotDef, remaining: number, now:
   return { ...save, spots: { ...save.spots, [def.id]: { fullness, at: now } } };
 }
 
+/** 場所の割合にしたがって、ホコリ1個ずつの種類を決める */
+export function rollDustTypes(def: SpotDef, count: number, random: () => number): DustType[] {
+  const entries = DUST_TYPES.filter((t) => (def.dust[t] ?? 0) > 0).map((t) => [t, def.dust[t] as number] as const);
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  const out: DustType[] = [];
+  for (let i = 0; i < count; i++) {
+    let r = random() * total;
+    let pick: DustType = entries[0][0];
+    for (const [t, w] of entries) {
+      r -= w;
+      if (r < 0) {
+        pick = t;
+        break;
+      }
+    }
+    out.push(pick);
+  }
+  return out;
+}
+
 // ---- 湿気 ----
 
-export function rollDamp(random: () => number): boolean {
-  return random() < DAMP_CHANCE;
+export function rollDamp(random: () => number, chance = DAMP_CHANCE): boolean {
+  return random() < chance;
 }
 
 /** 乾燥は無料で即回復。XPや容量は一切変えない。 */
 export function dry(save: SaveData): SaveData {
   return save.damp ? { ...save, damp: false } : save;
+}
+
+// ---- 依頼（掲示板）と評判 ----
+
+const AREA_CLIENT: Record<Area, string> = {
+  home: 'お母さん',
+  friend: '友だちのお母さん',
+  flower: '花屋さん',
+  bakery: 'パン屋さん',
+  grandma: 'おばあちゃん',
+};
+
+/** 今のプレイヤーが行ける掃除場所（道具・解禁を満たす） */
+export function availableSpots(save: SaveData): SpotDef[] {
+  return SPOTS.filter((d) => areaUnlocked(save, d.area) && bestTool(save).tier >= d.minTier);
+}
+
+/** 新しい依頼を1件つくる。行ける場所と手に入るホコリの中から選ぶ */
+export function makeRequest(save: SaveData, id: number, random: () => number): Request {
+  const spots = availableSpots(save);
+  const types = DUST_TYPES.filter((t) => spots.some((s) => (s.dust[t] ?? 0) > 0));
+  const roll = random();
+  const spot = spots[Math.floor(random() * spots.length)];
+  if (roll < 0.45 && types.length > 0) {
+    const dust = types[Math.floor(random() * types.length)];
+    const count = 5 + Math.floor(random() * 8);
+    const c = COLLECT_LINES[dust];
+    return { id, kind: 'collect', client: c.client, line: c.line, dust, count, reward: 10 + count * 4, rep: 1 };
+  }
+  if (roll < 0.75) {
+    const seconds = spot.maxDust * 4 + 10;
+    return {
+      id,
+      kind: 'speed',
+      client: AREA_CLIENT[spot.area],
+      line: `お客さんが来るの！ ${spot.name}を${seconds}秒以内にきれいにしてほしい`,
+      spot: spot.id,
+      seconds,
+      reward: 30 + spot.maxDust,
+      rep: 1,
+    };
+  }
+  const item = LOST_ITEMS[Math.floor(random() * LOST_ITEMS.length)];
+  return {
+    id,
+    kind: 'lost',
+    client: AREA_CLIENT[spot.area],
+    line: `${spot.name}で${item.name}をなくしちゃったの。ホコリにまぎれてないかしら`,
+    spot: spot.id,
+    item: item.id,
+    reward: 50,
+    rep: 2,
+  };
+}
+
+/**
+ * 時間がたつと依頼が届く（最大3件）。遊ばない間にたまるのも3件まで。
+ * random は依頼の中身を決めるのに使う。
+ */
+export function refreshRequests(save: SaveData, now: number, random: () => number, speed = 1): SaveData {
+  const interval = (REQUEST_INTERVAL_MINUTES * MINUTE) / speed;
+  let s = save;
+  // 一度も届いていなければ、最初の2件をすぐ届ける
+  if (s.requestSeq === 0 && s.requests.length === 0) s = { ...s, requestClock: now - interval };
+  let changed = false;
+  let requests = s.requests;
+  let clock = s.requestClock;
+  let seq = s.requestSeq;
+  while (requests.length < REQUEST_MAX && now >= clock) {
+    seq += 1;
+    requests = [...requests, makeRequest(s, seq, random)];
+    clock += interval;
+    changed = true;
+  }
+  // 満杯のあいだは時計を進めておき、1件こなしたら次はしばらく後に届く
+  if (requests.length >= REQUEST_MAX && clock < now) {
+    clock = now + interval;
+    changed = true;
+  }
+  return changed ? { ...s, requests, requestClock: clock, requestSeq: seq } : save;
+}
+
+export function findRequest(save: SaveData, kind: RequestKind, spot: SpotId): Request | undefined {
+  return save.requests.find((r) => r.kind === kind && r.spot === spot);
+}
+
+/** 依頼を達成する（報酬と評判を受け取る） */
+export function completeRequest(save: SaveData, id: number): { save: SaveData; request: Request } | null {
+  const request = save.requests.find((r) => r.id === id);
+  if (!request) return null;
+  return {
+    save: { ...save, coins: save.coins + request.reward, rep: save.rep + request.rep, requests: save.requests.filter((r) => r.id !== id) },
+    request,
+  };
+}
+
+/** 種類指定の依頼：バッグのホコリをわたす */
+export function deliverRequest(save: SaveData, id: number): { save: SaveData; request: Request } | null {
+  const r = save.requests.find((q) => q.id === id);
+  if (!r || r.kind !== 'collect' || !r.dust || !r.count || save.bag[r.dust] < r.count) return null;
+  const paid = { ...save, bag: { ...save.bag, [r.dust]: save.bag[r.dust] - r.count } };
+  return completeRequest(paid, id);
+}
+
+export function areaClient(area: Area): string {
+  return AREA_CLIENT[area];
+}
+
+export function areaName(area: Area): string {
+  return AREA_NAMES[area];
 }
 
 // ---- 成長の見た目 ----
@@ -250,6 +527,7 @@ export const RANKS: readonly Rank[] = [
   { name: '手のひら級', min: 20 },
   { name: 'ぬいぐるみ級', min: 50 },
   { name: 'お部屋級', min: 100 },
+  { name: 'おうち級', min: 300 },
 ];
 
 export function rankFor(xp: number): Rank {
@@ -280,19 +558,32 @@ export type CleaningSession = {
   spot: SpotId;
   rewardBase: number;
   total: number;
+  /** ホコリ1個ずつの種類 */
+  types: DustType[];
   collected: Set<number>;
   rewardClaimed: boolean;
+  /** 開始時刻（早さの依頼の判定用） */
+  startedAt: number;
 };
 
-export function createSession(id: number, def: SpotDef, total: number): CleaningSession {
-  return { id, spot: def.id, rewardBase: def.rewardBase, total, collected: new Set(), rewardClaimed: false };
+export function createSession(id: number, def: SpotDef, types: DustType[], startedAt = 0): CleaningSession {
+  return {
+    id,
+    spot: def.id,
+    rewardBase: def.rewardBase,
+    total: types.length,
+    types,
+    collected: new Set(),
+    rewardClaimed: false,
+    startedAt,
+  };
 }
 
-/** 回収を記録する。同じホコリは二度数えない。 */
-export function collectDust(session: CleaningSession, dustId: number): boolean {
-  if (dustId < 0 || dustId >= session.total || session.collected.has(dustId)) return false;
+/** 回収を記録する。同じホコリは二度数えない。回収できたらその種類を返す */
+export function collectDust(session: CleaningSession, dustId: number): DustType | null {
+  if (dustId < 0 || dustId >= session.total || session.collected.has(dustId)) return null;
   session.collected.add(dustId);
-  return true;
+  return session.types[dustId];
 }
 
 /** 達成に必要な回収数（80%を切り上げ） */

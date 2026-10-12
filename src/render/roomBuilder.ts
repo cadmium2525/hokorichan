@@ -38,8 +38,8 @@ export function frontBox(w: number, h: number, d: number, side: THREE.Material, 
 
 // ---- 床と壁 ----
 
-export function buildShell(group: THREE.Group, half: number, seed: number, wall?: WallColors): void {
-  const floorTop = lambert({ map: floorTexture(seed, half) });
+export function buildShell(group: THREE.Group, half: number, seed: number, wall?: WallColors, floorMap?: THREE.Texture): void {
+  const floorTop = lambert({ map: floorMap ?? floorTexture(seed, half) });
   const floorSide = lambert({ color: PALETTE.woodDark });
   const floor = box(half * 2, 0.3, half * 2, [floorSide, floorSide, floorTop, floorSide, floorSide, floorSide]);
   floor.position.y = -0.15;

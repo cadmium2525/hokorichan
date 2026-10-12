@@ -14,6 +14,8 @@ import type { GameScene } from './types.ts';
 
 export type PetView = {
   xp: number;
+  /** 毛並みの色（食べたホコリで決まる） */
+  tint: string;
   habitat: Habitat;
   damp: boolean;
   accessory: AccessoryId | null;
@@ -54,7 +56,97 @@ function glassTexture(): THREE.CanvasTexture {
   return tex;
 }
 
-function buildCase(level: Exclude<Habitat, 0>): THREE.Group {
+const CONTAINER_HEIGHT = 3.2;
+
+function corrugatedTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 16;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#86bcd1';
+    ctx.fillRect(0, 0, 16, 16);
+    ctx.fillStyle = '#6fa6bd';
+    for (let x = 0; x < 16; x += 4) ctx.fillRect(x, 0, 2, 16);
+    ctx.fillStyle = '#a5d0e0';
+    for (let x = 1; x < 16; x += 4) ctx.fillRect(x, 0, 1, 16);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(4, 1);
+  return tex;
+}
+
+/** 空き地に置いたコンテナ。正面（ローカル+Z）を開けて中が見えるようにする */
+function buildContainerYard(): THREE.Group {
+  const g = new THREE.Group();
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(18, 0.3, 18), new THREE.MeshLambertMaterial({ color: '#a9d68f' }));
+  grass.position.set(0, -0.16, 0);
+  const dirt = new THREE.Mesh(new THREE.BoxGeometry(9, 0.04, 9), new THREE.MeshLambertMaterial({ color: '#d9b98c' }));
+  dirt.position.set(CASE_CENTER.x, 0.0, CASE_CENTER.z);
+  g.add(grass, dirt);
+
+  const w = HABITATS[4].inner;
+  const h = CONTAINER_HEIGHT;
+  const box = new THREE.Group();
+  const wall = new THREE.MeshLambertMaterial({ map: corrugatedTexture() });
+  const edge = new THREE.MeshLambertMaterial({ color: '#5f93aa' });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.2, w + 0.3), edge);
+  floor.position.y = 0.1;
+  const mat = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, w), new THREE.MeshLambertMaterial({ color: '#fbdbe4' }));
+  mat.position.y = 0.23;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, h, 0.15), wall);
+  back.position.set(0, h / 2 + 0.2, -w / 2 - 0.08);
+  const left = new THREE.Mesh(new THREE.BoxGeometry(0.15, h, w + 0.3), wall);
+  left.position.set(-w / 2 - 0.08, h / 2 + 0.2, 0);
+  const right = left.clone();
+  right.position.x = w / 2 + 0.08;
+  // 上から中が見えるよう屋根は付けず、ふちだけ
+  const rimGeo = new THREE.BoxGeometry(w + 0.4, 0.15, 0.2);
+  const rimBack = new THREE.Mesh(rimGeo, edge);
+  rimBack.position.set(0, h + 0.28, -w / 2 - 0.08);
+  const rimSideGeo = new THREE.BoxGeometry(0.2, 0.15, w + 0.4);
+  const rimL = new THREE.Mesh(rimSideGeo, edge);
+  rimL.position.set(-w / 2 - 0.08, h + 0.28, 0);
+  const rimR = rimL.clone();
+  rimR.position.x = w / 2 + 0.08;
+  // 開いた扉（左右に開く）
+  const doorGeo = new THREE.BoxGeometry(0.1, h, w / 2);
+  const doorL = new THREE.Mesh(doorGeo, wall);
+  doorL.position.set(-w / 2 - 0.2, h / 2 + 0.2, w / 2 + w / 4);
+  const doorR = doorL.clone();
+  doorR.position.x = w / 2 + 0.2;
+  box.add(floor, mat, back, left, right, rimBack, rimL, rimR, doorL, doorR);
+  box.position.copy(CASE_CENTER);
+  box.rotation.y = Math.PI / 4;
+  g.add(box);
+
+  // まわりの柵と木
+  const wood = new THREE.MeshLambertMaterial({ color: '#e0a86c' });
+  for (let i = -4; i <= 4; i += 1.6) {
+    for (const [x, z] of [[i, -4.6], [-4.6, i]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.6, 0.12), wood);
+      post.position.set(CASE_CENTER.x + x, 0.3, CASE_CENTER.z + z);
+      g.add(post);
+    }
+  }
+  const leaves = new THREE.MeshLambertMaterial({ color: '#7fb77e', flatShading: true });
+  for (const [x, z] of [[-4.2, 2.2], [2.6, -4.4]]) {
+    const t = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0), leaves);
+    t.position.set(CASE_CENTER.x + x, 1.4, CASE_CENTER.z + z);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 1.0, 6), new THREE.MeshLambertMaterial({ color: '#9c6438' }));
+    trunk.position.set(CASE_CENTER.x + x, 0.5, CASE_CENTER.z + z);
+    g.add(t, trunk);
+  }
+  return g;
+}
+
+function buildCase(level: 1 | 2 | 3): THREE.Group {
   const w = HABITATS[level].inner;
   const h = w * 0.78;
   const g = new THREE.Group();
@@ -111,6 +203,7 @@ export class PetScene implements GameScene {
   private readonly textures = { heart: heartTexture(), sparkle: sparkleTexture(), drop: dropTexture() };
   private readonly background: THREE.Texture;
   private habitatGroup: THREE.Group | null = null;
+  private readonly room: THREE.Group;
   private view: PetView;
   private aspect = 0.6;
   /** ほこりちゃんが座る位置（足元） */
@@ -148,14 +241,15 @@ export class PetScene implements GameScene {
     this.view = { ...view, shape: { ...view.shape } };
     this.opts = opts;
     this.background = setupStage(this.scene);
-    const room = buildPetRoom(3);
-    this.scene.add(room.group);
+    this.room = buildPetRoom(3).group;
+    this.scene.add(this.room);
     this.buildHabitat(view.habitat);
     this.scene.add(this.pet.group, this.particles.group);
     this.size = petDisplaySize(view.xp, view.habitat, view.damp);
     this.dampTint = view.damp ? 1 : 0;
     this.pet.setAccessory(view.accessory);
     this.pet.setCustomShape(view.shape);
+    this.pet.setBaseColor(view.tint);
     this.bindInput();
   }
 
@@ -166,13 +260,18 @@ export class PetScene implements GameScene {
       this.scene.remove(this.habitatGroup);
       disposeHierarchy(this.habitatGroup);
     }
-    if (habitat === 0) {
+    // コンテナは空き地（屋外）。部屋は隠す
+    this.room.visible = habitat !== 4;
+    if (habitat === 4) {
+      this.habitatGroup = buildContainerYard();
+      this.seat.set(CASE_CENTER.x, CASE_FLOOR_Y, CASE_CENTER.z);
+    } else if (habitat === 0) {
       const desk = studyDesk(9);
       desk.object.position.copy(DESK_CENTER);
       this.habitatGroup = desk.object;
       this.seat.set(DESK_CENTER.x - 0.2, desk.topY, DESK_CENTER.z + 0.25);
     } else {
-      this.habitatGroup = buildCase(habitat);
+      this.habitatGroup = buildCase(habitat as 1 | 2 | 3);
       this.seat.set(CASE_CENTER.x, CASE_FLOOR_Y, CASE_CENTER.z);
     }
     this.scene.add(this.habitatGroup);
@@ -190,16 +289,16 @@ export class PetScene implements GameScene {
         points.push(new THREE.Vector3(s.x + dx, s.y + 1.1, s.z + dz));
       }
     } else {
-      // ケースの実際の角（45°回転済み）とその上の余白を画面に収める
+      // ケース・コンテナの実際の角（45°回転済み）とその上の余白を画面に収める
       const w = HABITATS[this.view.habitat].inner;
       const r = (w / 2 + 0.2) * Math.SQRT2;
-      const top = 0.2 + w * 0.78 + 0.5;
+      const top = this.view.habitat === 4 ? CONTAINER_HEIGHT + 0.4 : 0.2 + w * 0.78 + 0.5;
       for (const [dx, dz] of [[r, 0], [-r, 0], [0, r], [0, -r]]) {
         points.push(new THREE.Vector3(CASE_CENTER.x + dx, 0, CASE_CENTER.z + dz));
         points.push(new THREE.Vector3(CASE_CENTER.x + dx, top, CASE_CENTER.z + dz));
       }
     }
-    fitOrthoToBox(this.camera, points, this.aspect, 1.22);
+    fitOrthoToBox(this.camera, points, this.aspect, this.view.habitat === 4 ? 1.4 : 1.22);
     let { left, right, top, bottom } = this.camera;
     if (this.bottomInset > 0) {
       // 少し引いて、見えている上側の中央に来るよう下へずらす
@@ -301,6 +400,7 @@ export class PetScene implements GameScene {
     if (habitatChanged) this.buildHabitat(view.habitat);
     this.pet.setAccessory(view.accessory);
     this.pet.setCustomShape(view.shape);
+    this.pet.setBaseColor(view.tint);
   }
 
   /** 下のパネルで隠れる割合を伝え、カメラをなめらかに寄せ直す */

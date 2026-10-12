@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FRIEND_UNLOCK_XP, HABITATS, SPOT_READY_RATIO, spotDef, TOOLS } from '../src/game/catalog.ts';
+import { FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   bestTool,
   buyAccessory,
@@ -23,10 +23,26 @@ import {
   spotStatus,
   startSpot,
   toggleAccessory,
+  activeTraits,
+  addEvent,
+  areaUnlocked,
+  bagTotal,
+  buyLand,
+  canCleanTogether,
+  dampChance,
+  deliverRequest,
+  emptyBag,
+  landMeetingDue,
+  refreshRequests,
+  rollDustTypes,
+  type Bag,
   type SaveData,
 } from '../src/game/state.ts';
+import { createRandom } from '../src/game/rng.ts';
 
 const save = (patch: Partial<SaveData> = {}): SaveData => ({ ...createInitialSave(), ...patch });
+const kinds = (n: number): DustType[] => Array.from({ length: n }, () => 'cotton' as const);
+const bag = (patch: Partial<Bag>): Bag => ({ ...emptyBag(), ...patch });
 const MIN = 60_000;
 const windowSpot = spotDef('window');
 
@@ -39,17 +55,17 @@ test('はじめは素手・勉強机の上・主人公未選択', () => {
 });
 
 test('同じホコリは二度回収できない・範囲外IDは無視', () => {
-  const s = createSession(1, windowSpot, 10);
-  assert.equal(collectDust(s, 3), true);
-  assert.equal(collectDust(s, 3), false);
-  assert.equal(collectDust(s, -1), false);
-  assert.equal(collectDust(s, 10), false);
+  const s = createSession(1, windowSpot, kinds(10));
+  assert.equal(collectDust(s, 3), 'cotton');
+  assert.equal(collectDust(s, 3), null);
+  assert.equal(collectDust(s, -1), null);
+  assert.equal(collectDust(s, 10), null);
   assert.equal(s.collected.size, 1);
 });
 
 test('80%の境界：必要数ちょうどで報酬を受け取れ、1つ手前では不可', () => {
   for (const total of [3, 9, 10, 12, 14, 20, 30]) {
-    const s = createSession(1, windowSpot, total);
+    const s = createSession(1, windowSpot, kinds(total));
     const need = requiredCount(s);
     assert.ok(need / total >= 0.8 && (need - 1) / total < 0.8, `total=${total} need=${need}`);
     for (let i = 0; i < need - 1; i++) collectDust(s, i);
@@ -60,7 +76,7 @@ test('80%の境界：必要数ちょうどで報酬を受け取れ、1つ手前�
 });
 
 test('お小遣いは 場所の基本額 + 回収数×2 で、同じセッションで重複獲得できない', () => {
-  const s = createSession(1, windowSpot, 10);
+  const s = createSession(1, windowSpot, kinds(10));
   for (let i = 0; i < 9; i++) collectDust(s, i);
   const first = claimReward(save({ coins: 5 }), s);
   assert.ok(first);
@@ -137,10 +153,11 @@ test('すみか：机(10)→ケース小(30)→中(100)→大(300)、費用ど�
 });
 
 test('餌やり：容量を超えて与えられず、余りはバッグに残る。見た目が大きくなる', () => {
-  const { save: s1, fed } = feed(save({ dustBag: 15, growthXp: 4 }));
+  const { save: s1, fed } = feed(save({ bag: bag({ cotton: 15 }), growthXp: 4 }));
   assert.equal(fed, 6);
   assert.equal(s1.growthXp, 10);
-  assert.equal(s1.dustBag, 9);
+  assert.equal(s1.bag.cotton, 9);
+  assert.equal(s1.diet.cotton, 6);
   assert.equal(feed(s1).fed, 0);
   assert.ok(petDisplaySize(10, 0, false) > petDisplaySize(4, 0, false));
   // ケースを買えばまた食べられる
@@ -149,7 +166,7 @@ test('餌やり：容量を超えて与えられず、余りはバッグに残�
 
 test('机の上では小さく、ケースに移ると大きく見える。どの住まいでも上限XPで収まる', () => {
   assert.ok(petDisplaySize(10, 0, false) < petDisplaySize(10, 1, false));
-  for (const h of [0, 1, 2, 3] as const) {
+  for (const h of [0, 1, 2, 3, 4] as const) {
     assert.ok(petDisplaySize(HABITATS[h].capacity, h, false) <= HABITATS[h].inner * 0.85 + 1e-9);
   }
 });
@@ -198,4 +215,86 @@ test('友だちの家は成長が規定値に達すると解禁され、それ�
   assert.equal(friendUnlocked(after), true);
   assert.equal(spotStatus(after, room, 0).locked, false);
   assert.ok(startSpot(after, room, 0));
+});
+
+test('種類を選んで餌をあげられ、食べた種類が記録される', () => {
+  const s0 = save({ habitat: 2, growthXp: 0, bag: bag({ cotton: 5, pollen: 7 }) });
+  const r = feed(s0, 'pollen');
+  assert.equal(r.fed, 7);
+  assert.equal(r.save.bag.pollen, 0);
+  assert.equal(r.save.bag.cotton, 5);
+  assert.equal(r.save.diet.pollen, 7);
+  assert.equal(feed(r.save, 'pollen').fed, 0);
+  const all = feed(s0, 'all');
+  assert.equal(all.fed, 12);
+  assert.equal(bagTotal(all.save.bag), 0);
+});
+
+test('毛並み：割合が15%以上で現れ、一緒の掃除の能力や湿気の確率が変わる', () => {
+  assert.deepEqual(activeTraits(bag({ cotton: 10, pollen: 5 })), []); // 食べた量が少ない
+  const diet = bag({ cotton: 60, pollen: 20, fur: 10, flour: 30 });
+  const traits = activeTraits(diet);
+  assert.ok(traits.includes('pollen'));
+  assert.ok(traits.includes('flour'));
+  assert.ok(!traits.includes('fur')); // 10/120 は 15% 未満
+  assert.ok(dampChance(save({ diet })) < dampChance(save()));
+});
+
+test('ホコリの種類は場所の割合にしたがう', () => {
+  const types = rollDustTypes(spotDef('washer'), 50, createRandom(1));
+  assert.ok(types.every((t) => t === 'lint'));
+  const mixed = rollDustTypes(spotDef('window'), 400, createRandom(2));
+  const sand = mixed.filter((t) => t === 'sand').length / mixed.length;
+  assert.ok(sand > 0.5 && sand < 0.7, `sand=${sand}`);
+});
+
+test('1章の山場：ケース（大）が満杯で家族会議、空き地を買うとコンテナ（容量1000）に', () => {
+  const full = save({ habitat: 3, growthXp: 300, coins: LAND_PRICE });
+  assert.equal(landMeetingDue(full), true);
+  assert.equal(buyLand(full).ok, false); // 家族会議の前は買えない
+  const met = addEvent(full, 'landMeeting');
+  assert.equal(landMeetingDue(met), false);
+  assert.equal(buyLand({ ...met, coins: LAND_PRICE - 1 }).ok, false);
+  const bought = buyLand(met);
+  assert.equal(bought.ok, true);
+  assert.equal(bought.save.habitat, 4);
+  assert.equal(bought.save.coins, 0);
+  assert.equal(HABITATS[4].capacity, 1000);
+  assert.equal(canCleanTogether(bought.save), true);
+  assert.equal(canCleanTogether(full), false);
+});
+
+test('商店街は2章から、評判の★で順に紹介される', () => {
+  assert.equal(areaUnlocked(save({ habitat: 3, rep: 99 }), 'flower'), false);
+  const ch2 = save({ habitat: 4, growthXp: 300 });
+  assert.equal(areaUnlocked(ch2, 'flower'), true);
+  assert.equal(areaUnlocked(ch2, 'bakery'), false);
+  assert.equal(areaUnlocked({ ...ch2, rep: 4 }, 'bakery'), true);
+  assert.equal(areaUnlocked({ ...ch2, rep: 7 }, 'grandma'), false);
+  assert.equal(areaUnlocked({ ...ch2, rep: 8 }, 'grandma'), true);
+});
+
+test('依頼は時間で届き最大3件。種類指定はバッグのホコリをわたして報酬と評判', () => {
+  const rnd = createRandom(3);
+  const t0 = 10_000_000;
+  let s = refreshRequests(save(), t0, rnd);
+  assert.equal(s.requests.length, 2); // 最初は2件すぐ届く
+  s = refreshRequests(s, t0 + 1000, rnd);
+  assert.equal(s.requests.length, 2);
+  s = refreshRequests(s, t0 + 20 * 60_000, rnd);
+  assert.equal(s.requests.length, 3);
+  s = refreshRequests(s, t0 + 999 * 60_000, rnd);
+  assert.equal(s.requests.length, 3); // ためすぎない
+  const ids = s.requests.map((r) => r.id);
+  assert.equal(new Set(ids).size, 3);
+
+  const req = { id: 99, kind: 'collect' as const, client: 'x', line: 'y', dust: 'sand' as const, count: 5, reward: 30, rep: 1 };
+  const withReq = { ...save({ bag: bag({ sand: 4 }) }), requests: [req] };
+  assert.equal(deliverRequest(withReq, 99), null); // 足りない
+  const done = deliverRequest({ ...withReq, bag: bag({ sand: 6 }) }, 99);
+  assert.ok(done);
+  assert.equal(done.save.bag.sand, 1);
+  assert.equal(done.save.coins, 30);
+  assert.equal(done.save.rep, 1);
+  assert.equal(done.save.requests.length, 0);
 });

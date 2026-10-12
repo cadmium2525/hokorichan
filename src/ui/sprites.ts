@@ -125,6 +125,20 @@ export function friendMomSprite(className = 'sprite'): string {
   return pixelArt(MOTHER, { ...FACE, k: '#3b2a2a', h: '#3b2a2a', a: '#9fd8c4', p: '#f3d27a', f: '#3b2a2a' }, className);
 }
 
+export function floristSprite(className = 'sprite'): string {
+  return pixelArt(MOTHER, { ...FACE, k: '#3b2a2a', h: '#5a3a2a', a: '#7fb77e', p: PINK_DOT, f: '#5a3a2a' }, className);
+}
+
+export function bakerSprite(className = 'sprite'): string {
+  return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#3b2a2a', a: '#e2a663', p: '#9c6438', f: '#4a3328' }, className);
+}
+
+export function grandmaSprite(className = 'sprite'): string {
+  return pixelArt(MOTHER, { ...FACE, k: '#6b5a50', h: '#d9d4cc', a: '#8f78c4', p: '#f3d27a', f: '#6b5a50' }, className);
+}
+
+const PINK_DOT = '#f4b6c6';
+
 export function shopkeeperSprite(className = 'sprite'): string {
   return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#7a5a8c', a: '#f3d27a', p: '#e98aa6', f: '#7a5a8c' }, className);
 }
@@ -156,6 +170,18 @@ const SPOT_ICONS: Record<SpotId, [string[], Record<string, string>]> = {
   ['.........', '.........', '.........', '.aaa.bbb.', 'aaaa.bbbb', 'aaaa.bbbb', '.........', 'sssssssss', 'kkkkkkkkk'],
   { a: '#e98aa6', b: '#8ec1ea', s: '#d6d0c8', k: '#b0a89e' },
 ],
+  flowerShop: [
+    ['.a...b...', 'aaa.bbb.c', '.a...b.cc', '.g...g..c', '.g...g.g.', 'kkkkkkkkk', 'kwwkkkwwk', 'kwwkkkwwk', 'kkkkkkkkk'],
+    { a: '#f4b6c6', b: '#f6dd6a', c: '#cbb8ea', g: '#7fb77e', k: '#b6bcc7', w: '#e6e9ef' },
+  ],
+  bakery: [
+    ['.........', '..bbbbb..', '.bccccccb', 'bccbcbccb', 'bcccccccb', '.bbbbbbb.', '.........', 'kkkkkkkkk', '.........'],
+    { b: '#c98a4b', c: '#e2a663', k: '#9c6438' },
+  ],
+  grandmaRoom: [
+    ['.a.....a.', '.aa...aa.', '.aaaaaaa.', 'aakaaakaa', 'aaaapaaaa', '.aaaaaaa.', '..aaaaa..', 'ggggggggg', 'gkgkgkgkg'],
+    { a: '#f2c38f', k: '#3b2a2a', p: '#e98aa6', g: '#cfd59a' },
+  ],
   friendRoom: [
   ['.........', 'k........', 'kww......', 'kwwbbbbbb', 'kbbbbbbbb', 'kbbbbbbbb', 'kkkkkkkkk', 'k.......k', '.........'],
   { k: '#c98b55', w: '#fffaf3', b: '#9fd8c4' },

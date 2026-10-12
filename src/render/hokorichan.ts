@@ -1,7 +1,7 @@
 // ほこりちゃんの手続き生成モデル。丸い本体＋外周の小房＋顔（目・口・頬）＋アクセサリー。
 
 import * as THREE from 'three';
-import type { AccessoryId, PetShape } from '../game/catalog.ts';
+import { DUST_TYPES, DUSTS, type AccessoryId, type PetShape } from '../game/catalog.ts';
 import { createRandom, randRange } from '../game/rng.ts';
 import { blobShadowTexture, PALETTE } from './proceduralArt.ts';
 import { ISO_VIEW_DIR } from './threeUtils.ts';
@@ -11,6 +11,17 @@ export type Expression = 'idle' | 'happy' | 'eating' | 'damp' | 'sleep';
 const DRY_COLOR = new THREE.Color('#fff8ef');
 const DAMP_COLOR = new THREE.Color('#b9b6dc');
 const FACE_SIZE = 32;
+/** 食べたホコリの割合（綿ぼこり以外）に合わせて、毛並みの色を少しずつ染める */
+export function petTint(ratios: Record<string, number>): string {
+  const c = DRY_COLOR.clone();
+  for (const t of DUST_TYPES) {
+    if (t === 'cotton') continue;
+    const r = ratios[t] ?? 0;
+    if (r > 0) c.lerp(new THREE.Color(DUSTS[t].tint), Math.min(0.8, r * 2));
+  }
+  return `#${c.getHexString()}`;
+}
+
 /** 顔の板の+Zをカメラ方向へ向ける回転 */
 const FACE_ROTATION = new THREE.Quaternion().setFromRotationMatrix(
   new THREE.Matrix4().lookAt(ISO_VIEW_DIR, new THREE.Vector3(), new THREE.Vector3(0, 1, 0)),
@@ -277,9 +288,19 @@ export class HokorichanModel {
     this.redrawFace();
   }
 
+  private baseColor = DRY_COLOR.clone();
+  private dampT = 0;
+
   /** 0=通常, 1=湿気。色をなめらかに切り替える */
   setDampTint(t: number): void {
-    this.material.color.copy(DRY_COLOR).lerp(DAMP_COLOR, t);
+    this.dampT = t;
+    this.material.color.copy(this.baseColor).lerp(DAMP_COLOR, t);
+  }
+
+  /** 食べたホコリで決まる毛並みの色（ふだんの色） */
+  setBaseColor(color: string): void {
+    this.baseColor.set(color);
+    this.setDampTint(this.dampT);
   }
 
   /** size=直径、squashY=縦のつぶれ具合（アニメーション用） */

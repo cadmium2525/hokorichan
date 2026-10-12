@@ -14,7 +14,13 @@ test('保存して読み込むと同じ内容に戻る', () => {
   const s: SaveData = {
     ...createInitialSave(),
     coins: 123,
-    dustBag: 4,
+    bag: { ...createInitialSave().bag, cotton: 4, pollen: 2 },
+    diet: { ...createInitialSave().diet, cotton: 50, sand: 6 },
+    rep: 5,
+    events: ['town', 'board'],
+    requests: [{ id: 3, kind: 'lost', client: 'お母さん', line: 'なくした', spot: 'window', item: 'ring', reward: 50, rep: 2 }],
+    requestSeq: 3,
+    requestClock: 12345,
     growthXp: 56,
     habitat: 2,
     damp: true,
@@ -41,8 +47,8 @@ test('データなし・壊れたJSON・ストレージ無しは初期値', () =
 test('v1のデータはケース・掃除機を持った状態で引き継ぐ', () => {
   const v1 = { version: 1, coins: 50, dustBag: 3, growthXp: 40, caseLevel: 2, damp: false, cleanedSessions: 4, soundEnabled: false, tutorialDone: true };
   const s = sanitize(v1);
-  assert.equal(s.version, 3);
-  assert.equal(s.townIntroDone, false);
+  assert.equal(s.version, 4);
+  assert.equal(s.bag.cotton, 3);
   assert.equal(s.coins, 50);
   assert.equal(s.growthXp, 40);
   assert.equal(s.habitat, 2);
@@ -53,13 +59,23 @@ test('v1のデータはケース・掃除機を持った状態で引き継ぐ', 
 });
 
 test('v2のデータはまちの説明・友だちイベントを未読にして引き継ぐ', () => {
-  const s = sanitize({ version: 2, coins: 7, growthXp: 45, habitat: 1, hero: 'boy', tutorialDone: true });
-  assert.equal(s.version, 3);
+  const s = sanitize({ version: 2, coins: 7, dustBag: 9, growthXp: 45, habitat: 1, hero: 'boy', tutorialDone: true });
+  assert.equal(s.version, 4);
   assert.equal(s.coins, 7);
   assert.equal(s.growthXp, 45);
   assert.equal(s.hero, 'boy');
-  assert.equal(s.townIntroDone, false);
-  assert.equal(s.friendIntroDone, false);
+  assert.deepEqual(s.events, []);
+  assert.equal(s.bag.cotton, 9);
+});
+
+test('v3のデータはバッグと食べた量を綿ぼこりとして、既読イベントを引き継ぐ', () => {
+  const s = sanitize({ version: 3, coins: 1, dustBag: 12, growthXp: 80, habitat: 2, townIntroDone: true, friendIntroDone: false });
+  assert.equal(s.version, 4);
+  assert.equal(s.bag.cotton, 12);
+  assert.equal(s.diet.cotton, 80);
+  assert.deepEqual(s.events, ['town']);
+  assert.equal(s.rep, 0);
+  assert.deepEqual(s.requests, []);
 });
 
 test('未知のバージョンは初期化する', () => {
@@ -70,11 +86,13 @@ test('未知のバージョンは初期化する', () => {
 test('不正な値は項目ごとに初期値へ、範囲外は丸める', () => {
   const s = sanitize(
     {
-      version: 2,
+      version: 4,
       coins: -5,
-      dustBag: 'many',
+      bag: { cotton: 'many', sand: -3, pollen: 2.9 },
+      requests: [{ id: 1, kind: 'collect', client: 'a', line: 'b', dust: 'gold', count: 3 }, { id: 2, kind: 'lost', client: 'a', line: 'b', spot: 'window', item: 'ring', reward: 1e9 }, 'x'],
+      events: ['town', 'nope', 'town'],
       growthXp: 12.7,
-      habitat: 4,
+      habitat: 7,
       damp: 'yes',
       cleanedSessions: Number.POSITIVE_INFINITY,
       hero: 'cat',
@@ -87,7 +105,10 @@ test('不正な値は項目ごとに初期値へ、範囲外は丸める', () =>
     1000,
   );
   assert.equal(s.coins, 0);
-  assert.equal(s.dustBag, 0);
+  assert.deepEqual(s.bag, { ...createInitialSave().bag, pollen: 2 });
+  assert.equal(s.requests.length, 1);
+  assert.equal(s.requests[0].reward, 10_000);
+  assert.deepEqual(s.events, ['town']);
   assert.equal(s.growthXp, 12);
   assert.equal(s.habitat, 0);
   assert.equal(s.damp, false);
@@ -101,7 +122,7 @@ test('不正な値は項目ごとに初期値へ、範囲外は丸める', () =>
   // 未来の時刻は今に丸め、積もり具合は0〜1
   assert.deepEqual(s.spots.window, { fullness: 1, at: 1000 });
   assert.deepEqual(s.spots.washer, { fullness: 1, at: 0 });
-  assert.equal(sanitize({ version: 2, coins: 1e15 }).coins, 1_000_000_000);
+  assert.equal(sanitize({ version: 4, coins: 1e15 }).coins, 1_000_000_000);
 });
 
 test('読み書きで例外が出てもゲームは止まらない', () => {

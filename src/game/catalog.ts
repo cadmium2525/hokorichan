@@ -30,12 +30,49 @@ export const TOOLS: Record<ToolId, ToolDef> = {
 
 export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
-// ---- 掃除場所（一軒家の中） ----
+// ---- ホコリの種類 ----
 
-export type SpotId = 'window' | 'washer' | 'myroom' | 'shelf' | 'living' | 'friendEntrance' | 'friendRoom';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour';
+
+export type DustDef = {
+  id: DustType;
+  name: string;
+  /** 掃除シーンでの色（3〜4色からランダム） */
+  colors: string[];
+  /** たくさん食べたときの毛並みの色味 */
+  tint: string;
+  /** 毛並みの名前と効果の説明 */
+  trait: string;
+  traitDesc: string;
+};
+
+export const DUSTS: Record<DustType, DustDef> = {
+  cotton: { id: 'cotton', name: '綿ぼこり', colors: ['#c3bbd3', '#b3abc6', '#d4cddf', '#bfb3b8'], tint: '#fff8ef', trait: 'ふつう', traitDesc: 'ふわふわの基本の毛並み' },
+  lint: { id: 'lint', name: '糸くず', colors: ['#dcd6e8', '#cfd9ea', '#e8c9d6', '#c9e0d4'], tint: '#e6c8f0', trait: 'カラフル', traitDesc: '毛並みに色とりどりの糸がまじる' },
+  sand: { id: 'sand', name: '砂ぼこり', colors: ['#cdb79a', '#bfa889', '#d9c6aa', '#b59c7e'], tint: '#e6cb9c', trait: 'ころころ', traitDesc: '一緒の掃除で転がるのが速くなる' },
+  fur: { id: 'fur', name: '猫の毛', colors: ['#f2c38f', '#ffffff', '#e8a868', '#d9d2c8'], tint: '#f4c08e', trait: 'もふもふ', traitDesc: '一緒の掃除で吸い寄せる範囲が広がる' },
+  pollen: { id: 'pollen', name: '花粉', colors: ['#f6dd6a', '#f3cf4c', '#fbe9a0', '#e9c44a'], tint: '#ffe06a', trait: 'くしゃみ', traitDesc: '一緒の掃除で一度だけ「くしゃみ」で広く吸い込む' },
+  flour: { id: 'flour', name: '粉ぼこり', colors: ['#fbf8f2', '#efe9df', '#f6f1e6', '#e6ddd0'], tint: '#ffffff', trait: 'さらさら', traitDesc: '湿気に強くなる' },
+};
+
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour'];
+
+// ---- 掃除場所 ----
+
+export type SpotId =
+  | 'window'
+  | 'washer'
+  | 'myroom'
+  | 'shelf'
+  | 'living'
+  | 'friendEntrance'
+  | 'friendRoom'
+  | 'flowerShop'
+  | 'bakery'
+  | 'grandmaRoom';
 
 /** 掃除場所がある建物 */
-export type Area = 'home' | 'friend';
+export type Area = 'home' | 'friend' | 'flower' | 'bakery' | 'grandma';
 
 export type SpotDef = {
   id: SpotId;
@@ -50,19 +87,33 @@ export type SpotDef = {
   regenMinutes: number;
   /** 入るのに必要な道具ランク */
   minTier: number;
+  /** 出てくるホコリの種類と割合 */
+  dust: Partial<Record<DustType, number>>;
 };
 
 export const SPOTS: readonly SpotDef[] = [
-  { id: 'window', area: 'home', name: '窓のさん', desc: 'レールのすみに綿ぼこり', maxDust: 10, rewardBase: 10, regenMinutes: 20, minTier: 0 },
-  { id: 'washer', area: 'home', name: '洗濯機のフィルター', desc: 'ドラム式の乾燥フィルター', maxDust: 12, rewardBase: 12, regenMinutes: 30, minTier: 0 },
-  { id: 'myroom', area: 'home', name: '自分の部屋', desc: '床いっぱいのホコリ', maxDust: 20, rewardBase: 20, regenMinutes: 45, minTier: 0 },
-  { id: 'shelf', area: 'home', name: '本棚の上', desc: '手が届かない高いところ', maxDust: 14, rewardBase: 30, regenMinutes: 40, minTier: 2 },
-  { id: 'living', area: 'home', name: 'リビング', desc: '家族みんなの広い部屋', maxDust: 30, rewardBase: 40, regenMinutes: 60, minTier: 3 },
-  { id: 'friendEntrance', area: 'friend', name: '友だちの家の玄関', desc: 'くつのまわりに砂ぼこり', maxDust: 14, rewardBase: 20, regenMinutes: 30, minTier: 0 },
-  { id: 'friendRoom', area: 'friend', name: '友だちの部屋', desc: 'おもちゃのすきまにホコリ', maxDust: 24, rewardBase: 30, regenMinutes: 50, minTier: 0 },
+  { id: 'window', area: 'home', name: '窓のさん', desc: 'レールのすみに砂ぼこり', maxDust: 10, rewardBase: 10, regenMinutes: 20, minTier: 0, dust: { sand: 6, cotton: 4 } },
+  { id: 'washer', area: 'home', name: '洗濯機のフィルター', desc: 'ドラム式の乾燥フィルター', maxDust: 12, rewardBase: 12, regenMinutes: 30, minTier: 0, dust: { lint: 1 } },
+  { id: 'myroom', area: 'home', name: '自分の部屋', desc: '床いっぱいのホコリ', maxDust: 20, rewardBase: 20, regenMinutes: 45, minTier: 0, dust: { cotton: 8, lint: 2 } },
+  { id: 'shelf', area: 'home', name: '本棚の上', desc: '手が届かない高いところ', maxDust: 14, rewardBase: 30, regenMinutes: 40, minTier: 2, dust: { cotton: 1 } },
+  { id: 'living', area: 'home', name: 'リビング', desc: '家族みんなの広い部屋', maxDust: 30, rewardBase: 40, regenMinutes: 60, minTier: 3, dust: { cotton: 6, lint: 3, sand: 1 } },
+  { id: 'friendEntrance', area: 'friend', name: '友だちの家の玄関', desc: 'くつのまわりに砂ぼこり', maxDust: 14, rewardBase: 20, regenMinutes: 30, minTier: 0, dust: { sand: 8, cotton: 2 } },
+  { id: 'friendRoom', area: 'friend', name: '友だちの部屋', desc: '猫がいる部屋。毛がいっぱい', maxDust: 24, rewardBase: 30, regenMinutes: 50, minTier: 0, dust: { cotton: 5, fur: 4, lint: 1 } },
+  { id: 'flowerShop', area: 'flower', name: '花屋さん', desc: '花粉がふわふわ舞っている', maxDust: 22, rewardBase: 35, regenMinutes: 40, minTier: 0, dust: { pollen: 7, cotton: 2, sand: 1 } },
+  { id: 'bakery', area: 'bakery', name: 'パン屋さん', desc: '粉ぼこりで床がまっしろ', maxDust: 24, rewardBase: 40, regenMinutes: 45, minTier: 0, dust: { flour: 8, cotton: 2 } },
+  { id: 'grandmaRoom', area: 'grandma', name: 'おばあちゃんの家', desc: '猫が5匹いるたたみの部屋', maxDust: 28, rewardBase: 45, regenMinutes: 55, minTier: 0, dust: { fur: 8, cotton: 2 } },
 ];
 
-export const AREA_NAMES: Record<Area, string> = { home: '自分の家', friend: '友だちの家' };
+export const AREA_NAMES: Record<Area, string> = {
+  home: '自分の家',
+  friend: '友だちの家',
+  flower: '花屋さん',
+  bakery: 'パン屋さん',
+  grandma: 'おばあちゃんの家',
+};
+
+/** 商店街の店や家は、評判（★）がこれだけたまると紹介してもらえる（2章から） */
+export const AREA_REP: Partial<Record<Area, number>> = { flower: 0, bakery: 4, grandma: 8 };
 
 /** ほこりちゃんがこの成長に達すると、友だちから声がかかって友だちの家に行けるようになる */
 export const FRIEND_UNLOCK_XP = 30;
@@ -80,19 +131,47 @@ export const SPOT_READY_RATIO = 0.3;
 
 // ---- ほこりちゃんの住まい ----
 
-export type Habitat = 0 | 1 | 2 | 3;
+export type Habitat = 0 | 1 | 2 | 3 | 4;
 
 export type HabitatDef = { name: string; capacity: number; price: number; inner: number };
 
-/** 0 は勉強机の上（出会いの場所）。1〜3 はショップで買うケース */
+/** 0 は勉強机の上（出会いの場所）。1〜3 はショップで買うケース。4 は空き地に置くコンテナ（2章） */
 export const HABITATS: Record<Habitat, HabitatDef> = {
   0: { name: '勉強机の上', capacity: 10, price: 0, inner: 1.0 },
   1: { name: 'ケース（小）', capacity: 30, price: 40, inner: 1.8 },
   2: { name: 'ケース（中）', capacity: 100, price: 120, inner: 2.5 },
   3: { name: 'ケース（大）', capacity: 300, price: 300, inner: 3.3 },
+  4: { name: '空き地のコンテナ', capacity: 1000, price: 0, inner: 4.6 },
+};
+
+/** 1章の山場で買う空き地（コンテナ付き）の値段 */
+export const LAND_PRICE = 400;
+
+// ---- 依頼 ----
+
+export type LostItem = { id: string; name: string; color: string };
+
+export const LOST_ITEMS: readonly LostItem[] = [
+  { id: 'ring', name: '指輪', color: '#f2c94c' },
+  { id: 'key', name: '家の鍵', color: '#b6bcc7' },
+  { id: 'marble', name: 'ビー玉', color: '#8ec1ea' },
+  { id: 'hairpin', name: 'ヘアピン', color: '#e98aa6' },
+  { id: 'button', name: 'コートのボタン', color: '#9c6438' },
+  { id: 'figure', name: '小さなフィギュア', color: '#7fb77e' },
+];
+
+/** 種類指定の依頼のセリフ（町の人は真顔でホコリを欲しがる） */
+export const COLLECT_LINES: Record<DustType, { client: string; line: string }> = {
+  cotton: { client: '近所のおねえさん', line: '綿ぼこりでクッションを作りたいの' },
+  lint: { client: '友だちのお母さん', line: 'カラフルな糸くずを手芸に使いたくて' },
+  sand: { client: '公園のおじいさん', line: '砂ぼこりで盆栽の土をつくるんじゃ' },
+  fur: { client: 'おばあちゃん', line: '猫の毛でフェルトの人形をつくるのよ' },
+  pollen: { client: '花屋さん', line: '花粉を集めて新しい品種を育てたいの' },
+  flour: { client: 'パン屋さん', line: '粉ぼこり……捨てるのはもったいなくてね' },
 };
 
 // ---- アクセサリー ----
+
 
 export type AccessoryId = 'ribbon' | 'leaf' | 'flower' | 'glasses' | 'hat' | 'crown';
 

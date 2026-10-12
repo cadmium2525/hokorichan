@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import type { SpotId } from '../game/catalog.ts';
+import { createRandom } from '../game/rng.ts';
 import { makeCanvas, PALETTE, toTexture, wallTexture, woodTexture, booksTexture, frameTexture } from './proceduralArt.ts';
 import {
   blockerOf,
@@ -11,6 +12,7 @@ import {
   buildLivingRoom,
   frontBox,
   lambert,
+  buildShell,
   plant,
   type Blocker,
   type Room,
@@ -326,6 +328,198 @@ function entranceLayout(): SpotLayout {
   };
 }
 
+// ---- 商店街：花屋・パン屋・おばあちゃんの家 ----
+
+function tileFloor(colors: [string, string], repeat: number): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(16, 16);
+  ctx.fillStyle = colors[0];
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = colors[1];
+  ctx.fillRect(0, 0, 8, 8);
+  ctx.fillRect(8, 8, 8, 8);
+  return toTexture(canvas, [repeat, repeat]);
+}
+
+function tatamiTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(32, 32);
+  ctx.fillStyle = '#cfd59a';
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillStyle = '#c2c98b';
+  for (let y = 1; y < 32; y += 3) ctx.fillRect(0, y, 32, 1);
+  // へり
+  ctx.fillStyle = '#5a6b4a';
+  ctx.fillRect(0, 0, 32, 2);
+  ctx.fillRect(0, 16, 32, 2);
+  ctx.fillRect(15, 0, 2, 16);
+  return toTexture(canvas, [3, 3]);
+}
+
+function breadTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(32, 32);
+  ctx.fillStyle = PALETTE.woodLight;
+  ctx.fillRect(0, 0, 32, 32);
+  for (let shelf = 0; shelf < 3; shelf++) {
+    const y = shelf * 11 + 1;
+    ctx.fillStyle = PALETTE.wood;
+    ctx.fillRect(0, y + 9, 32, 2);
+    for (let x = 1; x < 30; x += 7) {
+      ctx.fillStyle = shelf === 1 ? '#c98a4b' : '#e2a663';
+      ctx.fillRect(x, y + 3, 6, 6);
+      ctx.fillStyle = '#f3cf8f';
+      ctx.fillRect(x + 1, y + 4, 4, 2);
+    }
+  }
+  return toTexture(canvas);
+}
+
+/** 色とりどりの花のバケツ */
+function flowerBucket(seed: number): THREE.Group {
+  const rng = createRandom(seed);
+  const g = new THREE.Group();
+  const bucket = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.18, 0.4, 10), lambert({ color: '#c8ced8' }));
+  bucket.position.y = 0.2;
+  g.add(bucket);
+  const colors = [PALETTE.pink, '#f6dd6a', PALETTE.lavender, '#ffffff', '#f0a37a'];
+  const stem = lambert({ color: PALETTE.leafDark });
+  for (let i = 0; i < 6; i++) {
+    const x = (rng() - 0.5) * 0.3;
+    const z = (rng() - 0.5) * 0.3;
+    const h = 0.5 + rng() * 0.3;
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, h, 4), stem);
+    st.position.set(x, 0.4 + h / 2, z);
+    const bloom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 0), lambert({ color: colors[Math.floor(rng() * colors.length)], flatShading: true }));
+    bloom.position.set(x, 0.4 + h, z);
+    g.add(st, bloom);
+  }
+  return g;
+}
+
+/** 座ったり寝たりしている猫 */
+function cat(color: string, seed: number): THREE.Group {
+  const rng = createRandom(seed);
+  const g = new THREE.Group();
+  const fur = lambert({ color });
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), fur);
+  body.scale.set(0.22, 0.16, 0.3);
+  body.position.y = 0.16;
+  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 1), fur);
+  head.position.set(0, 0.32, 0.22);
+  for (const x of [-0.07, 0.07]) {
+    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.09, 4), fur);
+    ear.position.set(x, 0.46, 0.22);
+    g.add(ear);
+  }
+  const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.32, 5), fur);
+  tail.rotation.x = Math.PI / 2.4;
+  tail.position.set(0.08, 0.14, -0.32);
+  const eye = lambert({ color: '#3b2a2a' });
+  for (const x of [-0.05, 0.05]) {
+    const e = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.012, 0.01), eye);
+    e.position.set(x, 0.34, 0.355);
+    g.add(e);
+  }
+  g.add(body, head, tail);
+  g.rotation.y = rng() * Math.PI * 2;
+  return g;
+}
+
+function shopLayout(kind: 'flower' | 'bakery' | 'grandma', seed: number): SpotLayout {
+  const g = new THREE.Group();
+  const half = kind === 'grandma' ? 3.4 : 3.2;
+  const random = createRandom(seed);
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, ry = 0) => {
+    obj.position.set(x, 0, z);
+    obj.rotation.y += ry;
+    g.add(obj);
+    blockers.push(blockerOf(obj));
+  };
+
+  if (kind === 'flower') {
+    buildShell(g, half, seed, { base: '#f3f8ec', stripe: '#e3efd6' }, tileFloor(['#f4efe6', '#e8e0d2'], 4));
+    // 奥の壁ぞいに花のバケツ、左の壁に鉢の棚、手前にレジ台
+    for (let i = 0; i < 5; i++) place(flowerBucket(seed + i), -2.4 + i * 1.05, -half + 0.35);
+    for (let i = 0; i < 3; i++) place(flowerBucket(seed + 10 + i), -half + 0.35, -1.0 + i * 1.1);
+    const counter = frontBox(1.6, 0.9, 0.6, lambert({ map: woodTexture(seed, PALETTE.woodLight) }), lambert({ map: woodTexture(seed + 1, PALETTE.woodLight, 2) }));
+    counter.position.y = 0.45;
+    const c = new THREE.Group();
+    c.add(counter);
+    place(c, 1.6, -1.2 + random() * 0.4);
+    const big = plant(seed + 20);
+    big.object.scale.setScalar(1.6);
+    place(big.object, half - 0.6, -half + 0.6);
+  } else if (kind === 'bakery') {
+    buildShell(g, half, seed, { base: '#fff3df', stripe: '#f7e3c4' }, tileFloor(['#f1e7d8', '#e6d6bf'], 4));
+    const shelfSide = lambert({ map: woodTexture(seed, PALETTE.wood) });
+    const breadShelf = frontBox(2.4, 1.6, 0.5, shelfSide, lambert({ map: breadTexture() }));
+    breadShelf.position.y = 0.8;
+    const bs = new THREE.Group();
+    bs.add(breadShelf);
+    place(bs, -0.8, -half + 0.3);
+    const bs2 = bs.clone();
+    place(bs2, -half + 0.3, 0.2, Math.PI / 2);
+    // ショーケースとレジ
+    const caseBase = box(1.8, 0.7, 0.7, lambert({ map: woodTexture(seed + 2, PALETTE.woodLight) }));
+    caseBase.position.y = 0.35;
+    const glass = box(1.8, 0.4, 0.7, new THREE.MeshLambertMaterial({ color: '#dff3ff', transparent: true, opacity: 0.4 }));
+    glass.position.y = 0.9;
+    const sc = new THREE.Group();
+    sc.add(caseBase, glass);
+    for (let i = 0; i < 4; i++) {
+      const bun = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), lambert({ color: i % 2 ? '#e2a663' : '#c98a4b' }));
+      bun.scale.y = 0.7;
+      bun.position.set(-0.6 + i * 0.4, 0.78, 0);
+      sc.add(bun);
+    }
+    place(sc, 1.4, 0.6);
+    // 小麦粉の袋
+    for (let i = 0; i < 2; i++) {
+      const sack = box(0.5, 0.6, 0.4, lambert({ color: '#f6f1e6' }));
+      sack.position.y = 0.3;
+      const s = new THREE.Group();
+      s.add(sack);
+      place(s, half - 0.5 - i * 0.6, -half + 0.4);
+    }
+  } else {
+    buildShell(g, half, seed, { base: '#f6efe0', stripe: '#eee2cb' }, tatamiTexture());
+    // ちゃぶ台、座布団、たんす、猫たち
+    const table = new THREE.Group();
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.08, 16), lambert({ map: woodTexture(seed, PALETTE.wood) }));
+    top.position.y = 0.4;
+    table.add(top);
+    for (const [x, z] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) {
+      const leg = box(0.07, 0.38, 0.07, lambert({ color: PALETTE.woodDark }));
+      leg.position.set(x, 0.19, z);
+      table.add(leg);
+    }
+    const teapot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), lambert({ color: '#7fb2a0' }));
+    teapot.position.y = 0.52;
+    table.add(teapot);
+    place(table, 0.3, 0.2);
+    for (const [x, z] of [[0.3, 1.4], [-1.0, 0.2]]) {
+      const cushion = box(0.6, 0.08, 0.6, lambert({ color: '#b56a7a' }));
+      cushion.position.set(x, 0.04, z);
+      g.add(cushion);
+    }
+    const tansu = frontBox(1.6, 1.2, 0.5, lambert({ map: woodTexture(seed + 1, PALETTE.woodDark) }), lambert({ map: woodTexture(seed + 2, PALETTE.woodDark, 4) }));
+    tansu.position.y = 0.6;
+    const t = new THREE.Group();
+    t.add(tansu);
+    place(t, -1.2, -half + 0.3);
+    const cats: Array<[string, number, number]> = [['#f2c38f', 1.8, -1.6], ['#ffffff', -2.4, 1.6], ['#9a9a9a', 2.2, 1.8], ['#e8a868', -0.8, -1.6], ['#3b3b3b', 1.4, 2.6]];
+    cats.forEach(([color, x, z], i) => place(cat(color, seed + i), x, z));
+  }
+
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.2, 0, -half - 0.2), new THREE.Vector3(half, 2.8, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
 export function buildSpot(id: SpotId, seed: number): SpotLayout {
   switch (id) {
     case 'window':
@@ -342,5 +536,11 @@ export function buildSpot(id: SpotId, seed: number): SpotLayout {
       return roomLayout(buildFriendRoom(seed));
     case 'friendEntrance':
       return entranceLayout();
+    case 'flowerShop':
+      return shopLayout('flower', seed);
+    case 'bakery':
+      return shopLayout('bakery', seed);
+    case 'grandmaRoom':
+      return shopLayout('grandma', seed);
   }
 }
