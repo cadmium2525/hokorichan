@@ -12,7 +12,7 @@ import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
-import { canShareImage, makePhotoCard, openXIntent, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
+import { canShareImage, makePhotoCard, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
 import {
   boardBody,
   contestResultBody,
@@ -1096,14 +1096,16 @@ export class Game {
     this.dropPhoto();
     this.photo = photo;
     const buttons: ButtonSpec[] = [];
-    if (canShareImage(photo)) buttons.push({ action: 'shareNative', label: 'シェア', variant: 'primary' });
-    buttons.push({ action: 'shareX', label: 'Xにポスト', variant: 'accent' });
-    buttons.push({ action: 'savePhoto', label: '画像を保存', variant: 'secondary' });
+    const canShare = canShareImage(photo);
+    if (canShare) buttons.push({ action: 'shareNative', label: 'シェア', sub: 'X・LINEなど', variant: 'primary' });
+    buttons.push({ action: 'savePhoto', label: '画像を保存', variant: canShare ? 'secondary' : 'primary' });
     buttons.push({ action: 'closeModal', label: 'とじる', variant: 'secondary' });
     this.openOverlay('photo', {
       title: 'パシャ！',
       className: 'modal--photo',
-      body: `<img class="photo" src="${photo.url}" alt="ほこりちゃんの写真"><p class="note">「Xにポスト」は画像を保存してから投稿画面を開くよ。画像を添付してね</p>`,
+      body: `<img class="photo" src="${photo.url}" alt="ほこりちゃんの写真"><p class="note">${
+        canShare ? '「シェア」から X や LINE を選ぶと、画像つきで投稿できるよ' : '画像を保存して、SNSに投稿してね #ほこりちゃん'
+      }</p>`,
       buttons,
     });
   }
@@ -1322,14 +1324,6 @@ export class Game {
           void shareImage(photo).then((r) => {
             if (r === 'failed') this.hud.toast('シェアできなかった…「画像を保存」してから投稿してね', 2600);
           });
-        }
-        return;
-      case 'shareX':
-        if (this.photo) {
-          // Xの投稿画面には画像を直接付けられないので、先に保存してもらう
-          savePhoto(this.photo);
-          openXIntent(this.photo);
-          this.hud.toast('画像を保存したよ。投稿に添付してね', 2600);
         }
         return;
       case 'savePhoto':

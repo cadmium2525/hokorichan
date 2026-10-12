@@ -117,12 +117,6 @@ export async function shareImage(photo: Photo): Promise<'shared' | 'cancelled' |
   }
 }
 
-/** Xの投稿画面を開く（画像は添付できないので、保存した画像を自分で付けてもらう） */
-export function openXIntent(photo: Photo): void {
-  const q = new URLSearchParams({ text: photo.text, url: gameUrl() });
-  window.open(`https://x.com/intent/post?${q.toString()}`, '_blank', 'noopener');
-}
-
 /** 画像を保存する（ダウンロード） */
 export function savePhoto(photo: Photo): void {
   const a = document.createElement('a');
