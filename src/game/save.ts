@@ -3,6 +3,7 @@
 import {
   ACCESSORY_IDS,
   CONTEST_MAX,
+  FUR_IDS,
   DUST_TYPES,
   LOST_ITEMS,
   PERSON_IDS,
@@ -77,6 +78,7 @@ function toDex(value: unknown): Dex {
     dust: list<DustType>(raw.dust, DUST_TYPES),
     items: list<string>(raw.items, LOST_ITEMS.map((i) => i.id)),
     people: list<PersonId>(raw.people, PERSON_IDS),
+    fur: list<string>(raw.fur, FUR_IDS),
   };
 }
 
@@ -228,6 +230,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     dex: toDex(data.dex),
     contestBest: Math.min(toCount(data.contestBest, 0), CONTEST_MAX),
     sky: toSpotState(data.sky, now),
+    rankDiet: toBag(data.rankDiet),
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }

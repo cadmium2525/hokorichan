@@ -1460,3 +1460,11 @@ body {
   color: #3cb878;
   font-weight: 800;
 }
+
+.dex__fur {
+  display: block;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #b5a8c8;
+}

@@ -18,6 +18,9 @@ import {
   LOST_ITEMS,
   CONTEST,
   CONTEST_MAX,
+  FUR_IDS,
+  furName,
+  furParts,
   PEOPLE,
   RAINY,
   type Area,
@@ -378,10 +381,28 @@ export function dexBody(save: SaveData): string {
       ${known ? characterSprite(person.id, 'sprite sprite--sm') : unknown}
       <b>${known ? escapeHtml(person.name) : '？？？'}</b><small>${known ? escapeHtml(person.note) : 'まだ会っていない'}</small></div>`;
   }).join('');
+  // 見つけた毛並みを先に並べる
+  const furs = [...FUR_IDS].sort((x, y) => Number(save.dex.fur.includes(y)) - Number(save.dex.fur.includes(x))).map((id) => {
+    const known = save.dex.fur.includes(id);
+    const parts = furParts(id);
+    const pure = parts.length === 1;
+    if (!known) {
+      return `<div class="dex__item dex__item--unknown">${unknown}<b>？？？</b><small>${pure ? `${escapeHtml(DUSTS[parts[0]].name)}ばかり食べると…？` : 'まだ見ていない'}</small></div>`;
+    }
+    const [a, b] = [DUSTS[parts[0]].tint, DUSTS[parts[1] ?? parts[0]].tint];
+    return `<div class="dex__item"><i class="dex__fur" style="background:radial-gradient(circle at 35% 35%, #fffaf2 0 25%, ${a} 26% 60%, ${b} 61%)"></i><b>${escapeHtml(furName(id))}</b><small>${parts.map((t) => escapeHtml(DUSTS[t].name)).join('＋')}</small></div>`;
+  }).join('');
   const section = (title: string, [n, max]: [number, number], body: string) =>
     `<h3 class="dex__title">${title}<span>${n} / ${max}</span></h3><div class="dex">${body}</div>`;
   const best = save.contestBest > 0 ? `<p class="note">大掃除大会の自己ベスト：${save.contestBest}個${save.events.includes('contestWon') ? '（町の清掃係）' : ''}</p>` : '';
-  return section('ホコリ', p.dust, dust) + section('落とし物', p.items, items) + section('町の人', p.people, people) + best;
+  return (
+    section('毛並み', p.fur, furs) +
+    '<p class="note">ランクが上がるとき、そのランクのあいだに食べたホコリで毛並みが決まるよ</p>' +
+    section('ホコリ', p.dust, dust) +
+    section('落とし物', p.items, items) +
+    section('町の人', p.people, people) +
+    best
+  );
 }
 
 // ---- 大掃除大会 ----

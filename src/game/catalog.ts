@@ -325,3 +325,45 @@ export const RAINY = {
   reward: 500,
   rep: 5,
 };
+
+// ---- 毛並み図鑑 ----
+
+/** 毛並みの名前に使うことば（形容とたとえ） */
+export const DUST_WORDS: Record<DustType, { adj: string; noun: string }> = {
+  cotton: { adj: 'ふんわり', noun: 'わたぐも' },
+  lint: { adj: 'いろとりどり', noun: 'いとまり' },
+  sand: { adj: 'さらさら', noun: 'すなはま' },
+  fur: { adj: 'もふもふ', noun: 'こねこ' },
+  pollen: { adj: 'きいろい', noun: 'ひまわり' },
+  flour: { adj: 'まっしろ', noun: 'パンきじ' },
+  kosa: { adj: 'こがね', noun: 'さばく' },
+  soot: { adj: 'いぶし', noun: 'すみ' },
+  chalk: { adj: 'パステル', noun: 'こくばん' },
+};
+
+/** 1種類がこの割合以上なら「純」毛並み */
+export const FUR_PURE_RATIO = 0.7;
+
+/** 毛並みの番号。純毛並みは pure:種類、まじりは 種類+種類（DUST_TYPES の順） */
+export function furId(top: DustType, second: DustType | null): string {
+  if (!second || second === top) return `pure:${top}`;
+  const [a, b] = DUST_TYPES.indexOf(top) < DUST_TYPES.indexOf(second) ? [top, second] : [second, top];
+  return `${a}+${b}`;
+}
+
+export const FUR_IDS: readonly string[] = [
+  ...DUST_TYPES.map((t) => furId(t, null)),
+  ...DUST_TYPES.flatMap((a, i) => DUST_TYPES.slice(i + 1).map((b) => furId(a, b))),
+];
+
+/** 毛並みの名前（例：いぶしのひまわり毛並み、純わたぐも毛並み） */
+export function furName(id: string): string {
+  if (id.startsWith('pure:')) return `純${DUST_WORDS[id.slice(5) as DustType].noun}毛並み`;
+  const [a, b] = id.split('+') as [DustType, DustType];
+  return `${DUST_WORDS[b].adj}${DUST_WORDS[a].noun}毛並み`;
+}
+
+/** 毛並みのもとになったホコリ */
+export function furParts(id: string): DustType[] {
+  return id.startsWith('pure:') ? [id.slice(5) as DustType] : (id.split('+') as DustType[]);
+}

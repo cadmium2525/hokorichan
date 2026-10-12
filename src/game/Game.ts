@@ -37,6 +37,7 @@ import {
   CONTEST,
   CONTEST_MAX,
   DUST_TYPES,
+  furName,
   RAINY,
   SKY,
   DUSTS,
@@ -1488,7 +1489,7 @@ export class Game {
   private doFeed(type: DustType | 'all'): void {
     const before = rankFor(this.save.growthXp);
     const beforeTraits = helperStats(this.save);
-    const { save, fed } = feed(this.save, type);
+    const { save, fed, furs } = feed(this.save, type);
     if (fed === 0) {
       this.sound.play('deny');
       return;
@@ -1504,10 +1505,14 @@ export class Game {
     }
     const after = rankFor(save.growthXp);
     const afterTraits = helperStats(save);
-    if (friendUnlocked(save) && !friendUnlocked({ ...save, growthXp: save.growthXp - fed })) {
-      this.hud.toast('友だちから電話！「うちに遊びにおいでよ」 おでかけしてみよう', 3600);
+    const friendCall = friendUnlocked(save) && !friendUnlocked({ ...save, growthXp: save.growthXp - fed });
+    if (friendCall) window.setTimeout(() => this.hud.toast('友だちから電話！「うちに遊びにおいでよ」 おでかけしてみよう', 3600), after !== before ? 3400 : 0);
+    if (friendCall && after === before) {
+      // 電話のお知らせだけ
     } else if (after !== before) {
-      this.hud.toast(`${after.name}に成長した！`);
+      const fur = furs[furs.length - 1];
+      if (fur) this.hud.toast(`${after.name}に成長した！ 毛並み「${furName(fur.fur)}」${fur.isNew ? 'を図鑑に記録！' : ''}`, 3200);
+      else this.hud.toast(`${after.name}に成長した！`);
     } else if (afterTraits.sneeze && !beforeTraits.sneeze) {
       this.hud.toast(`毛並みが変わった！「${DUSTS.pollen.trait}」が使えるようになった`);
     } else if (isFull(save)) {

@@ -156,6 +156,6 @@ test('v4のデータは図鑑を分かっていることから埋め、大会の
 
 test('図鑑と大会記録の不正値は捨てる', () => {
   const s = sanitize({ version: 5, dex: { dust: ['cotton', 'gold', 'cotton'], items: ['ring', 'ufo'], people: 'all' }, contestBest: -3 });
-  assert.deepEqual(s.dex, { dust: ['cotton'], items: ['ring'], people: [] });
+  assert.deepEqual(s.dex, { dust: ['cotton'], items: ['ring'], people: [], fur: [] });
   assert.equal(s.contestBest, 0);
 });

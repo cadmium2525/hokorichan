@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { RAINY, SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { FUR_IDS, furId, furName, RAINY, SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   canFly,
+  furOf,
   canDeliverRainy,
   cityTownDue,
   deliverRainy,
@@ -498,4 +499,28 @@ test('チョークの粉を食べると空を速く飛べる', () => {
   const s0 = createInitialSave();
   assert.equal(skySpeedMul(s0), 1);
   assert.ok(skySpeedMul({ ...s0, diet: { ...s0.diet, cotton: 60, chalk: 40 } }) > 1);
+});
+
+test('毛並み図鑑：ランクが上がるときに、そのランクのあいだに食べたホコリで毛並みが決まる', () => {
+  // 綿ぼこり級（0〜19）を、砂ぼこり12・綿ぼこり8で終える → まじり毛並み
+  let s: SaveData = { ...createInitialSave(), habitat: 2, bag: { ...emptyBag(), sand: 12, cotton: 20 } };
+  let r = feed(s, 'sand');
+  assert.equal(r.furs.length, 0);
+  r = feed(r.save, 'cotton');
+  assert.equal(r.furs.length, 1);
+  assert.equal(r.furs[0].fur, furId('sand', 'cotton'));
+  assert.equal(r.furs[0].rank, '綿ぼこり級');
+  assert.equal(r.furs[0].isNew, true);
+  assert.deepEqual(r.save.dex.fur, [furId('cotton', 'sand')]);
+  // 境目をこえた残り（綿ぼこり12）は次のランクの分になる
+  assert.equal(r.save.rankDiet.cotton, 12);
+  assert.equal(r.save.rankDiet.sand, 0);
+  // 1種類が7割以上なら「純」
+  assert.equal(furOf({ ...emptyBag(), pollen: 8, cotton: 2 }), 'pure:pollen');
+  assert.equal(furOf(emptyBag()), null);
+  // 名前
+  assert.equal(furName('pure:cotton'), '純わたぐも毛並み');
+  assert.equal(furName(furId('soot', 'pollen')), 'いぶしひまわり毛並み');
+  assert.equal(FUR_IDS.length, 9 + 36);
+  assert.equal(new Set(FUR_IDS).size, FUR_IDS.length);
 });

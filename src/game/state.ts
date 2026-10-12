@@ -15,6 +15,9 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  FUR_IDS,
+  FUR_PURE_RATIO,
+  furId,
   PERSON_IDS,
   RAINY,
   SHAPE_LIMITS,
@@ -99,7 +102,7 @@ export const EVENT_IDS: readonly EventId[] = [
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
-export type Dex = { dust: DustType[]; items: string[]; people: PersonId[] };
+export type Dex = { dust: DustType[]; items: string[]; people: PersonId[]; fur: string[] };
 
 export type SaveData = {
   version: typeof SAVE_VERSION;
@@ -135,6 +138,8 @@ export type SaveData = {
   contestAt: number;
   /** 空の雲の積もり具合（3章） */
   sky: SpotState;
+  /** いまのランクになってから食べたホコリ。ランクが上がるときに毛並みが決まる */
+  rankDiet: Bag;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -184,10 +189,11 @@ export function createInitialSave(): SaveData {
     requestClock: 0,
     requestSeq: 0,
     events: [],
-    dex: { dust: [], items: [], people: [] },
+    dex: { dust: [], items: [], people: [], fur: [] },
     contestBest: 0,
     contestAt: 0,
     sky: { fullness: 1, at: 0 },
+    rankDiet: emptyBag(),
   };
 }
 
@@ -212,8 +218,9 @@ export function dexAdd<K extends DexKind>(save: SaveData, kind: K, id: Dex[K][nu
   return { save: { ...save, dex: { ...save.dex, [kind]: [...list, id] } }, added: true };
 }
 
-export function dexProgress(save: SaveData): { dust: [number, number]; items: [number, number]; people: [number, number] } {
+export function dexProgress(save: SaveData): { dust: [number, number]; items: [number, number]; people: [number, number]; fur: [number, number] } {
   return {
+    fur: [save.dex.fur.length, FUR_IDS.length],
     dust: [save.dex.dust.length, DUST_TYPES.length],
     items: [save.dex.items.length, LOST_ITEMS.length],
     people: [save.dex.people.length, PERSON_IDS.length],
@@ -306,23 +313,57 @@ export function feedableAmount(save: SaveData, type: DustType | 'all' = 'all'): 
  * バッグのホコリを与える。type='all' なら多い種類から順に。
  * 容量を超える分はバッグに残る。食べた種類は diet に記録する。
  */
-export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: SaveData; fed: number } {
+/** ランクが上がったときに決まった毛並み */
+export type FurRecord = { rank: string; fur: string; isNew: boolean };
+
+/** そのランクのあいだに食べたホコリから毛並みを決める（いちばん多い種類と、2番目） */
+export function furOf(rankDiet: Bag): string | null {
+  const total = bagTotal(rankDiet);
+  if (total <= 0) return null;
+  const sorted = [...DUST_TYPES].sort((a, b) => rankDiet[b] - rankDiet[a] || DUST_TYPES.indexOf(a) - DUST_TYPES.indexOf(b));
+  const [top, second] = sorted;
+  if (rankDiet[top] / total >= FUR_PURE_RATIO || rankDiet[second] <= 0) return furId(top, null);
+  return furId(top, second);
+}
+
+export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: SaveData; fed: number; furs: FurRecord[] } {
   let room = capacityOf(save.habitat) - save.growthXp;
-  if (room <= 0) return { save, fed: 0 };
+  if (room <= 0) return { save, fed: 0, furs: [] };
   const bag = { ...save.bag };
   const diet = { ...save.diet };
+  let rankDiet = { ...save.rankDiet };
+  const furDex = [...save.dex.fur];
+  const furs: FurRecord[] = [];
+  let xp = save.growthXp;
   const order = type === 'all' ? [...DUST_TYPES].sort((a, b) => bag[b] - bag[a]) : [type];
   let fed = 0;
   for (const t of order) {
-    const n = Math.min(bag[t], room);
+    let n = Math.min(bag[t], room);
     if (n <= 0) continue;
     bag[t] -= n;
     diet[t] += n;
     room -= n;
     fed += n;
+    // ランクの境目で区切り、そこまでに食べた分で毛並みを確定する
+    while (n > 0) {
+      const next = RANKS.find((r) => r.min > xp);
+      const take = next ? Math.min(n, next.min - xp) : n;
+      rankDiet[t] += take;
+      xp += take;
+      n -= take;
+      if (next && xp >= next.min) {
+        const fur = furOf(rankDiet);
+        if (fur) {
+          const isNew = !furDex.includes(fur);
+          if (isNew) furDex.push(fur);
+          furs.push({ rank: rankFor(xp - 1).name, fur, isNew });
+        }
+        rankDiet = emptyBag();
+      }
+    }
   }
-  if (fed === 0) return { save, fed: 0 };
-  return { save: { ...save, bag, diet, growthXp: save.growthXp + fed }, fed };
+  if (fed === 0) return { save, fed: 0, furs: [] };
+  return { save: { ...save, bag, diet, rankDiet, growthXp: xp, dex: { ...save.dex, fur: furDex } }, fed, furs };
 }
 
 // ---- 毛並み（食べ合わせ） ----
