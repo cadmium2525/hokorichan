@@ -14,6 +14,9 @@ const SPEED = 3.2;
 const HERO_RADIUS = 0.28;
 /** 道さがしの格子の大きさ（ワールド単位） */
 const GRID = 0.25;
+/** この道のりより遠いと走る */
+const RUN_DISTANCE = 5;
+const RUN_MUL = 1.8;
 /** 画面に映す横幅（ワールド単位）。縦長画面では高さは比率で決まる */
 const VIEW_WIDTH = 10;
 
@@ -50,6 +53,7 @@ export class TownScene implements GameScene {
   private goingTo: BuildingId | null = null;
   /** 目的地までの経由点（最後が目的地） */
   private path: THREE.Vector3[] = [];
+  private running = false;
   private grid: Uint8Array | null = null;
   private aspect = 0.6;
   private readonly camCenter = new THREE.Vector2();
@@ -292,6 +296,17 @@ export class TownScene implements GameScene {
     return out;
   }
 
+  /** 目的地までの残りの道のり */
+  private remaining(): number {
+    let d = 0;
+    let at = this.pos;
+    for (const p of this.path.length ? this.path : this.target ? [this.target] : []) {
+      d += Math.hypot(p.x - at.x, p.z - at.z);
+      at = p;
+    }
+    return d;
+  }
+
   private move(dt: number): boolean {
     if (!this.target) return false;
     // 経由点に着いたら次へ
@@ -305,7 +320,10 @@ export class TownScene implements GameScene {
       this.arrive();
       return false;
     }
-    const step = Math.min(dist, SPEED * dt);
+    // 遠い所へは走る（行き来に時間がかかりすぎないように）
+    const left = this.remaining();
+    this.running = left > RUN_DISTANCE || (this.running && left > 1.2);
+    const step = Math.min(dist, SPEED * (this.running ? RUN_MUL : 1) * dt);
     const nx = this.pos.x + (dx / dist) * step;
     const nz = this.pos.z + (dz / dist) * step;
     const sd = screenDelta(dx, dz);
@@ -394,7 +412,7 @@ export class TownScene implements GameScene {
   update(dt: number, time: number): void {
     const walking = this.move(dt);
     this.hero.group.position.copy(this.pos);
-    this.hero.set(walking ? 'walk' : 'idle');
+    this.hero.set(walking ? (this.running ? 'run' : 'walk') : 'idle');
     this.hero.update(dt);
     if (this.marker.visible) this.marker.scale.setScalar(1 + Math.sin(time * 8) * 0.08);
     const want = this.heroScreenCenter();

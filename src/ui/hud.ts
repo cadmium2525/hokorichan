@@ -206,6 +206,26 @@ export class Hud {
     layer.querySelectorAll<HTMLElement>('[data-label]').forEach((el) => {
       if (!seen.has(el.dataset.label as string)) el.remove();
     });
+    this.separateLabels();
+  }
+
+  /** 名札どうしが重なったら、下にある札を上の札の下へずらす */
+  private separateLabels(): void {
+    const els = [...this.el.labels.querySelectorAll<HTMLElement>('[data-label]')];
+    const boxes = els.map((el) => {
+      el.style.marginTop = '0px';
+      return { el, r: el.getBoundingClientRect() };
+    });
+    boxes.sort((a, b) => a.r.top - b.r.top);
+    const placed: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+    for (const { el, r } of boxes) {
+      let top = r.top;
+      for (const p of placed) {
+        if (r.left < p.right + 2 && r.right > p.left - 2 && top < p.bottom + 2 && top + r.height > p.top - 2) top = p.bottom + 2;
+      }
+      if (top !== r.top) el.style.marginTop = `${(top - r.top).toFixed(0)}px`;
+      placed.push({ left: r.left, right: r.right, top, bottom: top + r.height });
+    }
   }
 
   setTownStatus(text: string): void {

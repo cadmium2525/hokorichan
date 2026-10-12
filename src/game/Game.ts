@@ -95,7 +95,7 @@ import {
 
 export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'RESULT';
 
-type Overlay = 'none' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
+type Overlay = 'none' | 'dest' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
 /** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
 type DebugParams = { seed: number | null; damp: boolean | null; speed: number };
@@ -283,7 +283,10 @@ export class Game {
       this.hud.setActions(this.homeButtons());
     } else if (this.mode === 'TOWN') {
       this.hud.setTownStatus(`評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
-      this.hud.setActions([{ action: 'walkHome', label: s.habitat >= 4 ? 'ほこりちゃんの所へ帰る' : 'おうちに帰る', variant: 'accent' }]);
+      this.hud.setActions([
+        { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
+        { action: 'walkHome', label: s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
+      ]);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
       const sess = this.session;
       const need = requiredCount(sess);
@@ -840,7 +843,19 @@ export class Game {
         this.sound.play('tap');
         this.town?.goToBuilding(this.petBuilding);
         return;
+      case 'openDest':
+        if (this.overlay !== 'none') return;
+        this.sound.play('tap');
+        this.openOverlay('dest', {
+          title: 'どこへ行く？',
+          className: 'modal--map',
+          sheet: true,
+          body: this.destBody(),
+          buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
+        });
+        return;
       case 'walkTo':
+        if (this.overlay === 'dest') this.closeModal();
         if (this.overlay !== 'none') return;
         if (BUILDING_IDS.includes(arg as BuildingId)) {
           this.sound.play('tap');
@@ -1083,6 +1098,39 @@ export class Game {
     this.syncSheetInset();
   }
 
+  /** 名札や行き先に出してよい建物（まだ知らない家・閉まっている店は出さない） */
+  private townKnown(id: BuildingId): boolean {
+    const s = this.save;
+    switch (id) {
+      case 'friend':
+        return friendUnlocked(s);
+      case 'flower':
+      case 'bakery':
+      case 'grandma':
+        return hasEvent(s, 'street') && areaUnlocked(s, id);
+      default:
+        return true;
+    }
+  }
+
+  private destBody(): string {
+    const s = this.save;
+    const notes: Partial<Record<BuildingId, string>> = {
+      home: s.habitat >= 4 ? '家の掃除' : 'ほこりちゃんのいる家',
+      shop: '道具・ケース・アクセサリー',
+      board: s.requests.length > 0 ? `依頼 ${s.requests.length}件` : '依頼の掲示板',
+      lot: s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
+      friend: '友だちの家の掃除',
+      flower: '花粉が多い', bakery: '粉ぼこりが多い', grandma: '猫の毛が多い',
+    };
+    const order: BuildingId[] = s.habitat >= 4 ? ['lot', 'home', 'board', 'shop', 'friend', 'flower', 'bakery', 'grandma'] : ['home', 'board', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma'];
+    const items = order
+      .filter((id) => this.townKnown(id) && (id !== 'lot' || s.habitat >= 4 || hasEvent(s, 'landMeeting')))
+      .map((id) => `<button type="button" class="dest" data-action="walkTo" data-arg="${id}"><b>${this.townLabel(id)}</b><small>${notes[id] ?? ''}</small></button>`)
+      .join('');
+    return `<div class="dests">${items}</div><p class="note">遠い所へは走っていくよ</p>`;
+  }
+
   private townLabel(id: BuildingId): string {
     const s = this.save;
     switch (id) {
@@ -1093,7 +1141,7 @@ export class Game {
       case 'board':
         return s.requests.length > 0 ? `掲示板（${s.requests.length}）` : '掲示板';
       case 'lot':
-        return s.habitat >= 4 ? 'ほこりちゃんのコンテナ' : '空き地';
+        return s.habitat >= 4 ? 'コンテナ' : '空き地';
       case 'friend':
         return friendUnlocked(s) ? '友だちの家' : '？？？の家';
       case 'flower':
@@ -1117,18 +1165,12 @@ export class Game {
       this.hud.setEdgeArrows(off.left, off.right);
     }
     if (this.town && this.mode === 'TOWN') {
-      const arrow = { left: '◀ ', right: '', up: '▲ ', down: '▼ ' };
+      // 名札は画面内の、行ける建物だけ（画面外や未開放の建物は「行き先」から）
       this.hud.setLabels(
-        this.town.labels().map((l) => {
-          const name = this.townLabel(l.id);
-          return {
-            id: l.id,
-            text: l.off ? `${arrow[l.off]}${name}${l.off === 'right' ? ' ▶' : ''}` : name,
-            x: l.x,
-            y: l.y,
-            action: l.off ? 'walkTo' : undefined,
-          };
-        }),
+        this.town
+          .labels()
+          .filter((l) => !l.off && this.townKnown(l.id))
+          .map((l) => ({ id: l.id, text: this.townLabel(l.id), x: l.x, y: l.y })),
       );
     }
     // 1秒ごと：依頼の到着とマップの積もり具合を更新する
