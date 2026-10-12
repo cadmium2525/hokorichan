@@ -94,8 +94,8 @@ function lambert(color: string): THREE.MeshLambertMaterial {
 }
 
 /**
- * 頭の上に付けるアクセサリー。本体直径1のときの大きさで作り、
- * offset は本体（幅・高さ）に対する相対位置。
+ * 頭の上に付けるアクセサリー。本体直径1のときの大きさで作る。
+ * offset の x,z は頭の上のどこに付けるか（本体直径1が基準）、y は表面からの浮かせ量。
  */
 function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THREE.Vector3 } | null {
   const g = new THREE.Group();
@@ -110,7 +110,7 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       }
       g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 1), lambert(PALETTE.pink)));
       g.rotation.y = Math.PI / 4;
-      return { object: g, offset: new THREE.Vector3(-0.2, 0.9, 0.12) };
+      return { object: g, offset: new THREE.Vector3(-0.2, 0.04, 0.12) };
     }
     case 'leaf': {
       const leaf = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), lambert(PALETTE.leaf));
@@ -120,20 +120,20 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.14, 5), lambert(PALETTE.leafDark));
       stem.position.y = 0.05;
       g.add(leaf, stem);
-      return { object: g, offset: new THREE.Vector3(0.02, 1.0, 0.02) };
+      return { object: g, offset: new THREE.Vector3(0.02, 0.02, 0.02) };
     }
     case 'flower': {
       const center = new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 1), lambert('#f3d27a'));
       g.add(center);
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
-        const petal = new THREE.Mesh(new THREE.IcosahedronGeometry(0.055, 1), lambert('#ffffff'));
+        const petal = new THREE.Mesh(new THREE.IcosahedronGeometry(0.055, 1), lambert(PALETTE.pink));
         petal.position.set(Math.cos(a) * 0.08, Math.sin(a) * 0.08, 0);
         g.add(petal);
       }
       // 花はカメラに向ける
       g.quaternion.copy(FACE_ROTATION);
-      return { object: g, offset: new THREE.Vector3(0.22, 0.88, 0.22) };
+      return { object: g, offset: new THREE.Vector3(0.2, 0.03, 0.2) };
     }
     case 'hat': {
       const felt = lambert(PALETTE.lavenderDeep);
@@ -143,7 +143,7 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       const band = new THREE.Mesh(new THREE.CylinderGeometry(0.195, 0.195, 0.05, 16), lambert(PALETTE.pink));
       band.position.y = 0.04;
       g.add(brim, top, band);
-      return { object: g, offset: new THREE.Vector3(0, 0.95, 0) };
+      return { object: g, offset: new THREE.Vector3(0, 0.0, 0) };
     }
     case 'crown': {
       const gold = lambert('#f2c94c');
@@ -159,7 +159,7 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 0), lambert(PALETTE.pinkDeep));
       gem.position.copy(ISO_VIEW_DIR.clone().setY(0).normalize().multiplyScalar(0.18));
       g.add(gem);
-      return { object: g, offset: new THREE.Vector3(0, 0.96, 0) };
+      return { object: g, offset: new THREE.Vector3(0, 0.02, 0) };
     }
     case 'glasses':
       return null; // 顔のテクスチャに描く
@@ -350,9 +350,13 @@ export class HokorichanModel {
     this.face.quaternion.copy(FACE_ROTATION);
     this.shadow.scale.setScalar(s * widen * 1.25);
     if (this.accessory) {
+      // 付ける位置の球の表面の高さ＋外側の綿の房のぶんだけ持ち上げて、埋もれないようにする
       const o = this.accessory.offset;
-      this.accessory.object.position.set(o.x * s * widen, o.y * s * sy, o.z * s * widen);
-      this.accessory.object.scale.setScalar(Math.pow(s, 0.8));
+      const surface = 0.5 + Math.sqrt(Math.max(0, 0.25 - o.x * o.x - o.z * o.z));
+      const f = this.shape.fluff;
+      const tuftOut = 0.45 + 0.03 * f + 0.085 * (0.55 + 0.45 * f) - 0.5;
+      this.accessory.object.position.set(o.x * s * widen, (surface * sy + tuftOut + o.y) * s, o.z * s * widen);
+      this.accessory.object.scale.setScalar(1.15 * Math.pow(s, 0.95));
     }
   }
 }

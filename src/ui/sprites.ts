@@ -171,7 +171,7 @@ const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> =
   ],
   flower: [
     ['.........', '...ww....', '..wwww...', '.wwyyww..', '.wwyyww..', '..wwww...', '...ww....', '...g.....', '...g.....'],
-    { w: '#ffffff', y: '#f3d27a', g: '#7fb77e' },
+    { w: '#f4b6c6', y: '#f3d27a', g: '#7fb77e' },
   ],
   glasses: [
     ['.........', '.........', '.........', 'kkkk.kkkk', 'k..kkk..k', 'k..k.k..k', 'kkkk.kkkk', '.........', '.........'],
