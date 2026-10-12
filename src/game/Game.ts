@@ -637,6 +637,7 @@ export class Game {
       startAt,
       lotOwned: this.save.habitat >= 4,
       warehouse: this.save.habitat >= 5,
+      railway: areaUnlocked(this.save, 'station'),
       npcs: this.townNpcs(),
       onArrive: (id) => this.onArrive(id),
     });
