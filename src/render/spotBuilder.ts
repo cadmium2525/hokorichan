@@ -32,6 +32,8 @@ export type SpotLayout = {
   scale: number;
   /** 洗濯機の糸くずのように明るい色のホコリにする */
   lint: boolean;
+  /** 見物席（大会の審査員席など）。ほこりちゃんが座る */
+  seat?: THREE.Vector3;
 };
 
 // ---- テクスチャ ----
@@ -632,9 +634,10 @@ function contestLayout(seed: number): SpotLayout {
     leg.position.set(x, 0.8, z);
     tent.add(leg);
   }
-  const table = box(1.2, 0.08, 0.5, lambert({ color: '#ffffff' }));
-  table.position.y = 0.7;
-  tent.add(table);
+  // 審査員席の札（ほこりちゃんが座る）
+  const sign = box(0.7, 0.3, 0.04, lambert({ color: '#fff6e8' }));
+  sign.position.set(0, 0.15, 0.85);
+  tent.add(sign);
   place(tent, 2.6, 1.0);
   // コーン
   for (const [x, z] of [[-1.2, 3.4], [0.4, 3.5]]) {
@@ -651,6 +654,7 @@ function contestLayout(seed: number): SpotLayout {
     view: new THREE.Box3(new THREE.Vector3(-half - 0.4, 0, -half - 0.4), new THREE.Vector3(half, 2.6, half)),
     scale: 1,
     lint: false,
+    seat: new THREE.Vector3(2.6, 0, 1.0),
   };
 }
 

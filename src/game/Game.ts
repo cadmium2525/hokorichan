@@ -645,6 +645,7 @@ export class Game {
       tool,
       hero: this.hero,
       element: this.hud.canvas,
+      spectator: { accessory: this.save.equippedAccessory, shape: this.save.shape, tint: petTint(dietRatios(this.save.diet)) },
       onCollect: (id) => this.onCollect(id),
       onMiss: () => this.onContestMiss(),
       onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),

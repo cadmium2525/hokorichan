@@ -52,6 +52,8 @@ export type CleaningOptions = {
   /** ホコリ1個ずつの種類（dustCount 個） */
   dustTypes: DustType[];
   helper?: HelperOptions;
+  /** 見物するほこりちゃん（大会の審査員席。掃除はしない） */
+  spectator?: { accessory: AccessoryId | null; shape: PetShape; tint: string };
   /** 落とし物を1つ混ぜる（依頼）。拾うと onTreasure */
   treasure?: { color: string };
   onTreasure?: () => void;
@@ -94,6 +96,7 @@ export class CleaningScene implements GameScene {
   private helper: { model: HokorichanModel; pos: THREE.Vector3; size: number; speed: number; radius: number; munch: number } | null = null;
   /** 部屋の掃除では主人公が道具を持って立つ（近景では道具だけ） */
   private heroSprite: CharacterSprite | null = null;
+  private spectator: { model: HokorichanModel; cheer: number } | null = null;
   /** 風（ワールド単位/秒）。ホコリが流され、面の外へ出ると取りこぼし */
   private wind = new THREE.Vector2();
   private heroDrift = 0;
@@ -124,6 +127,16 @@ export class CleaningScene implements GameScene {
     this.dustTotal = this.dusts.length;
     if (opts.treasure && treasureHome) this.placeTreasure(treasureHome, opts.treasure.color);
     if (opts.helper) this.addHelper(opts.helper);
+    if (opts.spectator && layout.seat) {
+      const model = new HokorichanModel(11);
+      model.setAccessory(opts.spectator.accessory);
+      model.setCustomShape(opts.spectator.shape);
+      model.setBaseColor(opts.spectator.tint);
+      model.setSize(1.15, 1);
+      model.group.position.copy(layout.seat);
+      this.scene.add(model.group);
+      this.spectator = { model, cheer: 0 };
+    }
 
     this.ring = new THREE.Mesh(
       new THREE.PlaneGeometry(this.radius * 2, this.radius * 2),
@@ -531,10 +544,12 @@ export class CleaningScene implements GameScene {
         const at = toHelper ? helperMouth : suction;
         this.particles.burst(this.sparkle, at.clone().setY(y + 0.35 * this.scale), 5, 1.4 * this.scale, 0.2 * this.scale);
         if (toHelper && this.helper) this.helper.munch = 0.5;
+        if (this.spectator) this.spectator.cheer = 0.6;
         this.opts.onCollect(d.id);
       }
     }
     this.updateTreasure(time, active);
+    this.updateSpectator(dt, time);
     this.particles.update(dt);
     this.updateHero(dt, active);
   }
@@ -564,6 +579,17 @@ export class CleaningScene implements GameScene {
     const right = new THREE.Vector3(1, 0, -1).normalize();
     hero.group.position.set(tip.x, this.surface.y, tip.z).addScaledVector(right, -off);
     hero.fitToPixels(this.camera, this.lowWidth);
+  }
+
+  /** 審査員席のほこりちゃん：拾うたびにぴょんと跳ねて応援する */
+  private updateSpectator(dt: number, time: number): void {
+    const sp = this.spectator;
+    if (!sp) return;
+    sp.cheer = Math.max(0, sp.cheer - dt);
+    const hop = sp.cheer > 0 ? Math.sin((sp.cheer / 0.6) * Math.PI) * 0.18 : 0;
+    sp.model.group.position.y = this.surface.y + hop;
+    sp.model.setSize(1.15, sp.cheer > 0 ? 1.04 : 1 + Math.sin(time * 3) * 0.03);
+    sp.model.setExpression(sp.cheer > 0 ? 'happy' : 'idle', Math.floor(time * 0.7) % 5 === 0);
   }
 
   /** ほこりちゃん：指で触れている間は指のほうへ、離すといちばん近いホコリへ転がる */

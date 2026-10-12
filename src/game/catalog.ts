@@ -215,12 +215,12 @@ export type Rival = { name: string; score: number };
 
 export const CONTEST = {
   /** 制限時間（秒） */
-  seconds: 45,
+  seconds: 30,
   /** 風でホコリが飛んでくるタイミング（開始からの秒）と数。合計が満点 */
   waves: [
     { at: 0, count: 15 },
-    { at: 15, count: 15 },
-    { at: 30, count: 15 },
+    { at: 10, count: 15 },
+    { at: 20, count: 15 },
   ] as ReadonlyArray<{ at: number; count: number }>,
   mix: { cotton: 4, sand: 3, pollen: 2, fur: 2, flour: 1, lint: 1 } as Partial<Record<DustType, number>>,
   /** 風の強さ（ワールド単位/秒）。ホコリが流され、通りの外へ出たら取りこぼし */
