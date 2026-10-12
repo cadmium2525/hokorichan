@@ -654,20 +654,65 @@ body {
   height: 30px;
 }
 
+/* 人物は 32×32 ドットを整数倍で表示する（2倍・3倍・4倍） */
 .sprite {
-  width: 32px;
-  height: 48px;
+  width: 64px;
+  height: 64px;
   flex: none;
 }
 
+.sprite--sm {
+  width: 32px;
+  height: 32px;
+}
+
 .sprite--lg {
-  width: 56px;
-  height: 84px;
+  width: 96px;
+  height: 96px;
 }
 
 .sprite--xl {
-  width: 72px;
-  height: 108px;
+  width: 128px;
+  height: 128px;
+}
+
+.px-char {
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-size: 400% 100%;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+  animation: px-char-frames 1.3s steps(4) infinite;
+}
+
+.px-char--walk,
+.px-char--clean,
+.px-char--joy,
+.px-char--surprise {
+  animation-duration: 0.5s;
+}
+
+.px-char--talk {
+  animation-duration: 0.8s;
+}
+
+.px-char--flip {
+  transform: scaleX(-1);
+}
+
+@keyframes px-char-frames {
+  from {
+    background-position-x: 0%;
+  }
+  to {
+    background-position-x: 133.333%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .px-char {
+    animation: none;
+  }
 }
 
 .hero-pick {

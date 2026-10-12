@@ -1,6 +1,7 @@
-// HUD用のドット絵（主人公・お母さん・場所/道具/アクセサリーのアイコン）。すべてSVGで生成する。
+// HUD用のドット絵。人物はジェネレーターの4コマアニメ、場所/道具/アクセサリーのアイコンはSVGで生成する。
 
 import type { AccessoryId, Hero, SpotId, ToolId } from '../game/catalog.ts';
+import { CHAR_H, CHAR_W, FRAMES, drawCharacter, type CharacterId, type Facing, type Pose } from '../render/pixelCharacters.ts';
 
 /** 文字の並びをドット絵SVGにする。'.' は透明 */
 export function pixelArt(rows: readonly string[], colors: Record<string, string>, className = 'px-icon'): string {
@@ -16,131 +17,41 @@ export function pixelArt(rows: readonly string[], colors: Record<string, string>
   return `<svg class="${className}" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
 }
 
-const FACE = {
-  s: '#f8d9c0',
-  e: '#3b2a2a',
-  c: '#f4a3b6',
-  m: '#d0607e',
-  w: '#ffffff',
-  l: '#f8d9c0',
-};
+// ---- 人物（設定資料準拠のドット絵ジェネレーターで描き、4コマを CSS で再生する） ----
 
-const BOY = [
-  '......kkkk......',
-  '....kkhhhhkk....',
-  '...khhhhhhhhk...',
-  '..khhhhhhhhhhk..',
-  '..khhhhhhhhhhk..',
-  '..khhsssssshhk..',
-  '..khsssssssshk..',
-  '..ksseesseessk..',
-  '..kcssssssssck..',
-  '..kssssmmssssk..',
-  '...kssssssssk...',
-  '....kwwwwwwk....',
-  '..kaaaaaaaaaak..',
-  '.kaaaaaaaaaaaak.',
-  '.ksaaaaaaaaaask.',
-  '..kaaaaaaaaaak..',
-  '..kbbbbbbbbbbk..',
-  '..kbbbbbbbbbbk..',
-  '...kbbbkkbbbk...',
-  '...kssk..kssk...',
-  '...kssk..kssk...',
-  '...kffk..kffk...',
-  '..kfffk..kfffk..',
-  '................',
-];
+export type SpriteOptions = { pose?: Pose; facing?: Facing; flip?: boolean };
 
-const GIRL = [
-  '......kkkk......',
-  '....kkhhhhkk....',
-  '...khhhhhhhhpp..',
-  '..khhhhhhhhhpp..',
-  '..khhhhhhhhhhk..',
-  '..khhhhhhhhhhk..',
-  '..khsssssssshk..',
-  '.khsseesseesshk.',
-  '.khcssssssssshk.',
-  '.khssssmmsssshk.',
-  '.khhssssssssshk.',
-  '..kkkwwwwwwkkk..',
-  '..kaaaaaaaaaak..',
-  '.kaaaaaaaaaaaak.',
-  '.ksaaaaaaaaaask.',
-  '.kaaaaaaaaaaaak.',
-  'kaaaaaaaaaaaaaak',
-  'kbbbbbbbbbbbbbbk',
-  '...kssk..kssk...',
-  '...kssk..kssk...',
-  '...kssk..kssk...',
-  '...kffk..kffk...',
-  '..kfffk..kfffk..',
-  '................',
-];
+const stripCache = new Map<string, string>();
 
-const MOTHER = [
-  '......kkkk......',
-  '.....khhhhk.....',
-  '....kkhhhhkk....',
-  '...khhhhhhhhk...',
-  '..khhhhhhhhhhk..',
-  '..khhhsssshhhk..',
-  '..khsssssssshk..',
-  '..kseesssseesk..',
-  '..kcssssssssck..',
-  '..kssssmmssssk..',
-  '...kssssssssk...',
-  '....kssssssk....',
-  '..kaaaaaaaaaak..',
-  '.kaawwwwwwwwaak.',
-  '.ksawwwwwwwwask.',
-  '.kaawwwppwwwaak.',
-  '..kawwwwwwwwak..',
-  '..kawwwwwwwwak..',
-  '..kaaaaaaaaaak..',
-  '..kaaaaaaaaaak..',
-  '...kssk..kssk...',
-  '...kssk..kssk...',
-  '..kfffk..kfffk..',
-  '................',
-];
-
-export function heroSprite(hero: Hero, className = 'sprite'): string {
-  return hero === 'boy'
-    ? pixelArt(BOY, { ...FACE, k: '#3b2a2a', h: '#4a3328', a: '#8ec1ea', b: '#5d7fa8', f: '#e98aa6' }, className)
-    : pixelArt(GIRL, { ...FACE, k: '#3b2a2a', h: '#5a3a2a', p: '#f4b6c6', a: '#f4b6c6', b: '#e98aa6', f: '#a58fd0' }, className);
+/** 4コマを横に並べた PNG（data URL）。DOM が必要なのでブラウザでだけ呼ぶ */
+function stripUrl(id: CharacterId, pose: Pose, facing: Facing): string {
+  const key = `${id}/${pose}/${facing}`;
+  let url = stripCache.get(key);
+  if (!url) {
+    const canvas = document.createElement('canvas');
+    canvas.width = CHAR_W * FRAMES;
+    canvas.height = CHAR_H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return '';
+    for (let f = 0; f < FRAMES; f++) {
+      const fr = drawCharacter({ id, facing, pose, frame: f });
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(fr.data), fr.width, fr.height), f * CHAR_W, 0);
+    }
+    url = canvas.toDataURL('image/png');
+    stripCache.set(key, url);
+  }
+  return url;
 }
 
-export function motherSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#8a5a3c', a: '#b9a6dc', p: '#f4b6c6', f: '#8a5a3c' }, className);
+export function characterSprite(id: CharacterId, className = 'sprite', opts: SpriteOptions = {}): string {
+  const pose = opts.pose ?? 'idle';
+  const url = stripUrl(id, pose, opts.facing ?? 'down');
+  const cls = `${className} px-char px-char--${pose}${opts.flip ? ' px-char--flip' : ''}`;
+  return `<span class="${cls}" style="background-image:url(${url})" aria-hidden="true"></span>`;
 }
 
-/** 友だち（ミント色の服の男の子） */
-export function friendSprite(className = 'sprite'): string {
-  return pixelArt(BOY, { ...FACE, k: '#4a3328', h: '#b5652d', a: '#9fd8c4', b: '#6fb7a0', f: '#f3d27a' }, className);
-}
-
-export function friendMomSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#3b2a2a', h: '#3b2a2a', a: '#9fd8c4', p: '#f3d27a', f: '#3b2a2a' }, className);
-}
-
-export function floristSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#3b2a2a', h: '#5a3a2a', a: '#7fb77e', p: PINK_DOT, f: '#5a3a2a' }, className);
-}
-
-export function bakerSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#3b2a2a', a: '#e2a663', p: '#9c6438', f: '#4a3328' }, className);
-}
-
-export function grandmaSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#6b5a50', h: '#d9d4cc', a: '#8f78c4', p: '#f3d27a', f: '#6b5a50' }, className);
-}
-
-const PINK_DOT = '#f4b6c6';
-
-export function shopkeeperSprite(className = 'sprite'): string {
-  return pixelArt(MOTHER, { ...FACE, k: '#4a3328', h: '#7a5a8c', a: '#f3d27a', p: '#e98aa6', f: '#7a5a8c' }, className);
+export function heroSprite(hero: Hero, className = 'sprite', opts: SpriteOptions = {}): string {
+  return characterSprite(hero, className, opts);
 }
 
 // ---- アイコン（9×9） ----
@@ -250,4 +161,4 @@ export function accessoryIcon(id: AccessoryId): string {
 }
 
 /** 行の長さがそろっているか（テスト用） */
-export const SPRITE_ROWS = { BOY, GIRL, MOTHER, SPOT_ICONS, TOOL_ICONS, ACCESSORY_ICONS };
+export const SPRITE_ROWS = { SPOT_ICONS, TOOL_ICONS, ACCESSORY_ICONS };

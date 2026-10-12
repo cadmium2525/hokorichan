@@ -4,7 +4,7 @@ import type * as THREE from 'three';
 export interface GameScene {
   readonly scene: THREE.Scene;
   readonly camera: THREE.OrthographicCamera;
-  resize(aspect: number): void;
+  resize(aspect: number, lowWidth: number): void;
   update(dt: number, time: number): void;
   /** メッシュ・テクスチャ・イベントを解放する */
   dispose(): void;

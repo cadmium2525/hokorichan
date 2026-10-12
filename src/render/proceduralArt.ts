@@ -3,17 +3,19 @@
 import * as THREE from 'three';
 import { createRandom, randRange, type Random } from '../game/rng.ts';
 
+// 部屋・家具は「ピクセルアート設定資料 Ver.1」の背景・家具パレット（#a0644a #d9a06a #b8754f #e8b48a #f2cbb0 #f8e3cc）を基準にした暖色系
 export const PALETTE = {
   cream: '#fff4e6',
-  wall: '#fbeedd',
-  wallStripe: '#f8dfe2',
+  wall: '#f8e3cc',
+  wallStripe: '#f2d4bc',
+  panel: '#e8b48a',
   pink: '#f4b6c6',
   pinkDeep: '#e98aa6',
   lavender: '#cbb8ea',
   lavenderDeep: '#a58fd0',
-  woodLight: '#e0a86c',
-  wood: '#c98b55',
-  woodDark: '#9c6438',
+  woodLight: '#dca46c',
+  wood: '#b8754f',
+  woodDark: '#a0644a',
   leaf: '#7fb77e',
   leafDark: '#5a9460',
   sky: '#bfe3f6',
@@ -81,15 +83,24 @@ export function wallTexture(width: number, colors: WallColors = { base: PALETTE.
   ctx.fillStyle = colors.base;
   ctx.fillRect(0, 0, 16, 32);
   ctx.fillStyle = colors.stripe;
-  ctx.fillRect(6, 0, 3, 28);
-  ctx.fillStyle = '#e8dcf2';
+  ctx.fillRect(6, 0, 3, 22);
+  ctx.fillStyle = shade(colors.base, 0.04);
   ctx.fillRect(13, 6, 1, 1);
-  ctx.fillRect(2, 18, 1, 1);
-  // 巾木
-  ctx.fillStyle = PALETTE.woodLight;
-  ctx.fillRect(0, 28, 16, 4);
+  ctx.fillRect(2, 15, 1, 1);
+  // 腰板（木の羽目板）と巾木
+  ctx.fillStyle = PALETTE.panel;
+  ctx.fillRect(0, 22, 16, 10);
+  ctx.fillStyle = shade(PALETTE.panel, 0.05);
+  ctx.fillRect(1, 23, 6, 1);
+  ctx.fillRect(9, 23, 6, 1);
+  ctx.fillStyle = shade(PALETTE.panel, -0.08);
+  ctx.fillRect(7, 23, 1, 7);
+  ctx.fillRect(15, 23, 1, 7);
   ctx.fillStyle = PALETTE.wood;
-  ctx.fillRect(0, 28, 16, 1);
+  ctx.fillRect(0, 21, 16, 1);
+  ctx.fillRect(0, 30, 16, 2);
+  ctx.fillStyle = PALETTE.woodDark;
+  ctx.fillRect(0, 31, 16, 1);
   return toTexture(canvas, [width, 1]);
 }
 
@@ -100,6 +111,14 @@ export function woodTexture(seed: number, base: string = PALETTE.wood, drawers =
   ctx.fillRect(0, 0, 32, 32);
   ctx.fillStyle = shade(base, -0.05);
   for (let i = 0; i < 10; i++) ctx.fillRect(Math.floor(rng() * 32), Math.floor(rng() * 32), 4 + Math.floor(rng() * 8), 1);
+  // ふちを1ドット暗くして、ドット絵の輪郭のように見せる
+  ctx.fillStyle = shade(base, -0.14);
+  ctx.fillRect(0, 0, 32, 1);
+  ctx.fillRect(0, 31, 32, 1);
+  ctx.fillRect(0, 0, 1, 32);
+  ctx.fillRect(31, 0, 1, 32);
+  ctx.fillStyle = shade(base, 0.06);
+  ctx.fillRect(1, 1, 30, 1);
   if (drawers > 0) {
     const h = 32 / drawers;
     for (let i = 0; i < drawers; i++) {
@@ -281,22 +300,88 @@ export function dropTexture(): THREE.CanvasTexture {
 // ---- ホコリ（掃除対象） ----
 
 /** 綿のような小さな塊。リアルな汚れではなく、ふわっとした灰色の玉にする */
+/** ホコリの見た目の種類（catalog の DustType と同じ名前） */
+export type DustShape = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour';
+
+let threadGeometry: THREE.BufferGeometry | null = null;
+
+/**
+ * ホコリのかたまり。種類ごとにシルエットを変える。
+ * 綿ぼこり＝ふわふわの玉、糸くず＝玉に糸がからむ、砂＝つぶの小山、猫の毛＝細長い毛束、花粉＝つぶつぶの黄色い玉、粉＝平たい山。
+ */
 export function createDustPuff(
   random: Random,
   geometry: THREE.BufferGeometry,
   materials: THREE.Material[],
+  shape: DustShape = 'cotton',
 ): THREE.Group {
   const group = new THREE.Group();
-  const count = 3 + Math.floor(random() * 3);
-  for (let i = 0; i < count; i++) {
-    const m = new THREE.Mesh(geometry, materials[Math.floor(random() * materials.length)]);
-    const r = randRange(random, 0.08, 0.14);
-    m.scale.setScalar(r);
-    const a = random() * Math.PI * 2;
-    const d = i === 0 ? 0 : randRange(random, 0.06, 0.14);
-    m.position.set(Math.cos(a) * d, r * 0.8 + (i === 0 ? 0.03 : 0), Math.sin(a) * d);
+  const pick = () => materials[Math.floor(random() * materials.length)];
+  const blob = (r: number, x: number, y: number, z: number, sx = 1, sy = 1, sz = 1) => {
+    const m = new THREE.Mesh(geometry, pick());
+    m.scale.set(r * sx, r * sy, r * sz);
+    m.position.set(x, y, z);
     m.rotation.set(random() * 3, random() * 3, random() * 3);
     group.add(m);
+    return m;
+  };
+  switch (shape) {
+    case 'sand': {
+      const n = 9 + Math.floor(random() * 5);
+      for (let i = 0; i < n; i++) {
+        const a = random() * Math.PI * 2;
+        const d = Math.sqrt(random()) * 0.2;
+        const r = randRange(random, 0.035, 0.06);
+        blob(r, Math.cos(a) * d, r * 0.7 + (0.2 - d) * 0.25, Math.sin(a) * d);
+      }
+      break;
+    }
+    case 'fur': {
+      // 同じ向きにそろった細長い毛束
+      const yaw = random() * Math.PI;
+      for (let i = 0; i < 5; i++) {
+        const m = blob(randRange(random, 0.07, 0.1), randRange(random, -0.05, 0.05), 0.07 + i * 0.012, randRange(random, -0.08, 0.08), 2.6, 0.7, 0.9);
+        m.rotation.set(0, yaw + randRange(random, -0.35, 0.35), randRange(random, -0.2, 0.2));
+      }
+      break;
+    }
+    case 'pollen': {
+      blob(0.11, 0, 0.13, 0);
+      for (let i = 0; i < 9; i++) {
+        const a = random() * Math.PI * 2;
+        const e = randRange(random, -0.2, 1.1);
+        blob(0.05, Math.cos(a) * Math.cos(e) * 0.12, 0.13 + Math.sin(e) * 0.12, Math.sin(a) * Math.cos(e) * 0.12);
+      }
+      break;
+    }
+    case 'flour': {
+      blob(0.2, 0, 0.03, 0, 1, 0.3, 1);
+      for (let i = 0; i < 4; i++) {
+        const a = random() * Math.PI * 2;
+        blob(0.05, Math.cos(a) * 0.2, 0.03, Math.sin(a) * 0.2, 1, 0.5, 1);
+      }
+      break;
+    }
+    default: {
+      const count = 3 + Math.floor(random() * 3);
+      for (let i = 0; i < count; i++) {
+        const r = randRange(random, 0.08, 0.14);
+        const a = random() * Math.PI * 2;
+        const d = i === 0 ? 0 : randRange(random, 0.06, 0.14);
+        blob(r, Math.cos(a) * d, r * 0.8 + (i === 0 ? 0.03 : 0), Math.sin(a) * d);
+      }
+      if (shape === 'lint') {
+        // からまった色糸
+        threadGeometry ??= new THREE.CylinderGeometry(0.012, 0.012, 1, 4);
+        for (let i = 0; i < 3; i++) {
+          const t = new THREE.Mesh(threadGeometry, pick());
+          t.scale.y = randRange(random, 0.25, 0.4);
+          t.position.set(randRange(random, -0.08, 0.08), 0.05 + i * 0.04, randRange(random, -0.08, 0.08));
+          t.rotation.set(Math.PI / 2 + randRange(random, -0.3, 0.3), 0, random() * Math.PI);
+          group.add(t);
+        }
+      }
+    }
   }
   return group;
 }

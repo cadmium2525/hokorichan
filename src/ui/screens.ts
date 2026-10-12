@@ -36,43 +36,26 @@ import {
   type SaveData,
 } from '../game/state.ts';
 import { buttonHtml, escapeHtml } from './hud.ts';
-import {
-  accessoryIcon,
-  bakerSprite,
-  floristSprite,
-  grandmaSprite,
-  friendMomSprite,
-  friendSprite,
-  heroSprite,
-  motherSprite,
-  shopkeeperSprite,
-  spotIcon,
-  toolIcon,
-} from './sprites.ts';
+import { accessoryIcon, characterSprite, heroSprite, spotIcon, toolIcon, type SpriteOptions } from './sprites.ts';
+import type { CharacterId } from '../render/pixelCharacters.ts';
 
 export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'narration';
 
-function speakerOf(speaker: Speaker, hero: Hero, className: string): { name: string; sprite: string } {
-  switch (speaker) {
-    case 'hero':
-      return { name: hero === 'boy' ? 'ぼく' : 'わたし', sprite: heroSprite(hero, className) };
-    case 'mother':
-      return { name: 'お母さん', sprite: motherSprite(className) };
-    case 'friend':
-      return { name: '友だち', sprite: friendSprite(className) };
-    case 'friendMom':
-      return { name: '友だちのお母さん', sprite: friendMomSprite(className) };
-    case 'shopkeeper':
-      return { name: '店員さん', sprite: shopkeeperSprite(className) };
-    case 'florist':
-      return { name: '花屋さん', sprite: floristSprite(className) };
-    case 'baker':
-      return { name: 'パン屋さん', sprite: bakerSprite(className) };
-    case 'grandma':
-      return { name: 'おばあちゃん', sprite: grandmaSprite(className) };
-    case 'narration':
-      return { name: '', sprite: '' };
-  }
+const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; id: CharacterId }> = {
+  mother: { name: 'お母さん', id: 'mother' },
+  friend: { name: '友だち', id: 'friend' },
+  friendMom: { name: '友だちのお母さん', id: 'friendMom' },
+  shopkeeper: { name: '店員さん', id: 'shopkeeper' },
+  florist: { name: '花屋さん', id: 'florist' },
+  baker: { name: 'パン屋さん', id: 'baker' },
+  grandma: { name: 'おばあちゃん', id: 'grandma' },
+};
+
+function speakerOf(speaker: Speaker, hero: Hero, className: string, opts: SpriteOptions = {}): { name: string; sprite: string } {
+  if (speaker === 'narration') return { name: '', sprite: '' };
+  if (speaker === 'hero') return { name: hero === 'boy' ? 'ぼく' : 'わたし', sprite: heroSprite(hero, className, opts) };
+  const s = SPEAKERS[speaker];
+  return { name: s.name, sprite: characterSprite(s.id, className, opts) };
 }
 
 // ---- 主人公選択 ----
@@ -89,7 +72,7 @@ export function heroSelectBody(): string {
 // ---- お話（吹き出し） ----
 
 export function storyBody(speaker: Speaker, hero: Hero, text: string): string {
-  const { name, sprite } = speakerOf(speaker, hero, 'sprite sprite--lg');
+  const { name, sprite } = speakerOf(speaker, hero, 'sprite sprite--lg', { pose: 'talk' });
   return `
     <div class="story ${speaker === 'narration' ? 'story--narration' : ''}">
       ${sprite ? `<div class="story__who">${sprite}<span>${name}</span></div>` : ''}
@@ -134,7 +117,7 @@ export function mapBody(save: SaveData, area: Area, now: number, speed: number):
       </button>`;
   }).join('');
   return `
-    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite')}<span>${escapeHtml(AREA_NAMES[area])}</span><span>${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
+    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite sprite--sm')}<span>${escapeHtml(AREA_NAMES[area])}</span><span>${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
     <div class="spots">${cards}</div>
     <p class="note">ホコリは時間がたつと少しずつ積もるよ</p>`;
 }
@@ -182,7 +165,7 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
       return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
     }).join('');
   }
-  const greet = `<div class="story story--shop"><div class="story__who">${shopkeeperSprite('sprite')}</div><div class="bubble">いらっしゃいませ！</div></div>`;
+  const greet = `<div class="story story--shop"><div class="story__who">${characterSprite('shopkeeper', 'sprite', { pose: 'talk' })}</div><div class="bubble">いらっしゃいませ！</div></div>`;
   return `${greet}<div class="tabs">${tabHtml}</div><div class="items">${items}</div>`;
 }
 
@@ -238,13 +221,14 @@ export function resultBody(opts: {
 }): string {
   const spot = SPOTS.find((s) => s.id === opts.spot);
   const area = spot?.area ?? 'home';
-  const giver = speakerOf(AREA_GIVER[area], opts.hero, 'sprite sprite--xl');
+  // 渡す人は右に立ち、左の主人公へコインを差し出す
+  const giver = speakerOf(AREA_GIVER[area], opts.hero, 'sprite sprite--lg', { pose: 'give', flip: true });
   const place = placeWord(area, spot?.name ?? '');
   const pct = Math.round((opts.collected / opts.total) * 100);
   const got = DUST_TYPES.filter((t) => (opts.got[t] ?? 0) > 0).map((t) => dustChip(t, opts.got[t])).join('');
   return `
     <div class="allowance">
-      ${heroSprite(opts.hero, 'sprite sprite--lg')}
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: 'joy' })}
       <div class="allowance__coin">+${opts.reward}</div>
       ${giver.sprite}
     </div>

@@ -2,6 +2,7 @@
 // ルールは state.ts、保存は save.ts、描画は scenes/render、画面の中身は ui に任せる。
 
 import { petTint } from '../render/hokorichan.ts';
+import type { CharacterId } from '../render/pixelCharacters.ts';
 import { PixelRenderer } from '../render/pixelRenderer.ts';
 import { buildSpot } from '../render/spotBuilder.ts';
 import type { BuildingId } from '../render/townBuilder.ts';
@@ -327,7 +328,7 @@ export class Game {
   private setScene(scene: GameScene): void {
     this.scene?.dispose();
     this.scene = scene;
-    scene.resize(this.renderer.aspect);
+    scene.resize(this.renderer.aspect, this.renderer.lowWidth);
   }
 
   private clearScenes(): void {
@@ -372,6 +373,19 @@ export class Game {
   }
 
   /** まちへ。startAt の建物の入口の前から歩き出す */
+  /** まちで建物の前に立っている人（開いている場所だけ） */
+  private townNpcs(): Array<{ id: CharacterId; at: BuildingId }> {
+    const s = this.save;
+    const list: Array<{ id: CharacterId; at: BuildingId }> = [{ id: 'shopkeeper', at: 'shop' }];
+    if (friendUnlocked(s)) list.push({ id: 'friend', at: 'friend' });
+    if (hasEvent(s, 'street')) {
+      if (areaUnlocked(s, 'flower')) list.push({ id: 'florist', at: 'flower' });
+      if (areaUnlocked(s, 'bakery')) list.push({ id: 'baker', at: 'bakery' });
+      if (areaUnlocked(s, 'grandma')) list.push({ id: 'grandma', at: 'grandma' });
+    }
+    return list;
+  }
+
   private goTown(startAt: BuildingId): void {
     this.clearScenes();
     this.mode = 'TOWN';
@@ -380,6 +394,7 @@ export class Game {
       hero: this.hero,
       startAt,
       lotOwned: this.save.habitat >= 4,
+      npcs: this.townNpcs(),
       onArrive: (id) => this.onArrive(id),
     });
     this.setScene(this.town);
@@ -1057,7 +1072,7 @@ export class Game {
   private resize(): void {
     const rect = this.hud.stage.getBoundingClientRect();
     this.renderer.resize(rect.width, rect.height);
-    this.scene?.resize(this.renderer.aspect);
+    this.scene?.resize(this.renderer.aspect, this.renderer.lowWidth);
     this.syncSheetInset();
   }
 

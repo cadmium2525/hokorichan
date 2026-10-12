@@ -2,7 +2,8 @@
 
 import * as THREE from 'three';
 import type { Hero } from '../game/catalog.ts';
-import { HeroModel } from '../render/heroModel.ts';
+import { CharacterSprite, screenDelta } from '../render/characterSprite.ts';
+import { facingFromScreen, type CharacterId } from '../render/pixelCharacters.ts';
 import { ringTexture } from '../render/proceduralArt.ts';
 import { createIsoCamera, disposeHierarchy, projectedExtents } from '../render/threeUtils.ts';
 import { buildTown, type BuildingId, type Town } from '../render/townBuilder.ts';
@@ -11,6 +12,8 @@ import type { GameScene } from './types.ts';
 
 const SPEED = 3.2;
 const HERO_RADIUS = 0.28;
+/** 道さがしの格子の大きさ（ワールド単位） */
+const GRID = 0.25;
 /** 画面に映す横幅（ワールド単位）。縦長画面では高さは比率で決まる */
 const VIEW_WIDTH = 10;
 
@@ -24,6 +27,8 @@ export type TownOptions = {
   startAt: BuildingId;
   /** 空き地を買ってコンテナを置いたか */
   lotOwned: boolean;
+  /** 建物の前に立っている町の人 */
+  npcs?: Array<{ id: CharacterId; at: BuildingId }>;
   onArrive: (id: BuildingId) => void;
 };
 
@@ -33,7 +38,9 @@ export class TownScene implements GameScene {
 
   private readonly opts: TownOptions;
   private readonly town: Town;
-  private readonly hero: HeroModel;
+  private readonly hero: CharacterSprite;
+  private readonly npcs: Array<{ sprite: CharacterSprite; pos: THREE.Vector3 }> = [];
+  private lowWidth = 260;
   private readonly background: THREE.Texture;
   private readonly marker: THREE.Mesh;
   private readonly raycaster = new THREE.Raycaster();
@@ -41,7 +48,9 @@ export class TownScene implements GameScene {
   private readonly pos = new THREE.Vector3();
   private target: THREE.Vector3 | null = null;
   private goingTo: BuildingId | null = null;
-  private heading = 0;
+  /** 目的地までの経由点（最後が目的地） */
+  private path: THREE.Vector3[] = [];
+  private grid: Uint8Array | null = null;
   private aspect = 0.6;
   private readonly camCenter = new THREE.Vector2();
   private inputEnabled = true;
@@ -53,14 +62,14 @@ export class TownScene implements GameScene {
     this.background = setupStage(this.scene);
     this.town = buildTown({ lotOwned: opts.lotOwned });
     this.scene.add(this.town.group);
-    this.hero = new HeroModel(opts.hero);
+    this.hero = new CharacterSprite(opts.hero);
     // 入口の少し手前（道側）に立ち、こちらを向いている
     const start = this.town.buildings[opts.startAt];
     const away = start.door.clone().sub(start.hit.position).setY(0).normalize().multiplyScalar(0.5);
     this.pos.copy(start.door).add(away);
-    this.heading = 0;
     this.hero.group.position.copy(this.pos);
     this.scene.add(this.hero.group);
+    for (const n of opts.npcs ?? []) this.addNpc(n.id, n.at);
 
     this.marker = new THREE.Mesh(
       new THREE.PlaneGeometry(0.8, 0.8),
@@ -72,6 +81,18 @@ export class TownScene implements GameScene {
 
     this.camCenter.copy(this.heroScreenCenter());
     this.bindInput();
+  }
+
+  /** 入口の横（道側）に町の人を立たせる */
+  private addNpc(id: CharacterId, at: BuildingId): void {
+    const b = this.town.buildings[at];
+    const out = b.door.clone().sub(b.hit.position).setY(0).normalize();
+    const side = new THREE.Vector3(out.z, 0, -out.x);
+    const pos = b.door.clone().addScaledVector(out, 0.45).addScaledVector(side, 0.95).setY(0);
+    const sprite = new CharacterSprite(id);
+    sprite.group.position.copy(pos);
+    this.scene.add(sprite.group);
+    this.npcs.push({ sprite, pos });
   }
 
   // ---- 入力 ----
@@ -108,6 +129,7 @@ export class TownScene implements GameScene {
   walkTo(point: THREE.Vector3, building: BuildingId | null): void {
     this.target = point.clone();
     this.goingTo = building;
+    this.path = this.findPath(this.pos, this.target);
     this.marker.position.set(point.x, 0.03, point.z);
     this.marker.visible = true;
   }
@@ -123,6 +145,7 @@ export class TownScene implements GameScene {
   /** 止まる（モーダル表示中など） */
   stop(): void {
     this.target = null;
+    this.path = [];
     this.goingTo = null;
     this.marker.visible = false;
   }
@@ -136,19 +159,157 @@ export class TownScene implements GameScene {
     return this.town.blockers.some((b) => x > b.minX - r && x < b.maxX + r && z > b.minZ - r && z < b.maxZ + r);
   }
 
+  // ---- 道さがし（建物を回りこむ） ----
+
+  private cellCount(): number {
+    return Math.ceil((this.town.half * 2) / GRID);
+  }
+
+  private cellCenter(i: number): THREE.Vector3 {
+    const n = this.cellCount();
+    const h = this.town.half;
+    return new THREE.Vector3(-h + ((i % n) + 0.5) * GRID, 0, -h + (Math.floor(i / n) + 0.5) * GRID);
+  }
+
+  private cellOf(p: THREE.Vector3): number {
+    const n = this.cellCount();
+    const h = this.town.half;
+    const cx = THREE.MathUtils.clamp(Math.floor((p.x + h) / GRID), 0, n - 1);
+    const cz = THREE.MathUtils.clamp(Math.floor((p.z + h) / GRID), 0, n - 1);
+    return cz * n + cx;
+  }
+
+  private freeGrid(): Uint8Array {
+    if (this.grid) return this.grid;
+    const n = this.cellCount();
+    const g = new Uint8Array(n * n);
+    for (let i = 0; i < n * n; i++) {
+      const c = this.cellCenter(i);
+      g[i] = this.blocked(c.x, c.z) ? 0 : 1;
+    }
+    this.grid = g;
+    return g;
+  }
+
+  /** 近くの通れるマス */
+  private nearestFree(i: number): number {
+    const g = this.freeGrid();
+    if (g[i]) return i;
+    const n = this.cellCount();
+    const x0 = i % n;
+    const z0 = Math.floor(i / n);
+    for (let r = 1; r < n; r++) {
+      let best = -1;
+      let bestD = Infinity;
+      for (let z = z0 - r; z <= z0 + r; z++) {
+        for (let x = x0 - r; x <= x0 + r; x++) {
+          if (x < 0 || z < 0 || x >= n || z >= n || !g[z * n + x]) continue;
+          const d = (x - x0) ** 2 + (z - z0) ** 2;
+          if (d < bestD) {
+            bestD = d;
+            best = z * n + x;
+          }
+        }
+      }
+      if (best >= 0) return best;
+    }
+    return i;
+  }
+
+  private clearLine(a: THREE.Vector3, b: THREE.Vector3): boolean {
+    const d = Math.hypot(b.x - a.x, b.z - a.z);
+    const steps = Math.ceil(d / 0.1);
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps;
+      if (this.blocked(a.x + (b.x - a.x) * t, a.z + (b.z - a.z) * t)) return false;
+    }
+    return true;
+  }
+
+  /** A* で経由点を求め、見通せる点は飛ばして短くする */
+  private findPath(from: THREE.Vector3, to: THREE.Vector3): THREE.Vector3[] {
+    if (this.clearLine(from, to)) return [to.clone()];
+    const g = this.freeGrid();
+    const n = this.cellCount();
+    const start = this.nearestFree(this.cellOf(from));
+    const goal = this.nearestFree(this.cellOf(to));
+    const cost = new Float32Array(n * n).fill(Infinity);
+    const prev = new Int32Array(n * n).fill(-1);
+    const open: number[] = [start];
+    const est = (i: number) => Math.hypot((i % n) - (goal % n), Math.floor(i / n) - Math.floor(goal / n));
+    cost[start] = 0;
+    const done = new Uint8Array(n * n);
+    while (open.length) {
+      // 小さな格子なので、いちばん良い候補を線形に探せば十分
+      let bi = 0;
+      for (let k = 1; k < open.length; k++) if (cost[open[k]] + est(open[k]) < cost[open[bi]] + est(open[bi])) bi = k;
+      const cur = open[bi];
+      open.splice(bi, 1);
+      if (cur === goal) break;
+      if (done[cur]) continue;
+      done[cur] = 1;
+      const cx = cur % n;
+      const cz = Math.floor(cur / n);
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dz) continue;
+          const x = cx + dx;
+          const z = cz + dz;
+          if (x < 0 || z < 0 || x >= n || z >= n) continue;
+          const j = z * n + x;
+          if (!g[j] || done[j]) continue;
+          // 角をななめにすり抜けない
+          if (dx && dz && (!g[cz * n + x] || !g[z * n + cx])) continue;
+          const c = cost[cur] + (dx && dz ? Math.SQRT2 : 1);
+          if (c < cost[j]) {
+            cost[j] = c;
+            prev[j] = cur;
+            open.push(j);
+          }
+        }
+      }
+    }
+    if (prev[goal] < 0 && goal !== start) return [to.clone()];
+    const cells: THREE.Vector3[] = [];
+    for (let i = goal; i !== start && i >= 0; i = prev[i]) cells.unshift(this.cellCenter(i));
+    cells.push(to.clone());
+    // 見通せるところまで一気に進む
+    const out: THREE.Vector3[] = [];
+    let at = from.clone();
+    let k = 0;
+    while (k < cells.length) {
+      let far = k;
+      for (let m = cells.length - 1; m > k; m--) {
+        if (this.clearLine(at, cells[m])) {
+          far = m;
+          break;
+        }
+      }
+      out.push(cells[far]);
+      at = cells[far];
+      k = far + 1;
+    }
+    return out;
+  }
+
   private move(dt: number): boolean {
     if (!this.target) return false;
-    const dx = this.target.x - this.pos.x;
-    const dz = this.target.z - this.pos.z;
+    // 経由点に着いたら次へ
+    while (this.path.length > 1 && Math.hypot(this.path[0].x - this.pos.x, this.path[0].z - this.pos.z) < 0.12) this.path.shift();
+    const way = this.path[0] ?? this.target;
+    const last = this.path.length <= 1;
+    const dx = way.x - this.pos.x;
+    const dz = way.z - this.pos.z;
     const dist = Math.hypot(dx, dz);
-    if (dist < 0.08) {
+    if (last && dist < 0.08) {
       this.arrive();
       return false;
     }
     const step = Math.min(dist, SPEED * dt);
     const nx = this.pos.x + (dx / dist) * step;
     const nz = this.pos.z + (dz / dist) * step;
-    this.heading = Math.atan2(dx, dz);
+    const sd = screenDelta(dx, dz);
+    this.hero.facing = facingFromScreen(sd.sx, sd.sy, this.hero.facing);
     // 建物に当たったら、壁ぞいに滑らせる
     if (!this.blocked(nx, nz)) {
       this.pos.x = nx;
@@ -159,7 +320,7 @@ export class TownScene implements GameScene {
       this.pos.z = this.pos.z + Math.sign(dz) * step;
     } else {
       // 進めないので、そこで止まる（建物に向かっていて入口のそばなら入る）
-      if (this.goingTo && Math.hypot(dx, dz) < 0.9) this.arrive();
+      if (last && this.goingTo && dist < 0.9) this.arrive();
       else this.stop();
       return false;
     }
@@ -172,7 +333,8 @@ export class TownScene implements GameScene {
     if (id) {
       // 建物のほうを向く
       const c = this.town.buildings[id].hit.position;
-      this.heading = Math.atan2(c.x - this.pos.x, c.z - this.pos.z);
+      const sd = screenDelta(c.x - this.pos.x, c.z - this.pos.z);
+      this.hero.facing = facingFromScreen(sd.sx, sd.sy, this.hero.facing);
       this.opts.onArrive(id);
     }
   }
@@ -185,8 +347,9 @@ export class TownScene implements GameScene {
     return new THREE.Vector2(p.x, p.y);
   }
 
-  resize(aspect: number): void {
+  resize(aspect: number, lowWidth: number): void {
     this.aspect = aspect;
+    this.lowWidth = lowWidth;
     this.applyCamera();
   }
 
@@ -196,8 +359,11 @@ export class TownScene implements GameScene {
     // まちの外が見えすぎないよう、カメラの中心をまちの範囲に収める
     const h = this.town.half;
     const e = projectedExtents(this.camera, new THREE.Box3(new THREE.Vector3(-h, 0, -h), new THREE.Vector3(h, 1, h)));
-    const cx = THREE.MathUtils.clamp(this.camCenter.x, e.minX + halfW, Math.max(e.minX + halfW, e.maxX - halfW));
-    const cy = THREE.MathUtils.clamp(this.camCenter.y, e.minY + halfH * 0.6, Math.max(e.minY + halfH * 0.6, e.maxY - halfH * 0.6));
+    // 中心を低解像度ピクセルの格子にそろえて、スクロール中のちらつきをおさえる
+    const unit = VIEW_WIDTH / Math.max(1, this.lowWidth);
+    const snap = (v: number) => Math.round(v / unit) * unit;
+    const cx = snap(THREE.MathUtils.clamp(this.camCenter.x, e.minX + halfW, Math.max(e.minX + halfW, e.maxX - halfW)));
+    const cy = snap(THREE.MathUtils.clamp(this.camCenter.y, e.minY + halfH * 0.6, Math.max(e.minY + halfH * 0.6, e.maxY - halfH * 0.6)));
     this.camera.left = cx - halfW;
     this.camera.right = cx + halfW;
     this.camera.top = cy + halfH;
@@ -228,17 +394,30 @@ export class TownScene implements GameScene {
   update(dt: number, time: number): void {
     const walking = this.move(dt);
     this.hero.group.position.copy(this.pos);
-    this.hero.update(dt, this.heading, walking);
+    this.hero.set(walking ? 'walk' : 'idle');
+    this.hero.update(dt);
     if (this.marker.visible) this.marker.scale.setScalar(1 + Math.sin(time * 8) * 0.08);
     const want = this.heroScreenCenter();
     this.camCenter.lerp(want, Math.min(1, dt * 4));
     this.applyCamera();
+    this.hero.fitToPixels(this.camera, this.lowWidth);
+    for (const n of this.npcs) {
+      // 主人公が近くに来たらそちらを向く
+      const dx = this.pos.x - n.pos.x;
+      const dz = this.pos.z - n.pos.z;
+      const sd = screenDelta(dx, dz);
+      n.sprite.facing = Math.hypot(dx, dz) < 2.2 ? facingFromScreen(sd.sx, sd.sy, 'down') : 'down';
+      n.sprite.update(dt);
+      n.sprite.fitToPixels(this.camera, this.lowWidth);
+    }
   }
 
   dispose(): void {
     for (const [type, fn] of this.listeners) this.opts.element.removeEventListener(type, fn);
     this.listeners.length = 0;
     this.background.dispose();
+    this.hero.dispose();
+    for (const n of this.npcs) n.sprite.dispose();
     disposeHierarchy(this.scene);
     this.scene.clear();
   }

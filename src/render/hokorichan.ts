@@ -8,7 +8,25 @@ import { ISO_VIEW_DIR } from './threeUtils.ts';
 
 export type Expression = 'idle' | 'happy' | 'eating' | 'damp' | 'sleep';
 
-const DRY_COLOR = new THREE.Color('#fff8ef');
+const DRY_COLOR = new THREE.Color('#fffaf2');
+/** 小房ごとの色むら（本体色に掛ける）。設定資料のクリーム・ラベンダー・ピンク */
+const TUFT_TINTS = ['#ffffff', '#ffffff', '#ffffff', '#ffffff', '#fff4ea', '#f1ecfa', '#fbeaee'];
+/** 下側の房はラベンダーの陰に寄せる */
+const TUFT_UNDER = ['#e6e0f2', '#dcd4ec', '#cfc6e6'];
+/** 輪郭（ドット絵のふち取り） */
+const OUTLINE_COLOR = '#b5a8c8';
+const OUTLINE_DAMP = '#8f8cb4';
+
+/** 3段階の陰影にする（トゥーン） */
+function toonGradient(): THREE.DataTexture {
+  const data = new Uint8Array([185, 185, 185, 255, 228, 228, 228, 255, 255, 255, 255, 255]);
+  const tex = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  tex.needsUpdate = true;
+  return tex;
+}
 const DAMP_COLOR = new THREE.Color('#b9b6dc');
 const FACE_SIZE = 32;
 /** 食べたホコリの割合（綿ぼこり以外）に合わせて、毛並みの色を少しずつ染める */
@@ -180,8 +198,10 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
 export class HokorichanModel {
   readonly group = new THREE.Group();
   private readonly body = new THREE.Group();
-  private readonly material: THREE.MeshLambertMaterial;
+  private readonly material: THREE.MeshToonMaterial;
+  private readonly outlineMaterial: THREE.MeshBasicMaterial;
   private readonly tufts: THREE.InstancedMesh;
+  private readonly tuftOutline: THREE.InstancedMesh;
   private readonly tuftBase: Array<{ dir: THREE.Vector3; size: number; rot: THREE.Quaternion; top: boolean }> = [];
   private readonly face: THREE.Mesh;
   private readonly faceCtx: CanvasRenderingContext2D;
@@ -198,12 +218,16 @@ export class HokorichanModel {
   constructor(seed = 7) {
     const random = createRandom(seed);
     // 自己発光を少し足して陰影をやわらげ、綿毛らしい明るさにする
-    this.material = new THREE.MeshLambertMaterial({ color: DRY_COLOR.clone(), emissive: new THREE.Color('#857a70') });
+    this.material = new THREE.MeshToonMaterial({ color: DRY_COLOR.clone(), emissive: new THREE.Color('#6e6478'), gradientMap: toonGradient() });
+    // 裏面だけを少し大きく描いて、ふちに1〜2ドットの輪郭を出す
+    this.outlineMaterial = new THREE.MeshBasicMaterial({ color: OUTLINE_COLOR, side: THREE.BackSide });
 
     // 本体：半径0.5の球（直径1）。サイズはbodyのscaleで変える
     const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.47, 2), this.material);
     core.position.y = 0.5;
-    this.body.add(core);
+    const coreOutline = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 2), this.outlineMaterial);
+    coreOutline.position.set(0, 0.5, 0).addScaledVector(ISO_VIEW_DIR, -0.12);
+    this.body.add(core, coreOutline);
 
     // 外周の小房：フィボナッチ球面上に小さな多面体を散らす
     const n = 160;
@@ -224,8 +248,16 @@ export class HokorichanModel {
       this.tuftBase.push({ dir: new THREE.Vector3(x, y, z).multiplyScalar(0.5), size: s, rot: new THREE.Quaternion(), top: true });
     });
     this.tufts = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), this.material, this.tuftBase.length);
+    this.tuftOutline = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), this.outlineMaterial, this.tuftBase.length);
+    const tint = new THREE.Color();
+    this.tuftBase.forEach((t, i) => {
+      const under = !t.top && t.dir.y < -0.15;
+      const list = under ? TUFT_UNDER : TUFT_TINTS;
+      tint.set(list[Math.floor(random() * list.length)]);
+      this.tufts.setColorAt(i, tint);
+    });
     this.updateTufts();
-    this.body.add(this.tufts);
+    this.body.add(this.tufts, this.tuftOutline);
     this.group.add(this.body);
 
     // 顔：カメラに正対する板。本体より上に描いて埋もれないようにする
@@ -270,8 +302,12 @@ export class HokorichanModel {
       pos.y += 0.5;
       m.compose(pos, t.rot, scale.setScalar(s));
       this.tufts.setMatrixAt(i, m);
+      // 輪郭は視線の奥へずらす（正投影なので画面上の位置は変わらず、ふちだけが見える）
+      m.compose(pos.addScaledVector(ISO_VIEW_DIR, -0.12), t.rot, scale.setScalar(s + 0.022));
+      this.tuftOutline.setMatrixAt(i, m);
     });
     this.tufts.instanceMatrix.needsUpdate = true;
+    this.tuftOutline.instanceMatrix.needsUpdate = true;
   }
 
   private redrawFace(): void {
@@ -295,6 +331,7 @@ export class HokorichanModel {
   setDampTint(t: number): void {
     this.dampT = t;
     this.material.color.copy(this.baseColor).lerp(DAMP_COLOR, t);
+    this.outlineMaterial.color.set(OUTLINE_COLOR).lerp(new THREE.Color(OUTLINE_DAMP), t);
   }
 
   /** 食べたホコリで決まる毛並みの色（ふだんの色） */
@@ -359,7 +396,7 @@ export class HokorichanModel {
     const widen = (1 + (1 - this.squashY) * 0.6) * width;
     this.body.scale.set(s * widen, s * sy, s * widen);
     // 顔は本体より成長を緩やかにして、大きくなってもパーツを小さく保つ
-    const faceScale = 0.8 * Math.pow(s, 0.6) * Math.pow(Math.min(widen, sy), 0.3);
+    const faceScale = 0.9 * Math.pow(s, 0.7) * Math.pow(Math.min(widen, sy), 0.3);
     this.face.scale.setScalar(faceScale);
     const r = 0.5 * s;
     const center = new THREE.Vector3(0, r * sy, 0);

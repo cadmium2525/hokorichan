@@ -9,6 +9,8 @@ import { createDustPuff, ringTexture, sparkleTexture, blobShadowTexture } from '
 import type { Blocker } from '../render/roomBuilder.ts';
 import type { SpotLayout, Surface } from '../render/spotBuilder.ts';
 import { createToolModel } from '../render/toolModels.ts';
+import { CharacterSprite, screenDelta } from '../render/characterSprite.ts';
+import type { HeldTool } from '../render/pixelCharacters.ts';
 import { createIsoCamera, disposeHierarchy, projectedExtents, type Extents } from '../render/threeUtils.ts';
 import { setupStage } from './sceneKit.ts';
 import type { GameScene } from './types.ts';
@@ -88,6 +90,11 @@ export class CleaningScene implements GameScene {
   private inputEnabled = true;
   private readonly listeners: Array<[string, EventListener]> = [];
   private helper: { model: HokorichanModel; pos: THREE.Vector3; size: number; speed: number; radius: number; munch: number } | null = null;
+  /** 部屋の掃除では主人公が道具を持って立つ（近景では道具だけ） */
+  private heroSprite: CharacterSprite | null = null;
+  private heroDrift = 0;
+  private lowWidth = 260;
+  private readonly lastTip = new THREE.Vector3();
   private treasure: { object: THREE.Object3D; pos: THREE.Vector3; state: 'idle' | 'taken' } | null = null;
 
   constructor(opts: CleaningOptions) {
@@ -122,6 +129,15 @@ export class CleaningScene implements GameScene {
     this.nozzle = createToolModel(opts.tool.id, opts.hero);
     this.nozzle.scale.multiplyScalar(this.scale);
     this.scene.add(this.ring, this.nozzle, this.particles.group);
+    if (this.scale >= 1) {
+      const held: Record<ToolDef['id'], HeldTool> = { hand: 'hand', rag: 'rag', mop: 'mop', vacuum: 'vacuum' };
+      this.heroSprite = new CharacterSprite(opts.hero);
+      this.heroSprite.set('clean', 'left', held[opts.tool.id]);
+      this.heroSprite.group.position.copy(this.point);
+      this.scene.add(this.heroSprite.group);
+      this.nozzle.visible = false;
+      this.lastTip.copy(this.point);
+    }
 
     this.bindInput();
   }
@@ -157,10 +173,15 @@ export class CleaningScene implements GameScene {
     const geometry = new THREE.IcosahedronGeometry(1, 0);
     // 種類ごとの色（綿ぼこりは灰色、花粉は黄色、猫の毛は茶白…）
     const materials = new Map<DustType, THREE.Material[]>();
+    // 2段階の陰影でドット絵らしく
+    const dustGradient = new THREE.DataTexture(new Uint8Array([170, 170, 170, 255, 255, 255, 255, 255]), 2, 1, THREE.RGBAFormat);
+    dustGradient.magFilter = THREE.NearestFilter;
+    dustGradient.minFilter = THREE.NearestFilter;
+    dustGradient.needsUpdate = true;
     const matsFor = (t: DustType) => {
       let m = materials.get(t);
       if (!m) {
-        m = DUSTS[t].colors.map((color) => new THREE.MeshLambertMaterial({ color, flatShading: true }));
+        m = DUSTS[t].colors.map((color) => new THREE.MeshToonMaterial({ color, gradientMap: dustGradient }));
         materials.set(t, m);
       }
       return m;
@@ -168,7 +189,8 @@ export class CleaningScene implements GameScene {
     const shadowMat = new THREE.MeshBasicMaterial({ map: blobShadowTexture(), transparent: true, depthWrite: false });
     const shadowGeo = new THREE.PlaneGeometry(0.5, 0.5);
     homes.forEach((home, id) => {
-      const object = createDustPuff(random, geometry, matsFor(types[id] ?? 'cotton'));
+      const type = types[id] ?? 'cotton';
+      const object = createDustPuff(random, geometry, matsFor(type), type);
       object.scale.setScalar(k);
       const shadow = new THREE.Mesh(shadowGeo, shadowMat);
       shadow.rotation.x = -Math.PI / 2;
@@ -326,7 +348,8 @@ export class CleaningScene implements GameScene {
   /**
    * 縦長画面では部屋の高さに合わせて拡大し、はみ出した左右は端スクロールで見せる。
    */
-  resize(aspect: number): void {
+  resize(aspect: number, lowWidth: number): void {
+    this.lowWidth = lowWidth;
     this.extents = projectedExtents(this.camera, this.roomBox);
     const e = this.extents;
     const roomHalfW = ((e.maxX - e.minX) / 2) * 1.02;
@@ -461,6 +484,34 @@ export class CleaningScene implements GameScene {
     }
     this.updateTreasure(time, active);
     this.particles.update(dt);
+    this.updateHero(dt, active);
+  }
+
+  /** 主人公：道具の先が吸引点に来るように立ち、動かした方向を向いて掃除する */
+  private updateHero(dt: number, active: boolean): void {
+    const hero = this.heroSprite;
+    if (!hero) return;
+    const tip = this.smoothPoint;
+    const moved = screenDelta(tip.x - this.lastTip.x, tip.z - this.lastTip.z);
+    this.lastTip.copy(tip);
+    // 少し動かしただけでは振り向かない
+    this.heroDrift = THREE.MathUtils.clamp(this.heroDrift + moved.sx, -0.6, 0.6) * Math.max(0, 1 - dt * 2);
+    let facing = hero.facing;
+    if (this.heroDrift < -0.25 * this.scale) facing = 'left';
+    else if (this.heroDrift > 0.25 * this.scale) facing = 'right';
+    // 画面の端では体が見えるほうを向く
+    const viewX = this.viewPos.copy(tip).applyMatrix4(this.camera.matrixWorldInverse).x;
+    const body = 22 * hero.dotSize;
+    if (facing === 'left' && viewX + body > this.camera.right) facing = 'right';
+    else if (facing === 'right' && viewX - body < this.camera.left) facing = 'left';
+    hero.set('clean', facing);
+    hero.playing = active && Math.hypot(moved.sx, moved.sy) > 1e-3;
+    hero.update(dt);
+    // 足元 = 道具の先から、画面の横方向にドットのずれ分だけ戻した位置
+    const off = (hero.tipOffset ?? 0) * hero.dotSize;
+    const right = new THREE.Vector3(1, 0, -1).normalize();
+    hero.group.position.set(tip.x, this.surface.y, tip.z).addScaledVector(right, -off);
+    hero.fitToPixels(this.camera, this.lowWidth);
   }
 
   /** ほこりちゃん：指で触れている間は指のほうへ、離すといちばん近いホコリへ転がる */
@@ -530,6 +581,7 @@ export class CleaningScene implements GameScene {
     for (const d of this.dusts) if (d.state === 'gone') this.scene.add(d.object);
     if (this.treasure?.state === 'taken') this.scene.add(this.treasure.object);
     this.particles.dispose();
+    this.heroSprite?.dispose();
     this.sparkle.dispose();
     this.background.dispose();
     disposeHierarchy(this.scene);
