@@ -1370,3 +1370,32 @@ body {
   border-color: #f6d55c;
   background: #fff6cc;
 }
+
+.acc-locked {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #ece4dc;
+  color: var(--ink-soft);
+  font-weight: 800;
+}
+
+/* 写真 */
+.photo {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto 8px;
+  border-radius: 12px;
+  image-rendering: auto;
+}
+
+.btn--wide {
+  width: 100%;
+  margin: 4px 0 8px;
+}
+
+.modal--photo .modal__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}

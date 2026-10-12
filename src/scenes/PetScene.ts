@@ -278,7 +278,7 @@ export class PetScene implements GameScene {
     this.scene.add(this.room);
     this.buildHabitat(view.habitat);
     this.scene.add(this.pet.group, this.particles.group);
-    this.size = petDisplaySize(view.xp, view.habitat, view.damp);
+    this.size = petDisplaySize(view.xp, view.habitat, view.damp, view.shape);
     this.dampTint = view.damp ? 1 : 0;
     this.pet.setAccessory(view.accessory);
     this.pet.setCustomShape(view.shape);
@@ -437,6 +437,15 @@ export class PetScene implements GameScene {
   }
 
   /** 下のパネルで隠れる割合を伝え、カメラをなめらかに寄せ直す */
+  /** 写真用：ほこりちゃんの画面上の位置と大きさ（0〜1の割合。y は上から） */
+  focus(): { x: number; y: number; r: number } {
+    this.camera.updateMatrixWorld();
+    const sphere = this.pet.boundingSphere(new THREE.Sphere());
+    const c = sphere.center.clone().project(this.camera);
+    const h = this.camera.top - this.camera.bottom;
+    return { x: (c.x + 1) / 2, y: (1 - c.y) / 2, r: sphere.radius / h };
+  }
+
   setBottomInset(fraction: number): void {
     this.bottomInset = Math.min(0.7, Math.max(0, fraction));
     this.computeCameraTarget();
@@ -490,6 +499,7 @@ export class PetScene implements GameScene {
   }
 
   update(dt: number, time: number): void {
+    this.pet.tick(dt);
     this.camCurrent.lerp(this.camTarget, Math.min(1, dt * 3));
     this.applyCamera();
 
@@ -508,7 +518,7 @@ export class PetScene implements GameScene {
     }
 
     // サイズと色は目標値へなめらかに近づける（連続成長）
-    const targetSize = petDisplaySize(this.view.xp, this.view.habitat, this.view.damp);
+    const targetSize = petDisplaySize(this.view.xp, this.view.habitat, this.view.damp, this.view.shape);
     const growRate = this.action.kind === 'eat' ? 2.2 : 4;
     this.size += (targetSize - this.size) * Math.min(1, dt * growRate);
     const targetTint = this.view.damp ? 1 : 0;

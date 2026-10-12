@@ -250,6 +250,7 @@ export class SkyScene implements GameScene {
   }
 
   update(dt: number, time: number): void {
+    this.pet.tick(dt, 4);
     this.projectPointer();
     if (this.target) {
       const dx = this.target.x - this.pos.x;

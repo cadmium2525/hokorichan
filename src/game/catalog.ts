@@ -176,17 +176,38 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
 // ---- アクセサリー ----
 
 
-export type AccessoryId = 'ribbon' | 'leaf' | 'flower' | 'glasses' | 'hat' | 'crown';
+export type AccessoryId =
+  | 'ribbon'
+  | 'leaf'
+  | 'flower'
+  | 'glasses'
+  | 'hat'
+  | 'crown'
+  | 'bandana'
+  | 'bell'
+  | 'cap'
+  | 'goggles'
+  | 'propeller'
+  | 'cloudpin';
 
-export type AccessoryDef = { id: AccessoryId; name: string; price: number };
+/** chapter：その章になるとショップに入荷する */
+export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 };
 
 export const ACCESSORIES: readonly AccessoryDef[] = [
-  { id: 'ribbon', name: 'リボン', price: 0 },
-  { id: 'leaf', name: 'はっぱ', price: 15 },
-  { id: 'flower', name: 'おはな', price: 25 },
-  { id: 'glasses', name: 'メガネ', price: 40 },
-  { id: 'hat', name: 'ぼうし', price: 60 },
-  { id: 'crown', name: 'おうかん', price: 150 },
+  { id: 'ribbon', name: 'リボン', price: 0, chapter: 1 },
+  { id: 'leaf', name: 'はっぱ', price: 15, chapter: 1 },
+  { id: 'flower', name: 'おはな', price: 25, chapter: 1 },
+  { id: 'glasses', name: 'メガネ', price: 40, chapter: 1 },
+  { id: 'hat', name: 'ぼうし', price: 60, chapter: 1 },
+  { id: 'crown', name: 'おうかん', price: 150, chapter: 1 },
+  // 2章（ご近所編）
+  { id: 'bandana', name: '三角巾', price: 80, chapter: 2 },
+  { id: 'bell', name: '猫の鈴', price: 100, chapter: 2 },
+  { id: 'cap', name: '清掃係のぼうし', price: 140, chapter: 2 },
+  // 3章（まち編）
+  { id: 'goggles', name: '飛行ゴーグル', price: 220, chapter: 3 },
+  { id: 'propeller', name: 'プロペラぼうし', price: 280, chapter: 3 },
+  { id: 'cloudpin', name: '雲の髪かざり', price: 350, chapter: 3 },
 ];
 
 export const ACCESSORY_IDS: readonly AccessoryId[] = ACCESSORIES.map((a) => a.id);

@@ -190,6 +190,93 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       g.add(gem);
       return { object: g, offset: new THREE.Vector3(0, 0.02, 0) };
     }
+    case 'bandana': {
+      // 三角巾：頭にかぶせた白い布（ピンクの水玉）と、後ろの結び目
+      const cloth = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2.4), lambert('#f6f0ea'));
+      cloth.scale.set(1, 0.55, 1);
+      g.add(cloth);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        const dot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.025, 0), lambert(PALETTE.pink));
+        dot.position.set(Math.cos(a) * 0.2, 0.1, Math.sin(a) * 0.2);
+        g.add(dot);
+      }
+      const knot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 1), lambert('#e8dfd6'));
+      knot.position.copy(ISO_VIEW_DIR.clone().setY(0).normalize().multiplyScalar(-0.28));
+      g.add(knot);
+      return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
+    }
+    case 'bell': {
+      // 猫の鈴：赤いひもと金の鈴
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.025, 6, 12), lambert('#f2635a'));
+      ring.rotation.x = Math.PI / 2;
+      const bell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), lambert('#f6d55c'));
+      bell.position.y = 0.1;
+      g.add(ring, bell);
+      return { object: g, offset: new THREE.Vector3(0.22, 0.02, 0.22) };
+    }
+    case 'cap': {
+      // 清掃係のぼうし：紺のキャップに黄色のしるし。つばはカメラ側へ
+      const navy = lambert('#5d7aa8');
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), navy);
+      crown.scale.y = 0.75;
+      const brimDir = ISO_VIEW_DIR.clone().setY(0).normalize();
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.025, 12, 1, false, 0, Math.PI), lambert('#435a82'));
+      brim.rotation.y = Math.atan2(brimDir.x, brimDir.z) - Math.PI / 2;
+      brim.position.copy(brimDir.clone().multiplyScalar(0.14));
+      const mark = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 0), lambert('#f6d55c'));
+      mark.position.copy(brimDir.clone().multiplyScalar(0.16)).setY(0.09);
+      g.add(crown, brim, mark);
+      return { object: g, offset: new THREE.Vector3(0, -0.03, 0) };
+    }
+    case 'goggles': {
+      // 飛行ゴーグル：おでこに上げた茶色のバンドと水色のレンズ
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.03, 6, 20), lambert('#a0644a'));
+      band.rotation.x = Math.PI / 2;
+      g.add(band);
+      const front = ISO_VIEW_DIR.clone().setY(0).normalize();
+      const side = new THREE.Vector3(front.z, 0, -front.x);
+      for (const k of [-1, 1]) {
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.06, 12), lambert('#6b4a3a'));
+        const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.065, 12), lambert('#7fd0d0'));
+        const at = front.clone().multiplyScalar(0.22).addScaledVector(side, k * 0.1);
+        for (const m of [rim, lens]) {
+          m.position.copy(at);
+          m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), front);
+          g.add(m);
+        }
+      }
+      return { object: g, offset: new THREE.Vector3(0, -0.04, 0) };
+    }
+    case 'propeller': {
+      // プロペラぼうし：緑のキャップの上に赤と黄の羽
+      const capMat = lambert('#7fb77e');
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), capMat);
+      crown.scale.y = 0.8;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6), lambert('#6b4a3a'));
+      stem.position.y = 0.14;
+      const blades = new THREE.Group();
+      blades.name = 'propeller';
+      for (const [k, color] of [[1, '#f2635a'], [-1, '#f6d55c']] as const) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.012, 0.045), lambert(color));
+        blade.position.x = k * 0.075;
+        blades.add(blade);
+      }
+      blades.position.y = 0.19;
+      g.add(crown, stem, blades);
+      return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
+    }
+    case 'cloudpin': {
+      // 雲の髪かざり：小さな白い雲
+      const white = lambert('#ffffff');
+      for (const [x, y, r] of [[0, 0.06, 0.09], [-0.1, 0.03, 0.07], [0.1, 0.03, 0.07], [0.04, 0.1, 0.06]] as const) {
+        const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), white);
+        puff.position.set(x, y, 0);
+        g.add(puff);
+      }
+      g.quaternion.copy(FACE_ROTATION);
+      return { object: g, offset: new THREE.Vector3(-0.2, 0.02, 0.18) };
+    }
     case 'glasses':
       return null; // 顔のテクスチャに描く
   }
@@ -371,6 +458,12 @@ export class HokorichanModel {
     this.faceKey = '';
     this.redrawFace();
     this.applyTransform();
+  }
+
+  /** 毎フレームの小さな動き（プロペラぼうしを回す）。speed は回る速さの倍率 */
+  tick(dt: number, speed = 1): void {
+    const blades = this.accessory?.object.getObjectByName('propeller');
+    if (blades) blades.rotation.y += dt * 6 * speed;
   }
 
   get diameter(): number {

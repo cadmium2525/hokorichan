@@ -30,6 +30,7 @@ import {
   bagTotal,
   bestTool,
   canBuyLand,
+  chapter,
   contestRanking,
   dexProgress,
   dietRatios,
@@ -171,9 +172,12 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
               : 'お店でいちばん大きなケースです。もっと大きくなったら……？'
         }</p>`;
   } else {
+    const ch = chapter(save);
+    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編' } as const;
     items = ACCESSORIES.map((a) => {
       const has = save.accessories.includes(a.id);
-      return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
+      if (!has && a.chapter > ch) return row('<span class="px-icon px-icon--lg acc-locked">？</span>', '？？？', `${a.chapter}章（${CHAPTER_NAMES[a.chapter]}）で入荷`, owned('入荷待ち'));
+      return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : a.chapter > 1 ? `${a.chapter}章の新作！ 買うとすぐ付けるよ` : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
     }).join('');
   }
   const greet = `<div class="story story--shop"><div class="story__who">${characterSprite('shopkeeper', 'sprite', { pose: 'talk' })}</div><div class="bubble">いらっしゃいませ！</div></div>`;
@@ -199,6 +203,7 @@ export function playBody(save: SaveData): string {
   };
   return `
     <p class="note">ほこりちゃんを指でなでてみよう</p>
+    <button type="button" class="btn btn--accent btn--wide" data-action="snap"><span class="btn__label">写真をとってシェア</span></button>
     <div class="row-title">アクセサリー</div><div class="chips">${acc}</div>
     <div class="row-title">かたち</div><div class="chips">${presets}</div>
     ${slider('width', 'よこ')}${slider('height', 'たて')}${slider('fluff', 'もふもふ')}`;

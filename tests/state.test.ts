@@ -180,10 +180,30 @@ test('餌やり：容量を超えて与えられず、余りはバッグに残�
 });
 
 test('机の上では小さく、ケースに移ると大きく見える。どの住まいでも上限XPで収まる', () => {
-  assert.ok(petDisplaySize(10, 0, false) < petDisplaySize(10, 1, false));
-  for (const h of [0, 1, 2, 3, 4] as const) {
+  assert.ok(petDisplaySize(10, 0, false) <= petDisplaySize(10, 1, false));
+  assert.ok(petDisplaySize(30, 1, false) > petDisplaySize(10, 0, false));
+  for (const h of [0, 1, 2, 3, 4, 5] as const) {
     assert.ok(petDisplaySize(HABITATS[h].capacity, h, false) <= HABITATS[h].inner * 0.85 + 1e-9);
   }
+});
+
+test('すみかがいっぱいになるまで、成長するほどずっと大きくなる。引っこしても小さくならない', () => {
+  for (const h of [0, 1, 2, 3, 4, 5] as const) {
+    const from = h === 0 ? 0 : HABITATS[(h - 1) as 0].capacity;
+    const to = HABITATS[h].capacity;
+    let prev = -1;
+    for (let i = 0; i <= 10; i++) {
+      const size = petDisplaySize(from + ((to - from) * i) / 10, h, false);
+      assert.ok(size > prev, `habitat ${h} step ${i}`);
+      prev = size;
+    }
+    // 最後の1割でもはっきり大きくなる（頭打ちにならない）
+    const nearEnd = petDisplaySize(from + (to - from) * 0.9, h, false);
+    assert.ok(prev - nearEnd > (prev - petDisplaySize(from, h, false)) * 0.05, `habitat ${h} keeps growing`);
+    if (h > 0) assert.ok(petDisplaySize(from, h, false) >= petDisplaySize(from, (h - 1) as 0, false) - 1e-9, `move ${h}`);
+  }
+  // 横長にしてもはみ出さない
+  assert.ok(petDisplaySize(300, 3, false, { width: 1.35, height: 1, fluff: 1 }) * 1.35 <= HABITATS[3].inner * 0.85);
 });
 
 test('湿気：XPと容量は減らず、乾燥で見た目が元に戻る', () => {
@@ -414,4 +434,12 @@ test('黄砂をたくさん食べると空で吸い込む範囲が広がる', ()
   assert.equal(skyRadiusMul(s0), 1);
   const s1 = { ...s0, diet: { ...s0.diet, cotton: 60, kosa: 40 } };
   assert.ok(skyRadiusMul(s1) > 1);
+});
+
+test('章が進むとアクセサリーが入荷する（前の章では買えない）', () => {
+  const rich = { ...createInitialSave(), coins: 10_000 };
+  assert.equal(buyAccessory(rich, 'bandana').ok, false);
+  assert.equal(buyAccessory({ ...rich, habitat: 4 as const }, 'bandana').ok, true);
+  assert.equal(buyAccessory({ ...rich, habitat: 4 as const }, 'goggles').ok, false);
+  assert.equal(buyAccessory({ ...rich, habitat: 5 as const }, 'goggles').ok, true);
 });

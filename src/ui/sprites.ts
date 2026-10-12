@@ -119,6 +119,30 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  bandana: [
+    ['.........', '.........', '..aaaaa..', '.aawaaaa.', 'aaaaawaaa', '.aaaaaaa.', '...a.a...', '..a...a..', '.........'],
+    { a: '#f6f0ea', w: '#f4a7b9' },
+  ],
+  bell: [
+    ['.........', 'rr.....rr', '.rrrrrrr.', '...yyy...', '..yyyyy..', '..ywyyy..', '..yyyyy..', '...yky...', '.........'],
+    { r: '#f2635a', y: '#f6d55c', w: '#fff7c8', k: '#8a6420' },
+  ],
+  cap: [
+    ['.........', '.........', '...bbb...', '..bbwbb..', '.bbbbbbb.', '.bbbbbbb.', 'nnnnnn...', '.........', '.........'],
+    { b: '#5d7aa8', w: '#f6d55c', n: '#435a82' },
+  ],
+  goggles: [
+    ['.........', '.........', 'bbbbbbbbb', '.ggg.ggg.', 'gcwgbgcwg', 'gcccbgccg', '.ggg.ggg.', '.........', '.........'],
+    { b: '#a0644a', g: '#6b4a3a', c: '#7fd0d0', w: '#ffffff' },
+  ],
+  propeller: [
+    ['.rrr.yyy.', '....k....', '...pkp...', '..pppbp..', '.ppbpppp.', '.ppppppp.', '.........', '.........', '.........'],
+    { r: '#f2635a', y: '#f6d55c', k: '#6b4a3a', p: '#7fb77e', b: '#a9b8f0' },
+  ],
+  cloudpin: [
+    ['.........', '...ww....', '..wwwww..', '.wwwwwww.', 'wwssswwww', '.wwwwww..', '.........', '...k.....', '.........'],
+    { w: '#ffffff', s: '#e6f4fb', k: '#9a86c6' },
+  ],
   ribbon: [
     ['.........', '.........', 'aa.....aa', 'aaa.c.aaa', 'aaaacaaaa', 'aaa.c.aaa', 'aa.....aa', '.........', '.........'],
     { a: '#e98aa6', c: '#f4b6c6' },

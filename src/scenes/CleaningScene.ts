@@ -475,6 +475,8 @@ export class CleaningScene implements GameScene {
   }
 
   update(dt: number, time: number): void {
+    this.helper?.model.tick(dt, 2);
+    this.spectator?.model.tick(dt);
     const active = this.isSucking;
     if (active) this.edgeScroll(dt);
     this.smoothPoint.lerp(this.point, Math.min(1, dt * 18));

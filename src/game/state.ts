@@ -428,7 +428,7 @@ export function bestTool(save: SaveData): ToolDef {
 
 export function buyAccessory(save: SaveData, id: AccessoryId): { save: SaveData; ok: boolean } {
   const def = ACCESSORIES.find((a) => a.id === id);
-  if (!def || save.accessories.includes(id) || save.coins < def.price) return { save, ok: false };
+  if (!def || def.chapter > chapter(save) || save.accessories.includes(id) || save.coins < def.price) return { save, ok: false };
   return {
     save: { ...save, coins: save.coins - def.price, accessories: [...save.accessories, id], equippedAccessory: id },
     ok: true,
@@ -687,18 +687,30 @@ export function rankFor(xp: number): Rank {
   return rank;
 }
 
-/** XPから本体の直径を決める。sqrtで序盤は大きく、後半もじわじわ育つ。 */
-export function baseBodySize(xp: number): number {
-  return 0.7 + 0.1 * Math.sqrt(Math.max(0, xp));
+/** すみかがいっぱい（容量に達した）ときに、すみかの内寸に対して占める大きさ */
+const FULL_FRACTION = 0.78;
+/** 机の上（出会い）では小さな綿ぼこりから始まる */
+const DESK_SIZE: [number, number] = [0.3, 0.6];
+
+/** そのすみかでの大きさの範囲（入ったとき〜いっぱいのとき）。前のすみかの最大より小さくならない */
+export function habitatSizeRange(habitat: Habitat): [number, number] {
+  if (habitat === 0) return DESK_SIZE;
+  const prevMax = habitatSizeRange((habitat - 1) as Habitat)[1];
+  const max = HABITATS[habitat].inner * FULL_FRACTION;
+  return [Math.min(prevMax, max), max];
 }
 
-/** 机の上では小さな綿ぼこりとして見せる */
-const DESK_SCALE = 0.55;
-
-/** 表示用の直径。住まいに収まるようクランプし、湿気中は縮める。 */
-export function petDisplaySize(xp: number, habitat: Habitat, damp: boolean): number {
-  const base = habitat === 0 ? baseBodySize(xp) * DESK_SCALE : baseBodySize(xp);
-  const size = Math.min(base, HABITATS[habitat].inner * 0.85);
+/**
+ * 表示用の直径。すみかの中での成長の割合に合わせて、いっぱいになるまでずっと大きくなり続ける。
+ * 横長・縦長にしたときは、はみ出さないよう少し小さくする。湿気中は縮める。
+ */
+export function petDisplaySize(xp: number, habitat: Habitat, damp: boolean, shape?: PetShape): number {
+  const from = habitat === 0 ? 0 : HABITATS[(habitat - 1) as Habitat].capacity;
+  const to = HABITATS[habitat].capacity;
+  const p = Math.min(1, Math.max(0, (xp - from) / Math.max(1, to - from)));
+  const [min, max] = habitatSizeRange(habitat);
+  let size = min + (max - min) * Math.pow(p, 0.85);
+  if (shape) size /= Math.max(1, shape.width, shape.height);
   return damp ? size * DAMP_SCALE : size;
 }
 

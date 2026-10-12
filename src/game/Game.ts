@@ -12,6 +12,7 @@ import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
+import { canShareImage, makePhotoCard, openXIntent, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
 import {
   boardBody,
   contestResultBody,
@@ -115,7 +116,7 @@ import {
 
 export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'RESULT';
 
-type Overlay = 'none' | 'dest' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
+type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
 /** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
 type DebugParams = { seed: number | null; damp: boolean | null; speed: number };
@@ -179,7 +180,7 @@ const CONTAINER_STORY: StoryStep[] = [
   { speaker: 'mother', text: 'これで広々ね。ごはんの時間には帰ってくるのよ。<br>おうちの掃除も、帰ってきたときにお願いね。', button: 'はーい' },
   {
     speaker: 'narration',
-    text: 'ほこりちゃんは<b>おうち級</b>になった！<br>これからは<b>一緒に掃除</b>に行けるよ。掃除のあいだ、ほこりちゃんが転がってホコリを吸い込んでくれる。<br>指でなぞると、ついてくるよ。',
+    text: 'ほこりちゃんは<b>おうち級</b>になった！<br>これからは<b>一緒に掃除</b>に行けるよ。掃除のあいだ、ほこりちゃんが転がってホコリを吸い込んでくれる。<br>指でなぞると、ついてくるよ。<br>ショップに<b>新しいアクセサリー</b>も入荷したみたい。',
     button: 'いこう！',
   },
 ];
@@ -247,7 +248,7 @@ const WAREHOUSE_STORY: StoryStep[] = [
   { speaker: 'narration', text: '空き地に<b>倉庫</b>が建った！ ほこりちゃんはまだまだ大きくなれる。', button: '次へ' },
   {
     speaker: 'narration',
-    text: 'ほこりちゃんの背中に乗れるようになった！<br>「<b>空へ</b>」で町の上を飛んで、<b>黄砂</b>や花粉の雲を吸い込もう。<br>指でさした方へ飛んでいくよ。',
+    text: 'ほこりちゃんの背中に乗れるようになった！<br>「<b>空へ</b>」で町の上を飛んで、<b>黄砂</b>や花粉の雲を吸い込もう。<br>指でさした方へ飛んでいくよ。<br>ショップには空にぴったりの<b>アクセサリー</b>も入荷！',
     button: '乗ってみる！',
   },
 ];
@@ -274,6 +275,8 @@ export class Game {
   /** 大掃除大会の最中なら開始時刻 */
   private contest: { startedAt: number; lastLeft: number; wave: number; seed: number; missed: number } | null = null;
   private sky: SkyScene | null = null;
+  /** 撮った写真（シェア画面を閉じたら捨てる） */
+  private photo: Photo | null = null;
   /** 空で吸い込んだ雲の数と種類 */
   private skyGot: { clouds: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
   /** 大会で初優勝した（戻ったら任命のお話） */
@@ -960,6 +963,7 @@ export class Game {
   }
 
   private closeModal(): void {
+    if (this.overlay === 'photo') this.dropPhoto();
     this.overlay = 'none';
     this.hud.closeModal();
     this.syncInput();
@@ -1064,6 +1068,49 @@ export class Game {
       body: playBody(this.save),
       buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
     });
+  }
+
+  /** あそぶ：ほこりちゃんの写真を撮ってシェアする */
+  private async takePhoto(): Promise<void> {
+    const pet = this.pet;
+    if (!pet || this.mode !== 'HOME') return;
+    this.sound.play('happy');
+    pet.playHappy();
+    // WebGLの絵は描いた直後でないと読めないので、描いてすぐ写す
+    this.renderer.render(pet.scene, pet.camera);
+    const shot = document.createElement('canvas');
+    shot.width = this.hud.canvas.width;
+    shot.height = this.hud.canvas.height;
+    shot.getContext('2d')?.drawImage(this.hud.canvas, 0, 0);
+    const s = this.save;
+    const photo = await makePhotoCard(shot, pet.focus(), {
+      title: 'ほこりちゃん',
+      rank: rankFor(s.growthXp).name,
+      xp: s.growthXp,
+      home: HABITATS[s.habitat].name,
+    });
+    if (!photo) {
+      this.hud.toast('写真をとれなかった…', 1800);
+      return;
+    }
+    this.dropPhoto();
+    this.photo = photo;
+    const buttons: ButtonSpec[] = [];
+    if (canShareImage(photo)) buttons.push({ action: 'shareNative', label: 'シェア', variant: 'primary' });
+    buttons.push({ action: 'shareX', label: 'Xにポスト', variant: 'accent' });
+    buttons.push({ action: 'savePhoto', label: '画像を保存', variant: 'secondary' });
+    buttons.push({ action: 'closeModal', label: 'とじる', variant: 'secondary' });
+    this.openOverlay('photo', {
+      title: 'パシャ！',
+      className: 'modal--photo',
+      body: `<img class="photo" src="${photo.url}" alt="ほこりちゃんの写真"><p class="note">「Xにポスト」は画像を保存してから投稿画面を開くよ。画像を添付してね</p>`,
+      buttons,
+    });
+  }
+
+  private dropPhoto(): void {
+    if (this.photo) URL.revokeObjectURL(this.photo.url);
+    this.photo = null;
   }
 
   private openFeed(): void {
@@ -1265,6 +1312,31 @@ export class Game {
       case 'openPlay':
         this.sound.play('tap');
         this.openPlay();
+        return;
+      case 'snap':
+        void this.takePhoto();
+        return;
+      case 'shareNative':
+        if (this.photo) {
+          const photo = this.photo;
+          void shareImage(photo).then((r) => {
+            if (r === 'failed') this.hud.toast('シェアできなかった…「画像を保存」してから投稿してね', 2600);
+          });
+        }
+        return;
+      case 'shareX':
+        if (this.photo) {
+          // Xの投稿画面には画像を直接付けられないので、先に保存してもらう
+          savePhoto(this.photo);
+          openXIntent(this.photo);
+          this.hud.toast('画像を保存したよ。投稿に添付してね', 2600);
+        }
+        return;
+      case 'savePhoto':
+        if (this.photo) {
+          savePhoto(this.photo);
+          this.hud.toast('画像を保存したよ', 1800);
+        }
         return;
       case 'openFeed':
         this.sound.play('tap');
