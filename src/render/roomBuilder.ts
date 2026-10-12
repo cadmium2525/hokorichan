@@ -21,23 +21,23 @@ export type Room = { group: THREE.Group; blockers: Blocker[]; half: number };
 
 const WALL_HEIGHT = 2.8;
 
-function lambert(params: THREE.MeshLambertMaterialParameters): THREE.MeshLambertMaterial {
+export function lambert(params: THREE.MeshLambertMaterialParameters): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial(params);
 }
 
-function box(w: number, h: number, d: number, material: THREE.Material | THREE.Material[]): THREE.Mesh {
+export function box(w: number, h: number, d: number, material: THREE.Material | THREE.Material[]): THREE.Mesh {
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   return mesh;
 }
 
 /** 正面(+Z)だけ別マテリアルの箱 */
-function frontBox(w: number, h: number, d: number, side: THREE.Material, front: THREE.Material): THREE.Mesh {
+export function frontBox(w: number, h: number, d: number, side: THREE.Material, front: THREE.Material): THREE.Mesh {
   return box(w, h, d, [side, side, side, side, front, side]);
 }
 
 // ---- 床と壁 ----
 
-function buildShell(group: THREE.Group, half: number, seed: number): void {
+export function buildShell(group: THREE.Group, half: number, seed: number): void {
   const floorTop = lambert({ map: floorTexture(seed, half) });
   const floorSide = lambert({ color: PALETTE.woodDark });
   const floor = box(half * 2, 0.3, half * 2, [floorSide, floorSide, floorTop, floorSide, floorSide, floorSide]);
@@ -57,7 +57,7 @@ function buildShell(group: THREE.Group, half: number, seed: number): void {
 }
 
 /** 壁に貼る板（窓・額）。wall='back'なら+Z向き、'left'なら+X向き */
-function wallDecal(
+export function wallDecal(
   group: THREE.Group,
   half: number,
   wall: 'back' | 'left',
@@ -79,7 +79,7 @@ function wallDecal(
 
 // ---- 家具（正面が+Z、原点は背面の中央・床） ----
 
-type Furniture = { object: THREE.Object3D; width: number; depth: number };
+export type Furniture = { object: THREE.Object3D; width: number; depth: number };
 
 function bed(): Furniture {
   const g = new THREE.Group();
@@ -115,7 +115,7 @@ function dresser(seed: number): Furniture {
   return { object: g, width: 1.3, depth: 0.55 };
 }
 
-function bookshelf(seed: number): Furniture {
+export function bookshelf(seed: number): Furniture {
   const side = lambert({ map: woodTexture(seed, PALETTE.wood) });
   const front = lambert({ map: booksTexture(seed) });
   const body = frontBox(1.2, 2.0, 0.45, side, front);
@@ -137,7 +137,7 @@ function toyBox(): Furniture {
   return { object: g, width: 0.9, depth: 0.6 };
 }
 
-function plant(seed: number): Furniture {
+export function plant(seed: number): Furniture {
   const rng = createRandom(seed);
   const g = new THREE.Group();
   const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.18, 0.4, 8), lambert({ color: '#e08f6a' }));
@@ -189,9 +189,108 @@ function chair(): THREE.Group {
   return g;
 }
 
+function sofa(): Furniture {
+  const g = new THREE.Group();
+  const fabric = lambert({ color: '#b9a6dc' });
+  const light = lambert({ color: '#cdbdea' });
+  const base = box(2.4, 0.42, 0.95, fabric);
+  base.position.set(0, 0.21, 0.475);
+  const back = box(2.4, 0.55, 0.25, fabric);
+  back.position.set(0, 0.7, 0.125);
+  const armL = box(0.22, 0.32, 0.95, light);
+  armL.position.set(-1.09, 0.58, 0.475);
+  const armR = armL.clone();
+  armR.position.x = 1.09;
+  const cushion = box(0.5, 0.36, 0.14, lambert({ color: PALETTE.pink }));
+  cushion.position.set(-0.6, 0.62, 0.35);
+  cushion.rotation.z = 0.15;
+  g.add(base, back, armL, armR, cushion);
+  return { object: g, width: 2.4, depth: 0.95 };
+}
+
+function tvStand(seed: number): Furniture {
+  const g = new THREE.Group();
+  const side = lambert({ map: woodTexture(seed, PALETTE.woodLight) });
+  const front = lambert({ map: woodTexture(seed + 1, PALETTE.woodLight, 1) });
+  const stand = frontBox(2.0, 0.5, 0.5, side, front);
+  stand.position.set(0, 0.25, 0.25);
+  const tv = box(1.5, 0.85, 0.08, lambert({ color: '#4a4552' }));
+  tv.position.set(0, 0.98, 0.2);
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.38, 0.74), new THREE.MeshBasicMaterial({ color: '#5d6a86' }));
+  screen.position.set(0, 0.98, 0.241);
+  const leg = box(0.3, 0.05, 0.2, lambert({ color: '#4a4552' }));
+  leg.position.set(0, 0.53, 0.2);
+  g.add(stand, tv, screen, leg);
+  return { object: g, width: 2.0, depth: 0.5 };
+}
+
+function lowTable(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = lambert({ map: woodTexture(61, PALETTE.woodLight) });
+  const top = box(1.5, 0.08, 0.95, wood);
+  top.position.y = 0.42;
+  g.add(top);
+  for (const [x, z] of [[-0.65, -0.4], [0.65, -0.4], [-0.65, 0.4], [0.65, 0.4]]) {
+    const leg = box(0.09, 0.4, 0.09, wood);
+    leg.position.set(x, 0.2, z);
+    g.add(leg);
+  }
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.12, 0.1, 8), lambert({ color: '#f3d27a' }));
+  bowl.position.set(-0.3, 0.51, 0);
+  g.add(bowl);
+  return g;
+}
+
+/** 勉強机（飼育の最初の舞台）。原点は机の中央・床、天板の高さを返す */
+export function studyDesk(seed: number): { object: THREE.Group; topY: number; width: number; depth: number } {
+  const g = new THREE.Group();
+  const wood = lambert({ map: woodTexture(seed, PALETTE.woodLight) });
+  const dark = lambert({ map: woodTexture(seed + 1, PALETTE.wood, 3) });
+  const width = 2.8;
+  const depth = 1.4;
+  const topY = 1.2;
+  const top = box(width, 0.1, depth, wood);
+  top.position.y = topY - 0.05;
+  const drawers = frontBox(0.8, topY - 0.1, depth - 0.1, wood, dark);
+  drawers.position.set(width / 2 - 0.45, (topY - 0.1) / 2, 0);
+  const legL = box(0.1, topY - 0.1, depth - 0.1, wood);
+  legL.position.set(-width / 2 + 0.08, (topY - 0.1) / 2, 0);
+  const shelf = box(width, 0.55, 0.3, wood);
+  shelf.position.set(0, topY + 0.275, -depth / 2 + 0.15);
+  g.add(top, drawers, legL, shelf);
+
+  // 机の上の小物：スタンドライト・ペン立て・ノート
+  const lampMat = lambert({ color: PALETTE.lavender });
+  const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.06, 10), lampMat);
+  lampBase.position.set(-width / 2 + 0.35, topY + 0.03, -depth / 2 + 0.5);
+  const arm = box(0.05, 0.7, 0.05, lampMat);
+  arm.position.set(-width / 2 + 0.35, topY + 0.38, -depth / 2 + 0.5);
+  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.24, 10, 1, true), lambert({ color: PALETTE.pink, side: THREE.DoubleSide }));
+  shade.position.set(-width / 2 + 0.5, topY + 0.72, -depth / 2 + 0.55);
+  shade.rotation.z = -0.5;
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.1, 0.24, 8), lambert({ color: '#9cc9e6' }));
+  cup.position.set(width / 2 - 0.35, topY + 0.12, -depth / 2 + 0.45);
+  g.add(lampBase, arm, shade, cup);
+  const pencilColors = ['#f3d27a', PALETTE.pinkDeep, '#7fb77e'];
+  pencilColors.forEach((c, i) => {
+    const pencil = box(0.035, 0.34, 0.035, lambert({ color: c }));
+    pencil.position.set(width / 2 - 0.39 + i * 0.04, topY + 0.3, -depth / 2 + 0.45 + (i - 1) * 0.03);
+    pencil.rotation.z = (i - 1) * 0.15;
+    g.add(pencil);
+  });
+  const note = box(0.6, 0.04, 0.45, lambert({ color: '#fff7e8' }));
+  note.position.set(width / 2 - 0.55, topY + 0.02, depth / 2 - 0.35);
+  note.rotation.y = 0.25;
+  const noteCover = box(0.6, 0.02, 0.45, lambert({ color: PALETTE.pink }));
+  noteCover.position.set(width / 2 - 0.55, topY + 0.005, depth / 2 - 0.35);
+  noteCover.rotation.y = 0.25;
+  g.add(note, noteCover);
+  return { object: g, topY, width, depth };
+}
+
 // ---- 配置 ----
 
-function blockerOf(object: THREE.Object3D): Blocker {
+export function blockerOf(object: THREE.Object3D): Blocker {
   object.updateMatrixWorld(true);
   const b = new THREE.Box3().setFromObject(object);
   return { minX: b.min.x, maxX: b.max.x, minZ: b.min.z, maxZ: b.max.z, height: b.max.y };
@@ -246,6 +345,15 @@ function placeAlongWall(
 export function buildCleaningRoom(seed: number): Room {
   const random = createRandom(seed);
   const half = 4;
+  return furnishRoom(seed, random, half, 'bedroom');
+}
+
+/** リビング：ソファ・テレビ台・ローテーブルのある広い部屋 */
+export function buildLivingRoom(seed: number): Room {
+  return furnishRoom(seed, createRandom(seed), 4.5, 'living');
+}
+
+function furnishRoom(seed: number, random: Random, half: number, theme: 'bedroom' | 'living'): Room {
   const room: Room = { group: new THREE.Group(), blockers: [], half };
   buildShell(room.group, half, seed);
 
@@ -257,15 +365,24 @@ export function buildCleaningRoom(seed: number): Room {
   room.blockers.push(blockerOf(corner.object));
 
   const extras = (): Furniture[] => {
-    const pool = [() => dresser(seed + 21), () => bookshelf(seed + 22), () => toyBox(), () => plant(seed + 23)];
+    const pool =
+      theme === 'bedroom'
+        ? [() => dresser(seed + 21), () => bookshelf(seed + 22), () => toyBox(), () => plant(seed + 23)]
+        : [() => bookshelf(seed + 24), () => plant(seed + 25), () => dresser(seed + 26)];
     const a = pick(random, pool);
     const rest = pool.filter((p) => p !== a);
     return [a(), pick(random, rest)()];
   };
-  const bedOnBack = random() < 0.5;
+  const bigOnBack = random() < 0.5;
   const backItems = extras();
   const leftItems = extras();
-  (bedOnBack ? backItems : leftItems).unshift(bed());
+  if (theme === 'bedroom') {
+    (bigOnBack ? backItems : leftItems).unshift(bed());
+  } else {
+    // テレビとソファは向かい合わせの壁に
+    backItems.unshift(bigOnBack ? tvStand(seed + 27) : sofa());
+    leftItems.unshift(bigOnBack ? sofa() : tvStand(seed + 27));
+  }
   if (random() < 0.5) backItems.reverse();
   if (random() < 0.5) leftItems.reverse();
 
@@ -277,14 +394,15 @@ export function buildCleaningRoom(seed: number): Room {
   wallDecal(room.group, half, 'left', leftOpen[0] ?? randRange(random, -1, 2), 1.9, 0.6, 0.6, frameTexture(seed));
 
   // ラグ（ホコリが乗ってもよい）
-  const rug = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.02, 2.0), lambert({ map: rugTexture() }));
+  const rugSize = theme === 'living' ? 3.4 : 2.6;
+  const rug = new THREE.Mesh(new THREE.BoxGeometry(rugSize, 0.02, rugSize * 0.77), lambert({ map: rugTexture() }));
   rug.position.set(randRange(random, 0, 1.2), 0.01, randRange(random, 0, 1.2));
   rug.rotation.y = random() < 0.5 ? 0 : Math.PI / 2;
   room.group.add(rug);
 
-  // 中央付近にテーブルと椅子。既存の家具と重ならない場所を探す
+  // 中央付近にテーブル（寝室は椅子つき）。既存の家具と重ならない場所を探す
   for (let attempt = 0; attempt < 40; attempt++) {
-    const t = table();
+    const t = theme === 'bedroom' ? table() : lowTable();
     t.position.set(randRange(random, -1.6, 2.0), 0, randRange(random, -1.6, 2.0));
     t.rotation.y = random() < 0.5 ? 0 : Math.PI / 2;
     const tb = blockerOf(t);
@@ -292,6 +410,7 @@ export function buildCleaningRoom(seed: number): Room {
     if (room.blockers.some((b) => overlaps(b, tb, 0.7))) continue;
     room.group.add(t);
     room.blockers.push(tb);
+    if (theme === 'living') break;
     const c = chair();
     c.position.copy(t.position).add(new THREE.Vector3(0, 0, 0.75).applyAxisAngle(new THREE.Vector3(0, 1, 0), t.rotation.y));
     c.rotation.y = t.rotation.y + Math.PI;

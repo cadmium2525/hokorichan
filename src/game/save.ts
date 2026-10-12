@@ -1,6 +1,13 @@
 // セーブデータの読み書き。不正データは項目単位で初期値に戻し、例外は外に出さない。
 
-import { createInitialSave, SAVE_VERSION, type CaseLevel, type SaveData } from './state.ts';
+import { ACCESSORY_IDS, SPOT_IDS, TOOLS, type AccessoryId, type Habitat, type Hero, type ToolId } from './catalog.ts';
+import {
+  clampShape,
+  createInitialSave,
+  SAVE_VERSION,
+  type SaveData,
+  type SpotState,
+} from './state.ts';
 
 export const SAVE_KEY = 'hokorichan.save.v1';
 
@@ -26,8 +33,29 @@ function toBool(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
-function toCaseLevel(value: unknown): CaseLevel {
-  return value === 1 || value === 2 || value === 3 ? value : 1;
+function toHabitat(value: unknown): Habitat {
+  return value === 0 || value === 1 || value === 2 || value === 3 ? value : 0;
+}
+
+function toHero(value: unknown): Hero | null {
+  return value === 'boy' || value === 'girl' ? value : null;
+}
+
+function toIdList<T extends string>(value: unknown, valid: readonly T[], always: T): T[] {
+  const list = Array.isArray(value) ? value.filter((v): v is T => valid.includes(v as T)) : [];
+  return [...new Set<T>([always, ...list])];
+}
+
+function toSpots(value: unknown, now: number): Record<string, SpotState> {
+  const raw = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
+  const spots: Record<string, SpotState> = {};
+  for (const id of SPOT_IDS) {
+    const s = raw[id] as { fullness?: unknown; at?: unknown } | undefined;
+    const fullness = typeof s?.fullness === 'number' && Number.isFinite(s.fullness) ? Math.min(1, Math.max(0, s.fullness)) : 1;
+    const at = typeof s?.at === 'number' && Number.isFinite(s.at) && s.at >= 0 ? Math.min(s.at, now) : 0;
+    spots[id] = { fullness, at };
+  }
+  return spots;
 }
 
 /**
@@ -35,28 +63,46 @@ function toCaseLevel(value: unknown): CaseLevel {
  * 未来のバージョンや解釈できない形式は null（=初期化）を返す。
  */
 export function migrate(raw: Record<string, unknown>): Record<string, unknown> | null {
-  const version = raw.version;
-  if (version === SAVE_VERSION) return raw;
-  // v2以降を追加するときはここに v1→v2 の変換を積み上げる
+  let data = raw;
+  if (data.version === 1) {
+    // v1はケースLv1から始まり掃除機で掃除していた。進行を失わないよう引き継ぐ
+    data = {
+      ...data,
+      version: 2,
+      habitat: data.caseLevel,
+      tools: ['hand', 'vacuum'],
+      hero: null,
+    };
+  }
+  if (data.version === SAVE_VERSION) return data;
   return null;
 }
 
 /** 任意の値を正しい SaveData に整える。 */
-export function sanitize(raw: unknown): SaveData {
+export function sanitize(raw: unknown, now = Date.now()): SaveData {
   const init = createInitialSave();
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return init;
   const data = migrate(raw as Record<string, unknown>);
   if (!data) return init;
+  const accessories = toIdList<AccessoryId>(data.accessories, ACCESSORY_IDS, 'ribbon');
+  const equipped = accessories.includes(data.equippedAccessory as AccessoryId) ? (data.equippedAccessory as AccessoryId) : null;
+  const shape = (typeof data.shape === 'object' && data.shape !== null ? data.shape : {}) as Record<string, unknown>;
   return {
     version: SAVE_VERSION,
     coins: toCount(data.coins, init.coins),
     dustBag: toCount(data.dustBag, init.dustBag),
     growthXp: toCount(data.growthXp, init.growthXp),
-    caseLevel: toCaseLevel(data.caseLevel),
+    habitat: toHabitat(data.habitat),
     damp: toBool(data.damp, init.damp),
     cleanedSessions: toCount(data.cleanedSessions, init.cleanedSessions),
     soundEnabled: toBool(data.soundEnabled, init.soundEnabled),
     tutorialDone: toBool(data.tutorialDone, init.tutorialDone),
+    hero: toHero(data.hero),
+    tools: toIdList<ToolId>(data.tools, Object.keys(TOOLS) as ToolId[], 'hand'),
+    accessories,
+    equippedAccessory: equipped,
+    shape: clampShape({ width: Number(shape.width ?? 1), height: Number(shape.height ?? 1), fluff: Number(shape.fluff ?? 1) }),
+    spots: toSpots(data.spots, now) as SaveData['spots'],
   };
 }
 

@@ -1,42 +1,72 @@
 // ゲーム全体の進行。状態遷移 BOOT→HOME→CLEANING→RESULT→HOME を管理し、
-// ルールは state.ts、保存は save.ts、描画は scenes/render に任せる。
+// ルールは state.ts、保存は save.ts、描画は scenes/render、画面の中身は ui に任せる。
 
 import { PixelRenderer } from '../render/pixelRenderer.ts';
+import { buildSpot } from '../render/spotBuilder.ts';
 import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene } from '../scenes/PetScene.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
+import {
+  heroSelectBody,
+  mapBody,
+  playBody,
+  resultBody,
+  shopBody,
+  storyBody,
+  type ShopTab,
+  type Speaker,
+} from '../ui/screens.ts';
 import { Sound } from './audio.ts';
-import { createRandom, randInt, type Random } from './rng.ts';
+import {
+  ACCESSORY_IDS,
+  HABITATS,
+  SHAPE_PRESETS,
+  spotDef,
+  SPOT_IDS,
+  TOOLS,
+  type AccessoryId,
+  type Hero,
+  type PetShape,
+  type SpotDef,
+  type SpotId,
+  type ToolId,
+} from './catalog.ts';
+import { createRandom, type Random } from './rng.ts';
 import { loadSave, writeSave } from './save.ts';
 import {
+  bestTool,
+  buyAccessory,
+  buyHabitat,
+  buyTool,
   canClaimReward,
-  canUpgrade,
-  caseCapacity,
+  capacityOf,
+  clampShape,
   claimReward,
   collectDust,
   createSession,
   dry,
-  DUST_MAX,
-  DUST_MIN,
   feed,
   feedableAmount,
-  isCaseFull,
-  nextUpgradeCost,
+  finishSpot,
+  isFull,
   rankFor,
-  REWARD_BASE,
   REWARD_PER_DUST,
   requiredCount,
+  rewardFor,
   rollDamp,
-  upgradeCase,
+  startSpot,
+  toggleAccessory,
   type CleaningSession,
   type SaveData,
 } from './state.ts';
 
 export type Mode = 'BOOT' | 'HOME' | 'CLEANING' | 'RESULT';
 
-/** URLパラメータによるテスト用設定（?seed=123&damp=1 など） */
-type DebugParams = { seed: number | null; damp: boolean | null };
+type Overlay = 'none' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'confirm' | 'result' | 'help';
+
+/** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
+type DebugParams = { seed: number | null; damp: boolean | null; speed: number };
 
 function readParams(): DebugParams {
   const q = new URLSearchParams(location.search);
@@ -45,27 +75,42 @@ function readParams(): DebugParams {
   return {
     seed: seed !== null && /^\d+$/.test(seed) ? Number(seed) : null,
     damp: damp === '1' ? true : damp === '0' ? false : null,
+    // ホコリが積もる速さを60倍にする（1分で1時間分）
+    speed: q.get('fast') === '1' ? 60 : 1,
   };
 }
 
-const TUTORIAL = [
+type StoryStep = { speaker: Speaker; text: string; button: string; enter?: (scene: PetScene | null) => void };
+
+const HOW_TO =
+  '「おそうじへ」で家の中の場所をえらんで、指でなぞってホコリを集めよう。<br>' +
+  '最初は<b>素手</b>。お小遣いで<b>掃除用具</b>や<b>ケース</b>を買えるよ。<br>' +
+  'ホコリは時間がたつとまた積もるから、待つ間は「あそぶ」でなでたり着せかえたりしよう！';
+
+const INTRO: StoryStep[] = [
+  { speaker: 'narration', text: 'ある日、勉強机の上に<b>小さなホコリ</b>を見つけた。', button: 'そっと見る', enter: (p) => p?.setSleeping(true) },
+  { speaker: 'narration', text: '……！ ホコリが目をあけた！', button: 'わあ！', enter: (p) => p?.playWake() },
+  { speaker: 'hero', text: 'かわいい……！ この子は「ほこりちゃん」だ！', button: '次へ' },
   {
-    title: 'お部屋をおそうじ',
-    body: '画面を指でなぞると、掃除機がホコリを吸い込むよ。<br>8割集めると<b>お小遣い</b>がもらえる！',
+    speaker: 'mother',
+    text: 'あら、そのホコリ、動いてるの？ ふふ。だったら家のおそうじを手伝ってくれたら、<b>お小遣い</b>をあげるわよ。',
+    button: 'やる！',
   },
-  {
-    title: 'ほこりちゃんにあげる',
-    body: '家に帰ったら「あげる」でバッグのホコリを食べさせよう。<br>食べるほど<b>大きく</b>育つよ。',
-  },
-  {
-    title: 'ケースを広げる',
-    body: 'ケースがいっぱいになったら、お小遣いで<b>拡張</b>しよう。<br>湿気でしょんぼりしたら「乾燥させる」で元気に！',
-  },
+  { speaker: 'hero', text: '集めたホコリは、ほこりちゃんのごはんにしよう！', button: '次へ' },
+  { speaker: 'narration', text: HOW_TO, button: 'はじめる' },
 ];
+
+const TOOL_HINT: Record<ToolId, string> = {
+  hand: '指でなぞってホコリをつまもう',
+  rag: 'なぞってぞうきんで拭き取ろう',
+  mop: 'なぞってモップでからめ取ろう',
+  vacuum: 'なぞって掃除機で吸い込もう',
+};
 
 export class Game {
   private save: SaveData;
   private mode: Mode = 'BOOT';
+  private overlay: Overlay = 'none';
   private readonly hud: Hud;
   private readonly renderer: PixelRenderer;
   private readonly sound: Sound;
@@ -76,17 +121,25 @@ export class Game {
   private pet: PetScene | null = null;
   private cleaning: CleaningScene | null = null;
   private session: CleaningSession | null = null;
+  private spot: SpotDef | null = null;
   private sessionCount = 0;
   private pendingDamp = false;
   private autoFinishTimer = 0;
-  private tutorialStep = -1;
+  private storyStep = 0;
+  private shopTab: ShopTab = 'tools';
+  private lastPetSound = 0;
+  private mapRefresh = 0;
   private lastTime = 0;
 
   constructor(root: HTMLElement) {
     this.save = loadSave();
     this.random = createRandom(this.params.seed ?? (Date.now() >>> 0));
     this.sound = new Sound(this.save.soundEnabled);
-    this.hud = new Hud(root, (action) => this.onAction(action));
+    this.hud = new Hud(
+      root,
+      (action, arg) => this.onAction(action, arg),
+      (name, value, done) => this.onSlider(name, value, done),
+    );
     this.renderer = new PixelRenderer(this.hud.canvas);
 
     new ResizeObserver(() => this.resize()).observe(this.hud.stage);
@@ -96,8 +149,17 @@ export class Game {
   start(): void {
     this.resize();
     this.goHome();
-    if (!this.save.tutorialDone) this.showTutorial(0);
+    if (!this.save.hero) this.showHeroSelect();
+    else if (!this.save.tutorialDone) this.startStory();
     this.renderer.renderer.setAnimationLoop((t) => this.frame(t));
+  }
+
+  private get now(): number {
+    return Date.now();
+  }
+
+  private get hero(): Hero {
+    return this.save.hero ?? 'boy';
   }
 
   // ---- 保存と表示 ----
@@ -108,24 +170,28 @@ export class Game {
     this.refreshHud();
   }
 
+  private petView() {
+    const s = this.save;
+    return { xp: s.growthXp, habitat: s.habitat, damp: s.damp, accessory: s.equippedAccessory, shape: s.shape };
+  }
+
   private refreshHud(): void {
     const s = this.save;
     this.hud.setWallet(s.coins, s.dustBag, s.soundEnabled);
     if (this.mode === 'HOME') {
-      const cap = caseCapacity(s.caseLevel);
-      this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, cap, s.caseLevel, s.damp);
+      this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), HABITATS[s.habitat].name, s.damp);
       this.hud.setActions(this.homeButtons());
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
       const sess = this.session;
       const need = requiredCount(sess);
-      this.hud.setCleaningStatus(sess.collected.size, sess.total, need);
+      this.hud.setCleaningStatus(this.spot?.name ?? 'おそうじ中', sess.collected.size, sess.total, need);
       const left = Math.max(0, need - sess.collected.size);
       this.hud.setActions([
-        { action: 'goHome', label: '帰宅', variant: 'secondary' },
+        { action: 'goHome', label: '帰る', variant: 'secondary' },
         {
           action: 'finish',
           label: '掃除完了',
-          sub: left > 0 ? `あと${left}個` : `報酬 ${REWARD_BASE + sess.collected.size * REWARD_PER_DUST}`,
+          sub: left > 0 ? `あと${left}個` : `お小遣い ${rewardFor(sess)}`,
           variant: 'primary',
           disabled: !canClaimReward(sess),
         },
@@ -136,24 +202,18 @@ export class Game {
   private homeButtons(): ButtonSpec[] {
     const s = this.save;
     const feedable = feedableAmount(s);
-    const cost = nextUpgradeCost(s);
     const buttons: ButtonSpec[] = [];
     if (s.damp) buttons.push({ action: 'dry', label: '乾燥させる', sub: '無料', variant: 'water' });
-    buttons.push({ action: 'goClean', label: '掃除に行く', variant: 'accent' });
+    buttons.push({ action: 'openMap', label: 'おそうじへ', variant: 'accent' });
     buttons.push({
       action: 'feed',
       label: '餌をあげる',
-      sub: s.dustBag === 0 ? 'バッグが空' : isCaseFull(s) ? 'ケース満杯' : `${feedable}個`,
+      sub: s.dustBag === 0 ? 'バッグが空' : isFull(s) ? 'いっぱい' : `${feedable}個`,
       variant: 'primary',
       disabled: feedable === 0,
     });
-    buttons.push({
-      action: 'upgrade',
-      label: 'ケース拡張',
-      sub: cost === null ? '最大' : `${cost}コイン`,
-      variant: 'secondary',
-      disabled: !canUpgrade(s),
-    });
+    buttons.push({ action: 'openShop', label: 'ショップ', variant: 'secondary' });
+    buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
     return buttons;
   }
 
@@ -168,6 +228,7 @@ export class Game {
   private goHome(): void {
     this.cleaning = null;
     this.session = null;
+    this.spot = null;
     this.mode = 'HOME';
     this.hud.hint(null);
     this.hud.setEdgeArrows(0, 0);
@@ -175,42 +236,56 @@ export class Game {
 
     let becameDamp = false;
     if (this.pendingDamp && !this.save.damp) {
-      this.pendingDamp = false;
       becameDamp = true;
       this.save = { ...this.save, damp: true };
       writeSave(this.save);
     }
-    const s = this.save;
-    this.pet = new PetScene({ xp: s.growthXp, level: s.caseLevel, damp: s.damp });
+    this.pendingDamp = false;
+    this.pet = new PetScene(this.petView(), {
+      element: this.hud.canvas,
+      onPet: () => {
+        if (this.lastTime - this.lastPetSound > 0.4) {
+          this.lastPetSound = this.lastTime;
+          this.sound.play('happy');
+        }
+      },
+    });
     this.setScene(this.pet);
+    this.syncInput();
     this.refreshHud();
+    const s = this.save;
     if (becameDamp) this.hud.toast('お留守番中に湿気でしっとり…「乾燥させる」でふかふかに！', 3200);
-    else if (isCaseFull(s) && s.caseLevel < 3) this.hud.toast('ケースがいっぱい！拡張しよう');
+    else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
-  private startCleaning(): void {
+  private startCleaning(def: SpotDef, dust: number): void {
     this.pet = null;
     this.sessionCount++;
     const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
-    const sceneRandom = createRandom(seed);
-    const count = randInt(sceneRandom, DUST_MIN, DUST_MAX);
-    // 湿気は清掃セッション開始時に判定し、帰宅時に反映する（初回プレイは除外）
-    this.pendingDamp = this.params.damp ?? (this.save.cleanedSessions > 0 && rollDamp(this.random));
+    // 湿気は清掃セッション開始時に判定し、帰宅時に反映する（はじめの2回は除外）
+    this.pendingDamp = this.params.damp ?? (this.save.cleanedSessions >= 2 && rollDamp(this.random));
+    const tool = bestTool(this.save);
 
+    const layout = buildSpot(def.id, seed);
     const scene = new CleaningScene({
       seed,
-      dustCount: count,
+      dustCount: dust,
+      layout,
+      tool,
+      hero: this.hero,
       element: this.hud.canvas,
       onCollect: (id) => this.onCollect(id),
-      onSuctionChange: (active) => (active ? this.sound.startHum() : this.sound.stopHum()),
+      onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),
     });
-    this.session = createSession(this.sessionCount, scene.dustTotal);
+    this.session = createSession(this.sessionCount, def, scene.dustTotal);
+    this.spot = def;
     this.cleaning = scene;
     this.mode = 'CLEANING';
     this.autoFinishTimer = 0;
     this.setScene(scene);
     this.syncInput();
-    this.hud.hint('指でなぞってホコリを吸い込もう\n端に寄せると部屋が動くよ');
+    // 部屋は横にはみ出すので端スクロールの案内も出す
+    this.hud.hint(layout.scale < 1 ? TOOL_HINT[tool.id] : `${TOOL_HINT[tool.id]}\n端に寄せると画面が動くよ`);
     this.refreshHud();
   }
 
@@ -225,7 +300,17 @@ export class Game {
     if (session.collected.size === session.total) this.autoFinishTimer = 0.8;
   }
 
-  /** RESULT：報酬確定はここで一度だけ */
+  /** 掃除を終えて、取り残しを場所に記録してから帰宅する */
+  private leaveCleaning(): void {
+    if (this.session && this.spot) {
+      const remaining = this.session.total - this.session.collected.size;
+      this.commit(finishSpot(this.save, this.spot, remaining, this.now));
+    }
+    this.closeModal();
+    this.goHome();
+  }
+
+  /** RESULT：お母さんからお小遣い。報酬確定はここで一度だけ */
   private enterResult(): void {
     const session = this.session;
     if (!session || this.mode !== 'CLEANING') return;
@@ -237,25 +322,107 @@ export class Game {
     this.sound.play('reward');
     this.commit(result.save);
     this.hud.bump('coins');
-    const n = session.collected.size;
-    const pct = Math.round((n / session.total) * 100);
-    this.hud.showModal({
+    this.openOverlay('result', {
       title: 'おそうじ完了！',
       className: 'modal--result',
-      body: `
-        <dl class="result">
-          <dt>回収したホコリ</dt><dd>${n} / ${session.total}（${pct}%）</dd>
-          <dt>お小遣い</dt><dd class="result__coin">+${result.reward}</dd>
-          <dt class="result__note" >内訳</dt><dd class="result__note">基本${REWARD_BASE} ＋ ${n}個×${REWARD_PER_DUST}</dd>
-          <dt>バッグ</dt><dd>${this.save.dustBag}個</dd>
-        </dl>`,
-      buttons: [{ action: 'resultHome', label: '帰宅する', variant: 'primary' }],
+      body: resultBody({
+        hero: this.hero,
+        spot: session.spot,
+        collected: session.collected.size,
+        total: session.total,
+        reward: result.reward,
+        base: session.rewardBase,
+        perDust: REWARD_PER_DUST,
+        bag: this.save.dustBag,
+      }),
+      buttons: [{ action: 'resultHome', label: 'ありがとう！', variant: 'primary' }],
+    });
+  }
+
+  // ---- オーバーレイ ----
+
+  private openOverlay(overlay: Overlay, spec: Parameters<Hud['showModal']>[0]): void {
+    this.overlay = overlay;
+    this.hud.showModal(spec);
+    this.syncInput();
+    this.syncSheetInset();
+  }
+
+  private closeModal(): void {
+    this.overlay = 'none';
+    this.hud.closeModal();
+    this.syncInput();
+    this.syncSheetInset();
+  }
+
+  /** 下のパネルが3D画面を覆う割合をペットシーンに伝える */
+  private syncSheetInset(): void {
+    this.pet?.setBottomInset(this.hud.sheetCoverage());
+  }
+
+  private showHeroSelect(): void {
+    this.openOverlay('hero', { title: 'ほこりちゃん', className: 'modal--hero', body: heroSelectBody(), buttons: [] });
+  }
+
+  private startStory(): void {
+    this.storyStep = 0;
+    this.showStoryStep();
+  }
+
+  private showStoryStep(): void {
+    const step = INTRO[this.storyStep];
+    if (!step) {
+      this.closeModal();
+      if (!this.save.tutorialDone) this.commit({ ...this.save, tutorialDone: true });
+      return;
+    }
+    step.enter?.(this.pet);
+    this.openOverlay('story', {
+      title: this.storyStep === INTRO.length - 1 ? 'あそびかた' : 'であい',
+      className: 'modal--story',
+      // 下のパネルに出して、机の上のほこりちゃんが目を覚ますところを見せる
+      sheet: true,
+      body: storyBody(step.speaker, this.hero, step.text),
+      buttons: [{ action: 'storyNext', label: step.button, variant: 'primary' }],
+    });
+  }
+
+  private openMap(): void {
+    this.openOverlay('map', {
+      title: 'どこを掃除する？',
+      className: 'modal--map',
+      body: mapBody(this.save, this.now, this.params.speed),
+      buttons: [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
+    });
+  }
+
+  private renderShop(open: boolean): void {
+    const body = shopBody(this.save, this.shopTab);
+    if (!open) {
+      this.hud.updateModalBody(body);
+      return;
+    }
+    this.openOverlay('shop', {
+      title: 'ショップ',
+      className: 'modal--shop',
+      body,
+      buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
+    });
+  }
+
+  private openPlay(): void {
+    this.openOverlay('play', {
+      title: 'あそぶ',
+      className: 'modal--sheet',
+      sheet: true,
+      body: playBody(this.save),
+      buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
     });
   }
 
   // ---- 入力 ----
 
-  private onAction(action: string): void {
+  private onAction(action: string, arg?: string): void {
     this.sound.unlock();
     switch (action) {
       case 'sound': {
@@ -266,34 +433,102 @@ export class Game {
         return;
       }
       case 'help':
-        if (this.hud.modalOpen) return;
+        if (this.hud.blockingModalOpen) return;
         this.sound.play('tap');
-        this.showTutorial(0);
+        this.openOverlay('help', {
+          title: 'あそびかた',
+          className: 'modal--story',
+          body: storyBody('narration', this.hero, HOW_TO),
+          buttons: [{ action: 'closeModal', label: 'とじる', variant: 'primary' }],
+        });
         return;
-      case 'tutorialNext':
+      case 'closeModal':
         this.sound.play('tap');
-        this.showTutorial(this.tutorialStep + 1);
-        return;
-      case 'modalClose':
         this.closeModal();
         return;
+      case 'pickHero':
+        if (arg === 'boy' || arg === 'girl') {
+          this.sound.play('happy');
+          this.commit({ ...this.save, hero: arg });
+          this.closeModal();
+          if (!this.save.tutorialDone) this.startStory();
+        }
+        return;
+      case 'storyNext':
+        this.sound.play('tap');
+        this.storyStep++;
+        this.showStoryStep();
+        return;
     }
 
-    if (this.mode === 'HOME') this.onHomeAction(action);
+    if (this.mode === 'HOME') this.onHomeAction(action, arg);
     else if (this.mode === 'CLEANING') this.onCleaningAction(action);
-    else if (this.mode === 'RESULT' && action === 'resultHome') {
-      this.closeModal();
-      this.goHome();
-    }
+    else if (this.mode === 'RESULT' && action === 'resultHome') this.leaveCleaning();
   }
 
-  private onHomeAction(action: string): void {
-    if (this.hud.modalOpen) return;
+  private onHomeAction(action: string, arg?: string): void {
     switch (action) {
-      case 'goClean':
+      case 'openMap':
         this.sound.play('tap');
-        this.startCleaning();
-        break;
+        this.openMap();
+        return;
+      case 'goSpot': {
+        if (!SPOT_IDS.includes(arg as SpotId)) return;
+        const def = spotDef(arg as SpotId);
+        const started = startSpot(this.save, def, this.now, this.params.speed);
+        if (!started) {
+          this.sound.play('deny');
+          return;
+        }
+        this.sound.play('tap');
+        this.commit(started.save);
+        this.closeModal();
+        this.startCleaning(def, started.dust);
+        return;
+      }
+      case 'openShop':
+        this.sound.play('tap');
+        this.renderShop(true);
+        return;
+      case 'shopTab':
+        if (arg === 'tools' || arg === 'home' || arg === 'accessories') {
+          this.shopTab = arg;
+          this.sound.play('tap');
+          this.renderShop(false);
+        }
+        return;
+      case 'buyTool':
+      case 'buyHome':
+      case 'buyAccessory':
+        this.buy(action, arg);
+        return;
+      case 'openPlay':
+        this.sound.play('tap');
+        this.openPlay();
+        return;
+      case 'wear': {
+        const id = arg === 'none' ? null : ACCESSORY_IDS.includes(arg as AccessoryId) ? (arg as AccessoryId) : undefined;
+        if (id === undefined) return;
+        const next = id === null ? { ...this.save, equippedAccessory: null } : toggleAccessory(this.save, id);
+        this.sound.play('tap');
+        this.commit(next);
+        this.pet?.setView(this.petView());
+        this.hud.updateModalBody(playBody(this.save));
+        return;
+      }
+      case 'shapePreset': {
+        const preset = SHAPE_PRESETS[Number(arg)];
+        if (!preset) return;
+        this.sound.play('happy');
+        this.commit({ ...this.save, shape: { ...preset.shape } });
+        this.pet?.setView(this.petView());
+        this.hud.updateModalBody(playBody(this.save));
+        return;
+      }
+    }
+
+    if (this.hud.blockingModalOpen) return;
+    switch (action) {
       case 'feed': {
         const before = rankFor(this.save.growthXp);
         const { save, fed } = feed(this.save);
@@ -302,38 +537,66 @@ export class Game {
           return;
         }
         this.commit(save);
-        this.pet?.setView({ xp: save.growthXp, level: save.caseLevel, damp: save.damp });
+        this.pet?.setView(this.petView());
         this.pet?.playFeed(fed);
         this.sound.play('feed');
         window.setTimeout(() => this.sound.play('happy'), 1600);
         const after = rankFor(save.growthXp);
         if (after !== before) this.hud.toast(`${after.name}に成長した！`);
-        else if (isCaseFull(save)) this.hud.toast(save.caseLevel < 3 ? 'ケースがいっぱい！拡張しよう' : 'ケースがいっぱい！（MVPの上限）');
-        break;
-      }
-      case 'upgrade': {
-        const { save, ok } = upgradeCase(this.save);
-        if (!ok) {
-          this.sound.play('deny');
-          return;
+        else if (isFull(save)) {
+          this.hud.toast(
+            save.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : save.habitat < 3 ? 'ケースがいっぱい！ショップで大きくしよう' : 'ケースがいっぱい！（今の上限）',
+          );
         }
-        this.commit(save);
-        this.pet?.setView({ xp: save.growthXp, level: save.caseLevel, damp: save.damp });
-        this.pet?.playUpgrade();
-        this.sound.play('upgrade');
-        this.hud.toast(`ケースが広くなった！容量 ${caseCapacity(save.caseLevel)}`);
-        break;
+        return;
       }
       case 'dry': {
         if (!this.save.damp) return;
-        const save = dry(this.save);
-        this.commit(save);
-        this.pet?.setView({ xp: save.growthXp, level: save.caseLevel, damp: save.damp });
+        this.commit(dry(this.save));
+        this.pet?.setView(this.petView());
         this.pet?.playDry();
         this.sound.play('dry');
-        break;
+        return;
       }
     }
+  }
+
+  private buy(action: string, arg?: string): void {
+    let result: { save: SaveData; ok: boolean } = { save: this.save, ok: false };
+    let message = '';
+    if (action === 'buyTool' && arg && arg in TOOLS) {
+      result = buyTool(this.save, arg as ToolId);
+      message = `${TOOLS[arg as ToolId].name}を手に入れた！`;
+    } else if (action === 'buyHome') {
+      const before = this.save.habitat;
+      result = buyHabitat(this.save);
+      const h = result.save.habitat;
+      message = before === 0 ? `${HABITATS[h].name}にお引っこし！` : `${HABITATS[h].name}に広げた！容量 ${HABITATS[h].capacity}`;
+    } else if (action === 'buyAccessory' && ACCESSORY_IDS.includes(arg as AccessoryId)) {
+      result = buyAccessory(this.save, arg as AccessoryId);
+      message = 'さっそく付けてみた！';
+    }
+    if (!result.ok) {
+      this.sound.play('deny');
+      return;
+    }
+    this.commit(result.save);
+    this.sound.play('upgrade');
+    this.hud.bump('coins');
+    this.pet?.setView(this.petView());
+    this.pet?.playHappy();
+    this.hud.toast(message);
+    this.renderShop(false);
+  }
+
+  private onSlider(name: string, value: number, done: boolean): void {
+    if (this.mode !== 'HOME' || this.overlay !== 'play') return;
+    if (name !== 'width' && name !== 'height' && name !== 'fluff') return;
+    const shape: PetShape = clampShape({ ...this.save.shape, [name]: value });
+    this.save = { ...this.save, shape };
+    this.pet?.setView(this.petView());
+    // ドラッグ中は表示だけ更新し、指を離したら保存する
+    if (done) writeSave(this.save);
   }
 
   private onCleaningAction(action: string): void {
@@ -347,48 +610,23 @@ export class Game {
         return;
       }
       this.sound.play('tap');
-      this.hud.showModal({
-        title: '帰宅する？',
+      this.openOverlay('confirm', {
+        title: '帰る？',
         body: `まだ8割集めていないので、お小遣いはもらえないよ。<br>集めたホコリ（${session.collected.size}個）はバッグに入っているよ。`,
         buttons: [
-          { action: 'modalClose', label: '続ける', variant: 'secondary' },
-          { action: 'leaveNow', label: '帰宅する', variant: 'primary' },
+          { action: 'closeModal', label: '続ける', variant: 'secondary' },
+          { action: 'leaveNow', label: '帰る', variant: 'primary' },
         ],
       });
-      this.syncInput();
     } else if (action === 'leaveNow') {
-      this.closeModal();
-      this.goHome();
+      this.leaveCleaning();
     }
   }
 
-  private showTutorial(step: number): void {
-    if (step >= TUTORIAL.length) {
-      this.tutorialStep = -1;
-      this.closeModal();
-      if (!this.save.tutorialDone) this.commit({ ...this.save, tutorialDone: true });
-      return;
-    }
-    this.tutorialStep = step;
-    const t = TUTORIAL[step];
-    const dots = TUTORIAL.map((_, i) => `<i class="${i === step ? 'on' : ''}"></i>`).join('');
-    this.hud.showModal({
-      title: t.title,
-      className: 'modal--tutorial',
-      body: `<div class="tutorial-art tutorial-art--${step}"></div><p>${t.body}</p><div class="dots">${dots}</div>`,
-      buttons: [{ action: 'tutorialNext', label: step === TUTORIAL.length - 1 ? 'はじめる' : '次へ', variant: 'primary' }],
-    });
-    this.syncInput();
-  }
-
-  private closeModal(): void {
-    this.hud.closeModal();
-    this.syncInput();
-  }
-
-  /** モーダル表示中は3D側の入力を止める */
+  /** モーダル表示中は3D側の入力を止める（「あそぶ」パネルの間はなでられる） */
   private syncInput(): void {
     this.cleaning?.setInputEnabled(this.mode === 'CLEANING' && !this.hud.modalOpen);
+    this.pet?.setInputEnabled(this.mode === 'HOME' && (this.overlay === 'none' || this.overlay === 'play'));
   }
 
   private bindLifecycle(): void {
@@ -396,6 +634,7 @@ export class Game {
     window.addEventListener('pointerdown', () => this.sound.unlock(), { capture: true });
     const pause = () => {
       this.cleaning?.cancelInput();
+      this.pet?.cancelInput();
       this.sound.stopHum();
     };
     window.addEventListener('blur', pause);
@@ -414,6 +653,7 @@ export class Game {
     const rect = this.hud.stage.getBoundingClientRect();
     this.renderer.resize(rect.width, rect.height);
     this.scene?.resize(this.renderer.aspect);
+    this.syncSheetInset();
   }
 
   private frame(timeMs: number): void {
@@ -428,6 +668,14 @@ export class Game {
     if (this.cleaning && this.mode === 'CLEANING') {
       const off = this.cleaning.offscreenDust();
       this.hud.setEdgeArrows(off.left, off.right);
+    }
+    // マップを開いている間は積もり具合を1秒ごとに更新する
+    if (this.overlay === 'map') {
+      this.mapRefresh -= dt;
+      if (this.mapRefresh <= 0) {
+        this.mapRefresh = 1;
+        this.hud.updateModalBody(mapBody(this.save, this.now, this.params.speed));
+      }
     }
     if (this.scene) {
       this.scene.update(dt, time);

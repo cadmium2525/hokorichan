@@ -1,16 +1,17 @@
-// 清掃シーン：手続き生成の部屋にホコリを散らし、ドラッグで吸い込む。
+// 清掃シーン：掃除場所のレイアウトにホコリを散らし、なぞって道具で集める。
 
 import * as THREE from 'three';
+import type { Hero, ToolDef } from '../game/catalog.ts';
 import { createRandom, randRange, type Random } from '../game/rng.ts';
 import { Particles } from '../render/particles.ts';
-import { createDustPuff, ringTexture, sparkleTexture, blobShadowTexture, PALETTE } from '../render/proceduralArt.ts';
-import { buildCleaningRoom, type Blocker } from '../render/roomBuilder.ts';
+import { createDustPuff, ringTexture, sparkleTexture, blobShadowTexture } from '../render/proceduralArt.ts';
+import type { Blocker } from '../render/roomBuilder.ts';
+import type { SpotLayout, Surface } from '../render/spotBuilder.ts';
+import { createToolModel } from '../render/toolModels.ts';
 import { createIsoCamera, disposeHierarchy, projectedExtents, type Extents } from '../render/threeUtils.ts';
 import { setupStage } from './sceneKit.ts';
 import type { GameScene } from './types.ts';
 
-const SUCTION_RADIUS = 0.75;
-const SUCK_TIME = 0.28;
 /** 指で隠れないよう、タッチ時は吸引点を少し上にずらす（CSS px） */
 const TOUCH_OFFSET_Y = 28;
 /** 画面の左右この割合に指が入ると、その方向へ部屋がスクロールする */
@@ -30,6 +31,9 @@ type Dust = {
 export type CleaningOptions = {
   seed: number;
   dustCount: number;
+  layout: SpotLayout;
+  tool: ToolDef;
+  hero: Hero;
   /** ポインター入力を受け取る要素（canvas） */
   element: HTMLElement;
   onCollect: (dustId: number) => void;
@@ -42,19 +46,21 @@ export class CleaningScene implements GameScene {
   readonly dustTotal: number;
 
   private readonly opts: CleaningOptions;
-  private readonly half: number;
+  private readonly surface: Surface;
+  private readonly scale: number;
+  private readonly radius: number;
   private readonly dusts: Dust[] = [];
   private readonly particles = new Particles();
   private readonly sparkle = sparkleTexture();
   private readonly ring: THREE.Mesh;
-  private readonly nozzle: THREE.Group;
+  private readonly nozzle: THREE.Object3D;
   private readonly roomBox: THREE.Box3;
   private readonly background: THREE.Texture;
 
-  private readonly point = new THREE.Vector3(1.2, 0, 1.2);
-  private readonly smoothPoint = new THREE.Vector3(1.2, 0, 1.2);
+  private readonly point = new THREE.Vector3();
+  private readonly smoothPoint = new THREE.Vector3();
   private readonly raycaster = new THREE.Raycaster();
-  private readonly floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly floorPlane: THREE.Plane;
   private pointerId: number | null = null;
   private lastPointer: { x: number; y: number; touch: boolean } | null = null;
   private extents: Extents = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
@@ -66,22 +72,29 @@ export class CleaningScene implements GameScene {
   constructor(opts: CleaningOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene);
-    const room = buildCleaningRoom(opts.seed);
-    this.half = room.half;
-    this.scene.add(room.group);
-    this.roomBox = new THREE.Box3(new THREE.Vector3(-room.half - 0.2, 0, -room.half - 0.2), new THREE.Vector3(room.half, 2.8, room.half));
+    const layout = opts.layout;
+    this.surface = layout.surface;
+    this.scale = layout.scale;
+    this.radius = opts.tool.radius * layout.scale;
+    this.scene.add(layout.group);
+    this.roomBox = layout.view;
+    this.floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.surface.y);
+    const s = this.surface;
+    // 最初は面の手前寄りに道具を置いておく
+    this.point.set(s.minX + (s.maxX - s.minX) * 0.7, s.y, s.minZ + (s.maxZ - s.minZ) * 0.7);
+    this.smoothPoint.copy(this.point);
 
     const random = createRandom(opts.seed ^ 0x9e3779b9);
-    this.placeDust(random, opts.dustCount, room.blockers);
+    this.placeDust(random, opts.dustCount, layout.blockers, layout.lint);
     this.dustTotal = this.dusts.length;
 
     this.ring = new THREE.Mesh(
-      new THREE.PlaneGeometry(SUCTION_RADIUS * 2, SUCTION_RADIUS * 2),
+      new THREE.PlaneGeometry(this.radius * 2, this.radius * 2),
       new THREE.MeshBasicMaterial({ map: ringTexture(), transparent: true, depthWrite: false }),
     );
     this.ring.rotation.x = -Math.PI / 2;
-    this.ring.position.y = 0.03;
-    this.nozzle = this.buildNozzle();
+    this.nozzle = createToolModel(opts.tool.id, opts.hero);
+    this.nozzle.scale.multiplyScalar(this.scale);
     this.scene.add(this.ring, this.nozzle, this.particles.group);
 
     this.bindInput();
@@ -89,33 +102,37 @@ export class CleaningScene implements GameScene {
 
   // ---- 生成 ----
 
-  private placeDust(random: Random, count: number, blockers: Blocker[]): void {
+  private placeDust(random: Random, count: number, blockers: Blocker[], lint: boolean): void {
     const geometry = new THREE.IcosahedronGeometry(1, 0);
-    const materials = ['#c3bbd3', '#b3abc6', '#d4cddf', '#bfb3b8'].map(
+    // 洗濯機の糸くずは明るく、服の色がまじる
+    const colors = lint ? ['#dcd6e8', '#cfd9ea', '#e8d6df', '#d3cde0'] : ['#c3bbd3', '#b3abc6', '#d4cddf', '#bfb3b8'];
+    const materials = colors.map(
       (color) => new THREE.MeshLambertMaterial({ color, flatShading: true }),
     );
     const shadowMat = new THREE.MeshBasicMaterial({ map: blobShadowTexture(), transparent: true, depthWrite: false });
     const shadowGeo = new THREE.PlaneGeometry(0.5, 0.5);
     // カメラから見て家具の奥（-X,-Z側）は隠れるので、高さに応じて除外範囲を伸ばす
+    const k = this.scale;
     const hidden = blockers.map((b) => ({
-      minX: b.minX - 0.25 - b.height * 0.8,
-      maxX: b.maxX + 0.25,
-      minZ: b.minZ - 0.25 - b.height * 0.8,
-      maxZ: b.maxZ + 0.25,
+      minX: b.minX - 0.25 * k - b.height * 0.8,
+      maxX: b.maxX + 0.25 * k,
+      minZ: b.minZ - 0.25 * k - b.height * 0.8,
+      maxZ: b.maxZ + 0.25 * k,
     }));
-    const limit = this.half - 0.35;
+    const s = this.surface;
     const homes: THREE.Vector3[] = [];
     for (let attempt = 0; attempt < 4000 && homes.length < count; attempt++) {
-      const x = randRange(random, -limit, limit);
-      const z = randRange(random, -limit, limit);
+      const x = randRange(random, s.minX, s.maxX);
+      const z = randRange(random, s.minZ, s.maxZ);
       if (hidden.some((h) => x > h.minX && x < h.maxX && z > h.minZ && z < h.maxZ)) continue;
-      // 家具が多くて置き場が足りないときは間隔を詰めて個数を確保する
-      const spacing = attempt < 2000 ? 0.5 : 0.32;
+      // 置き場が足りないときは間隔を詰めて個数を確保する
+      const spacing = (attempt < 2000 ? 0.5 : 0.3) * k;
       if (homes.some((p) => (p.x - x) ** 2 + (p.z - z) ** 2 < spacing * spacing)) continue;
-      homes.push(new THREE.Vector3(x, 0, z));
+      homes.push(new THREE.Vector3(x, s.y, z));
     }
     homes.forEach((home, id) => {
       const object = createDustPuff(random, geometry, materials);
+      object.scale.setScalar(k);
       const shadow = new THREE.Mesh(shadowGeo, shadowMat);
       shadow.rotation.x = -Math.PI / 2;
       shadow.position.y = 0.025;
@@ -125,29 +142,6 @@ export class CleaningScene implements GameScene {
       this.scene.add(object);
       this.dusts.push({ id, object, home, state: 'idle', t: 0, phase: random() * Math.PI * 2 });
     });
-  }
-
-  /** 吸引ノズル：小さなヘッドと、カメラ側へ伸びる柄 */
-  private buildNozzle(): THREE.Group {
-    const g = new THREE.Group();
-    const body = new THREE.MeshLambertMaterial({ color: PALETTE.lavenderDeep });
-    const accent = new THREE.MeshLambertMaterial({ color: PALETTE.pink });
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.28), body);
-    head.position.y = 0.08;
-    head.rotation.y = Math.PI / 4;
-    const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.05, 0.08), accent);
-    bumper.position.set(0.1, 0.05, 0.1);
-    bumper.rotation.y = Math.PI / 4;
-    const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.6, 6), new THREE.MeshLambertMaterial({ color: '#e8e2f2' }));
-    // 柄はカメラ側（+X+Z、上）へ傾ける
-    const dir = new THREE.Vector3(0.45, 1, 0.45).normalize();
-    stick.position.copy(dir.clone().multiplyScalar(0.8)).add(new THREE.Vector3(0, 0.1, 0));
-    stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.25, 0.12), accent);
-    grip.position.copy(dir.clone().multiplyScalar(1.6)).add(new THREE.Vector3(0, 0.1, 0));
-    grip.quaternion.copy(stick.quaternion);
-    g.add(head, bumper, stick, grip);
-    return g;
   }
 
   // ---- 入力 ----
@@ -203,8 +197,8 @@ export class CleaningScene implements GameScene {
     this.raycaster.setFromCamera(ndc, this.camera);
     const hit = new THREE.Vector3();
     if (!this.raycaster.ray.intersectPlane(this.floorPlane, hit)) return;
-    const limit = this.half - 0.15;
-    this.point.set(THREE.MathUtils.clamp(hit.x, -limit, limit), 0, THREE.MathUtils.clamp(hit.z, -limit, limit));
+    const s = this.surface;
+    this.point.set(THREE.MathUtils.clamp(hit.x, s.minX, s.maxX), s.y, THREE.MathUtils.clamp(hit.z, s.minZ, s.maxZ));
   }
 
   /** 指が離れた・画面外・タブ切替などで吸引を安全に止める */
@@ -245,8 +239,20 @@ export class CleaningScene implements GameScene {
       halfW = roomHalfW * MIN_VISIBLE_WIDTH;
       halfH = halfW / aspect;
     }
-    const center = (e.minX + e.maxX) / 2;
-    const slack = Math.max(0, roomHalfW - halfW);
+    let center = (e.minX + e.maxX) / 2;
+    let slack = Math.max(0, roomHalfW - halfW);
+    if (this.scale < 1) {
+      // 近景はホコリの積もる面が横に収まるまで引き、面の中央に合わせる（スクロールさせない）
+      const s = this.surface;
+      const se = projectedExtents(this.camera, new THREE.Box3(new THREE.Vector3(s.minX, s.y, s.minZ), new THREE.Vector3(s.maxX, s.y + 0.3 * this.scale, s.maxZ)));
+      const need = ((se.maxX - se.minX) / 2) * 1.12;
+      if (halfW < need) {
+        halfW = need;
+        halfH = halfW / aspect;
+      }
+      center = (se.minX + se.maxX) / 2;
+      slack = 0;
+    }
     this.view = {
       halfW,
       halfH,
@@ -303,39 +309,46 @@ export class CleaningScene implements GameScene {
     const active = this.isSucking;
     if (active) this.edgeScroll(dt);
     this.smoothPoint.lerp(this.point, Math.min(1, dt * 18));
-    this.ring.position.set(this.smoothPoint.x, 0.03, this.smoothPoint.z);
+    const y = this.surface.y;
+    this.ring.position.set(this.smoothPoint.x, y + 0.03 * this.scale, this.smoothPoint.z);
     const pulse = active ? 1 + Math.sin(time * 14) * 0.06 : 1;
     this.ring.scale.setScalar(pulse);
     (this.ring.material as THREE.MeshBasicMaterial).opacity = active ? 1 : 0.45;
-    this.nozzle.position.set(this.smoothPoint.x, active ? 0 : 0.06, this.smoothPoint.z);
+    this.nozzle.position.set(this.smoothPoint.x, y + (active ? 0 : 0.08 * this.scale), this.smoothPoint.z);
 
-    const suction = new THREE.Vector3(this.smoothPoint.x, 0.12, this.smoothPoint.z);
+    const tool = this.opts.tool;
+    const suction = new THREE.Vector3(this.smoothPoint.x, y + 0.12 * this.scale, this.smoothPoint.z);
     for (const d of this.dusts) {
       if (d.state === 'gone') continue;
       if (d.state === 'idle') {
         // ふわふわ揺れて見つけやすく
-        d.object.position.y = Math.max(0, Math.sin(time * 2 + d.phase)) * 0.04;
         const dx = d.home.x - this.smoothPoint.x;
         const dz = d.home.z - this.smoothPoint.z;
         const dist = Math.hypot(dx, dz);
-        if (active && dist < SUCTION_RADIUS) {
+        if (active && dist < this.radius) {
           d.state = 'sucking';
           d.t = 0;
-        } else if (active && dist < SUCTION_RADIUS * 1.7) {
+        } else if (active && tool.pull > 0 && dist < this.radius * tool.pull) {
+          // 掃除機は周りのホコリを少しずつ吸い寄せる
+          d.home.x -= dx * Math.min(1, dt * 2.5);
+          d.home.z -= dz * Math.min(1, dt * 2.5);
+          d.object.rotation.y += dt * 6;
+        } else if (active && dist < this.radius * 1.7) {
           d.object.rotation.y += dt * 4;
         }
+        d.object.position.set(d.home.x, y + Math.max(0, Math.sin(time * 2 + d.phase)) * 0.04 * this.scale, d.home.z);
         continue;
       }
       // 吸い込まれ中は止めずに最後まで進める（離しても重複・取りこぼしなし）
-      d.t += dt / SUCK_TIME;
+      d.t += dt / tool.pickTime;
       const k = Math.min(1, d.t);
       d.object.position.lerpVectors(d.home, suction, k * k);
-      d.object.scale.setScalar(Math.max(0.05, 1 - k * 0.9));
+      d.object.scale.setScalar(this.scale * Math.max(0.05, 1 - k * 0.9));
       d.object.rotation.y += dt * 18;
       if (k >= 1) {
         d.state = 'gone';
         this.scene.remove(d.object);
-        this.particles.burst(this.sparkle, suction.clone().setY(0.35), 5, 1.4, 0.2);
+        this.particles.burst(this.sparkle, suction.clone().setY(y + 0.35 * this.scale), 5, 1.4 * this.scale, 0.2 * this.scale);
         this.opts.onCollect(d.id);
       }
     }

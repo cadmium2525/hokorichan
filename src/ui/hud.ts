@@ -1,7 +1,11 @@
 // HTML/CSSのHUD。WebGLには文字を描かず、表示と入力の窓口をここに集める。
 
+import { pixelArt } from './sprites.ts';
+
 export type ButtonSpec = {
   action: string;
+  /** data-arg として渡す追加情報（購入する商品IDなど） */
+  arg?: string;
   label: string;
   sub?: string;
   variant?: 'primary' | 'secondary' | 'accent' | 'water';
@@ -13,21 +17,11 @@ export type ModalSpec = {
   body: string;
   buttons: ButtonSpec[];
   className?: string;
+  /** 画面下に出すパネル。背景を暗くせず、上の3Dを触れるままにする */
+  sheet?: boolean;
 };
 
-/** ドット絵アイコンをSVGで生成（画像ファイル不要） */
-function pixelIcon(rows: string[], colors: Record<string, string>): string {
-  const h = rows.length;
-  const w = rows[0].length;
-  let rects = '';
-  rows.forEach((row, y) => {
-    for (let x = 0; x < w; x++) {
-      const c = colors[row[x]];
-      if (c) rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${c}"/>`;
-    }
-  });
-  return `<svg class="px-icon" viewBox="0 0 ${w} ${h}" shape-rendering="crispEdges" aria-hidden="true">${rects}</svg>`;
-}
+const pixelIcon = (rows: string[], colors: Record<string, string>) => pixelArt(rows, colors);
 
 const ICONS = {
   coin: pixelIcon(
@@ -52,13 +46,14 @@ const ICONS = {
   ),
 };
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 
-function buttonHtml(b: ButtonSpec): string {
+export function buttonHtml(b: ButtonSpec): string {
   const sub = b.sub ? `<span class="btn__sub">${escapeHtml(b.sub)}</span>` : '';
-  return `<button type="button" class="btn btn--${b.variant ?? 'secondary'}" data-action="${b.action}" ${
+  const arg = b.arg ? ` data-arg="${escapeHtml(b.arg)}"` : '';
+  return `<button type="button" class="btn btn--${b.variant ?? 'secondary'}" data-action="${b.action}"${arg} ${
     b.disabled ? 'disabled' : ''
   }><span class="btn__label">${escapeHtml(b.label)}</span>${sub}</button>`;
 }
@@ -69,8 +64,13 @@ export class Hud {
   private readonly el: Record<string, HTMLElement> = {};
   private toastTimer = 0;
   private lastActions = '';
+  private modalBody = '';
 
-  constructor(root: HTMLElement, onAction: (action: string) => void) {
+  constructor(
+    root: HTMLElement,
+    onAction: (action: string, arg?: string) => void,
+    onInput?: (name: string, value: number, done: boolean) => void,
+  ) {
     root.innerHTML = `
       <div class="app">
         <header class="hud-top">
@@ -102,8 +102,15 @@ export class Hud {
     root.addEventListener('click', (e) => {
       const target = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if (!target || target.disabled) return;
-      onAction(target.dataset.action as string);
+      onAction(target.dataset.action as string, target.dataset.arg);
     });
+    // スライダー：動かしている間は input、指を離したら change
+    const slider = (done: boolean) => (e: Event) => {
+      const input = e.target as HTMLInputElement;
+      if (input.type === 'range' && input.name) onInput?.(input.name, Number(input.value), done);
+    };
+    root.addEventListener('input', slider(false));
+    root.addEventListener('change', slider(true));
   }
 
   setWallet(coins: number, bag: number, soundEnabled: boolean): void {
@@ -120,13 +127,13 @@ export class Hud {
     pill.classList.add('pill--bump');
   }
 
-  setCleaningStatus(collected: number, total: number, required: number): void {
+  setCleaningStatus(title: string, collected: number, total: number, required: number): void {
     const pct = total > 0 ? (collected / total) * 100 : 0;
     const goal = total > 0 ? (required / total) * 100 : 80;
     const done = collected >= required;
     this.el.status.innerHTML = `
       <div class="status__line">
-        <span class="status__title">おそうじ中</span>
+        <span class="status__title">${escapeHtml(title)}</span>
         <span class="status__value">${collected} / ${total}</span>
       </div>
       <div class="bar ${done ? 'bar--done' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${collected}">
@@ -135,13 +142,13 @@ export class Hud {
       </div>`;
   }
 
-  setPetStatus(rank: string, xp: number, capacity: number, level: number, damp: boolean): void {
+  setPetStatus(rank: string, xp: number, capacity: number, home: string, damp: boolean): void {
     const pct = Math.min(100, (xp / capacity) * 100);
     const full = xp >= capacity;
     this.el.status.innerHTML = `
       <div class="status__line">
         <span class="status__title">ほこりちゃん <small>${escapeHtml(rank)}</small>${damp ? '<em class="tag tag--damp">しっとり</em>' : ''}</span>
-        <span class="status__value">ケースLv${level}</span>
+        <span class="status__value">${escapeHtml(home)}</span>
       </div>
       <div class="bar bar--xp ${full ? 'bar--full' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="${capacity}" aria-valuenow="${xp}">
         <div class="bar__fill" style="width:${pct}%"></div>
@@ -194,11 +201,13 @@ export class Hud {
 
   showModal(spec: ModalSpec): void {
     const modal = this.el.modal;
+    modal.classList.toggle('modal-layer--sheet', spec.sheet === true);
+    this.modalBody = spec.body;
     modal.innerHTML = `
       <div class="modal ${spec.className ?? ''}" role="dialog" aria-modal="true" aria-label="${escapeHtml(spec.title)}">
         <h2 class="modal__title">${escapeHtml(spec.title)}</h2>
         <div class="modal__body">${spec.body}</div>
-        <div class="modal__actions">${spec.buttons.map(buttonHtml).join('')}</div>
+        ${spec.buttons.length ? `<div class="modal__actions">${spec.buttons.map(buttonHtml).join('')}</div>` : ''}
       </div>`;
     modal.hidden = false;
   }
@@ -208,7 +217,30 @@ export class Hud {
     this.el.modal.innerHTML = '';
   }
 
+  /** 開いているモーダルの本文だけを書き換える（スクロール位置を保つ） */
+  updateModalBody(body: string): void {
+    const el = this.el.modal.querySelector<HTMLElement>('.modal__body');
+    if (!el || body === this.modalBody) return;
+    this.modalBody = body;
+    el.innerHTML = body;
+  }
+
+  /** 下のパネルが3D画面（stage）の高さのどれだけを覆っているか */
+  sheetCoverage(): number {
+    if (this.el.modal.hidden || !this.el.modal.classList.contains('modal-layer--sheet')) return 0;
+    const sheet = this.el.modal.querySelector<HTMLElement>('.modal');
+    if (!sheet) return 0;
+    const stage = this.stage.getBoundingClientRect();
+    const top = sheet.getBoundingClientRect().top;
+    return stage.height > 0 ? Math.min(1, Math.max(0, (stage.bottom - top) / stage.height)) : 0;
+  }
+
   get modalOpen(): boolean {
     return !this.el.modal.hidden;
+  }
+
+  /** 画面全体を覆うモーダル（シートではない）が開いているか */
+  get blockingModalOpen(): boolean {
+    return this.modalOpen && !this.el.modal.classList.contains('modal-layer--sheet');
   }
 }

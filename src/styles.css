@@ -337,7 +337,8 @@ body {
 
 /* 奇数個のときは先頭を横いっぱいに */
 .actions[data-count='1'] > :first-child,
-.actions[data-count='3'] > :first-child {
+.actions[data-count='3'] > :first-child,
+.actions[data-count='5'] > :first-child {
   grid-column: 1 / -1;
 }
 
@@ -509,6 +510,388 @@ body {
 
 .dots i.on {
   background: var(--pink-deep);
+}
+
+/* ---- v0.2: 主人公・お話・マップ・ショップ・あそぶ ---- */
+
+.px-icon--lg {
+  width: 30px;
+  height: 30px;
+}
+
+.sprite {
+  width: 32px;
+  height: 48px;
+  flex: none;
+}
+
+.sprite--lg {
+  width: 56px;
+  height: 84px;
+}
+
+.sprite--xl {
+  width: 72px;
+  height: 108px;
+}
+
+.hero-pick {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.hero-card {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  min-height: 140px;
+  padding: 12px 6px;
+  border: 3px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+  font: inherit;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hero-card:active {
+  transform: translateY(2px);
+  border-color: var(--pink);
+}
+
+.story {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.story__who {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+.bubble {
+  position: relative;
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #fff6f0;
+  border: 2px solid var(--line);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.story--narration .bubble {
+  background: transparent;
+  border: 0;
+  text-align: center;
+}
+
+.bubble--mother {
+  margin: 8px 0 10px;
+  font-size: 14px;
+}
+
+.allowance {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+
+.allowance__coin {
+  align-self: center;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #fff3c4;
+  border: 2px solid #f2c94c;
+  color: #b07a12;
+  font-size: 20px;
+  font-weight: 800;
+  animation: coin-hop 0.8s ease-out;
+}
+
+@keyframes coin-hop {
+  0% {
+    transform: translate(28px, 10px) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: translate(0, -8px) scale(1.1);
+    opacity: 1;
+  }
+}
+
+.map-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.map-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 12px;
+  background: #fff3e0;
+  border: 2px solid var(--line);
+}
+
+.spots {
+  display: grid;
+  gap: 8px;
+}
+
+.spot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.spot:active:not([disabled]) {
+  transform: translateY(2px);
+  border-color: var(--pink);
+}
+
+.spot[disabled] {
+  cursor: default;
+  background: #f7f1ea;
+}
+
+.spot--locked {
+  opacity: 0.55;
+}
+
+.spot__text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.spot__name {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.spot__desc {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.meter {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: #efe3d6;
+  overflow: hidden;
+}
+
+.meter > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #c3bbd3, #a79fb8);
+}
+
+.note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 4px;
+  border-radius: 14px;
+  background: #f6e7d6;
+}
+
+.tab {
+  flex: 1;
+  white-space: nowrap;
+  min-height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tab--on {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 0 rgba(90, 70, 54, 0.12);
+}
+
+.items {
+  display: grid;
+  gap: 8px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.item__text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.item__text small {
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+.item .btn {
+  flex: none;
+  min-width: 72px;
+  min-height: 46px;
+  padding: 4px 8px;
+}
+
+.owned {
+  flex: none;
+  min-width: 72px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lavender-deep);
+  text-align: center;
+}
+
+.case-icon {
+  width: 30px;
+  height: 26px;
+  flex: none;
+  border: 3px solid #bfe0f6;
+  border-bottom: 6px solid var(--wood);
+  border-radius: 4px;
+}
+
+.row-title {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip--on {
+  border-color: var(--pink-deep);
+  background: #ffeef3;
+}
+
+.slider {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.slider input {
+  width: 100%;
+  height: 32px;
+  accent-color: var(--pink-deep);
+  touch-action: pan-x;
+}
+
+/* 「あそぶ」は画面下のパネル。上の3Dは暗くせず、なでられるままにする */
+.modal-layer--sheet {
+  place-items: end stretch;
+  padding: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.modal-layer--sheet .modal {
+  max-width: none;
+  max-height: 46%;
+  padding-top: 12px;
+  border-radius: 20px 20px 0 0;
+  border-bottom: 0;
+  padding-bottom: calc(var(--safe-bottom) + 12px);
+  pointer-events: auto;
+  animation: sheet-in 0.22s ease-out;
+}
+
+.modal-layer--sheet .modal__title {
+  margin-bottom: 4px;
+  font-size: 16px;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(40%);
+    opacity: 0;
+  }
+}
+
+.modal--map .modal__body,
+.modal--shop .modal__body {
+  max-height: 62vh;
+  max-height: 62dvh;
+  overflow: auto;
 }
 
 /* チュートリアルの小さな挿絵（CSSで描く） */
