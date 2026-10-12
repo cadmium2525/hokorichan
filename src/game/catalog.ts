@@ -321,7 +321,7 @@ export const RAINY = {
   /** 3章で、駅と学校が開いてから、ほこりちゃんがこれだけ育つと梅雨が来る */
   xp: 2500,
   /** 市役所の「乾燥パウダー大作戦」に届けるホコリ（乾いた粉で湿気を吸う） */
-  need: { flour: 20, kosa: 20, chalk: 20 } as Partial<Record<DustType, number>>,
+  need: { flour: 20, soot: 20, chalk: 20 } as Partial<Record<DustType, number>>,
   reward: 500,
   rep: 5,
 };
