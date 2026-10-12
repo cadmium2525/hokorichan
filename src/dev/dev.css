@@ -1,0 +1,153 @@
+:root {
+  color-scheme: light;
+  font-family: 'Hiragino Sans', 'Noto Sans JP', system-ui, sans-serif;
+  color: #5a4636;
+  background: #fbeee0;
+}
+
+body {
+  margin: 0;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
+}
+
+h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+h3 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: #8a7a70;
+}
+
+section {
+  margin: 14px 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fffaf4;
+  border: 2px solid #ecdccb;
+}
+
+.warn {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: #c95f72;
+}
+
+.msg {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #e8f6ee;
+  color: #2f7a52;
+  font-size: 13px;
+}
+
+.summary {
+  margin: 0;
+  font-size: 14px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.grid--small {
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+}
+
+button,
+.go,
+.file {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid #ecdccb;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button small {
+  font-size: 11px;
+  color: #8a7a70;
+}
+
+.go {
+  background: #c7b4e6;
+  border-color: #9a86c6;
+  font-weight: 700;
+}
+
+.primary {
+  margin-top: 12px;
+  background: #f4a7b9;
+  border-color: #d9798f;
+  font-weight: 700;
+}
+
+.danger {
+  border-color: #f2635a;
+  color: #c0392b;
+}
+
+.file input {
+  display: none;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.fields label {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+input[type='number'],
+select {
+  padding: 6px;
+  border-radius: 8px;
+  border: 2px solid #ecdccb;
+  font: inherit;
+}
+
+.events {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  height: 220px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  border-radius: 8px;
+  border: 2px solid #ecdccb;
+}
