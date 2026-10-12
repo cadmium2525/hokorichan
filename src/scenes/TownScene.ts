@@ -239,16 +239,42 @@ export class TownScene implements GameScene {
     const goal = this.nearestFree(this.cellOf(to));
     const cost = new Float32Array(n * n).fill(Infinity);
     const prev = new Int32Array(n * n).fill(-1);
-    const open: number[] = [start];
     const est = (i: number) => Math.hypot((i % n) - (goal % n), Math.floor(i / n) - Math.floor(goal / n));
     cost[start] = 0;
     const done = new Uint8Array(n * n);
-    while (open.length) {
-      // 小さな格子なので、いちばん良い候補を線形に探せば十分
-      let bi = 0;
-      for (let k = 1; k < open.length; k++) if (cost[open[k]] + est(open[k]) < cost[open[bi]] + est(open[bi])) bi = k;
-      const cur = open[bi];
-      open.splice(bi, 1);
+    // 二分ヒープ（[評価値, マス]）
+    const heap: Array<[number, number]> = [[est(start), start]];
+    const push = (item: [number, number]) => {
+      heap.push(item);
+      let i = heap.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (heap[p][0] <= heap[i][0]) break;
+        [heap[p], heap[i]] = [heap[i], heap[p]];
+        i = p;
+      }
+    };
+    const pop = (): [number, number] => {
+      const top = heap[0];
+      const last = heap.pop()!;
+      if (heap.length) {
+        heap[0] = last;
+        let i = 0;
+        for (;;) {
+          const l = i * 2 + 1;
+          const r = l + 1;
+          let m = i;
+          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+          if (m === i) break;
+          [heap[m], heap[i]] = [heap[i], heap[m]];
+          i = m;
+        }
+      }
+      return top;
+    };
+    while (heap.length) {
+      const cur = pop()[1];
       if (cur === goal) break;
       if (done[cur]) continue;
       done[cur] = 1;
@@ -268,7 +294,7 @@ export class TownScene implements GameScene {
           if (c < cost[j]) {
             cost[j] = c;
             prev[j] = cur;
-            open.push(j);
+            push([c + est(j), j]);
           }
         }
       }
