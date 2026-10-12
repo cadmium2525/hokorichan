@@ -2,6 +2,7 @@
 
 import {
   ACCESSORY_IDS,
+  CONTEST_MAX,
   DUST_TYPES,
   LOST_ITEMS,
   PERSON_IDS,
@@ -218,7 +219,8 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     requestSeq: Math.max(toCount(data.requestSeq, 0), ...toRequests(data.requests).map((r) => r.id)),
     events: toEvents(data.events),
     dex: toDex(data.dex),
-    contestBest: Math.min(toCount(data.contestBest, 0), 999),
+    contestBest: Math.min(toCount(data.contestBest, 0), CONTEST_MAX),
+    contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }
 

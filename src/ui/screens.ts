@@ -17,6 +17,7 @@ import {
   LAND_PRICE,
   LOST_ITEMS,
   CONTEST,
+  CONTEST_MAX,
   PEOPLE,
   type Area,
   type DustType,
@@ -300,7 +301,7 @@ function requestHtml(save: SaveData, r: Request): string {
     </div>`;
 }
 
-export function boardBody(save: SaveData, minutesToNext: number): string {
+export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0): string {
   const list = save.requests.map((r) => requestHtml(save, r)).join('');
   const next =
     save.requests.length < REQUEST_MAX ? `<p class="note">次の依頼まで あと${Math.max(1, minutesToNext)}分</p>` : '<p class="note">依頼は3件まで。こなすと新しい依頼が届くよ</p>';
@@ -309,7 +310,7 @@ export function boardBody(save: SaveData, minutesToNext: number): string {
     save.habitat >= 4 && nextArea
       ? `<p class="note">★${AREA_REP[nextArea]}になると「${escapeHtml(AREA_NAMES[nextArea])}」を紹介してもらえる</p>`
       : '';
-  const poster = save.events.includes('contestNotice') ? contestPoster(save) : '';
+  const poster = save.events.includes('contestNotice') ? contestPoster(save, contestWait) : '';
   return `
     ${poster}
     <div class="rep">評判 <b>★${save.rep}</b></div>
@@ -358,15 +359,19 @@ export function dexBody(save: SaveData): string {
 
 // ---- 大掃除大会 ----
 
-export function contestPoster(save: SaveData): string {
+export function contestPoster(save: SaveData, wait: number): string {
   const won = save.events.includes('contestWon');
   const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+  const button =
+    wait > 0
+      ? `<button type="button" class="btn btn--secondary" disabled><span class="btn__label">次の大会まで あと${wait}分</span></button>`
+      : `<button type="button" class="btn btn--primary" data-action="enterContest"><span class="btn__label">${won ? 'もう一度出る' : '出場する'}</span><span class="btn__sub">${won ? '自己ベストに挑戦' : `${CONTEST.seconds}秒・ほこりちゃんは審査員席`}</span></button>`;
   return `
     <div class="poster">
       <div class="poster__title">町内会 大掃除大会</div>
-      <p>${CONTEST.seconds}秒で、商店街通りのホコリをいちばん多く集めたチームが優勝！<br>風でホコリが次々に飛んでくるよ。ほこりちゃんも一緒に出られる。</p>
-      <p class="note">いちばん強い「${escapeHtml(CONTEST.rivals[CONTEST.rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}</p>
-      <button type="button" class="btn btn--primary" data-action="enterContest"><span class="btn__label">${won ? 'もう一度出る' : '出場する'}</span><span class="btn__sub">${won ? '自己ベストに挑戦' : '何度でも出られる'}</span></button>
+      <p>${CONTEST.seconds}秒のあいだに、風で${CONTEST.waves.length}回ホコリが飛んでくる（ぜんぶで${CONTEST_MAX}個）。<br>いちばん多く集めたチームが優勝！</p>
+      <p class="note">いちばん強い「${escapeHtml(CONTEST.rivals[CONTEST.rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}${won ? '' : `<br>初優勝で${CONTEST.firstWinBonus}コインと★${CONTEST.winRep}`}</p>
+      ${button}
     </div>`;
 }
 
@@ -380,7 +385,7 @@ export function contestResultBody(opts: { hero: Hero; score: number; rank: numbe
       <div class="allowance__coin">+${opts.prize}</div>
       ${characterSprite('grandma', 'sprite sprite--lg', { pose: 'give', flip: true })}
     </div>
-    <div class="bubble bubble--mother">町内会長「${opts.won ? '優勝はほこりちゃんチーム！ おめでとう！' : `${opts.rank}位！ よくがんばったわね。またいつでも出てちょうだい`}」</div>
+    <div class="bubble bubble--mother">町内会長「${opts.won ? '優勝はほこりちゃんチーム！ おめでとう！' : `${opts.rank}位！ よくがんばったわね。また次の大会に出てちょうだい`}」</div>
     <ol class="ranking">${rows}</ol>
     ${opts.best ? '<p class="note">自己ベスト更新！</p>' : ''}`;
 }

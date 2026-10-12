@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CONTEST, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { CONTEST, CONTEST_MAX, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   contestDue,
   contestRanking,
   contestResult,
+  contestWaitMinutes,
+  enterContest,
   dexAdd,
   dexProgress,
   bestTool,
@@ -313,7 +315,7 @@ test('大会のおしらせは2章・成長・評判がそろってから一度�
   assert.equal(contestDue(addEvent(base, 'contestNotice')), false);
 });
 
-test('大会：同点ではライバルが上、超えれば優勝。初優勝だけ評判が増える', () => {
+test('大会：同点ではライバルが上、超えれば優勝。初優勝だけごほうびと評判', () => {
   const top = Math.max(...CONTEST.rivals.map((r) => r.score));
   assert.equal(contestRanking(top)[0].you, false);
   assert.equal(contestRanking(top + 1)[0].you, true);
@@ -325,15 +327,34 @@ test('大会：同点ではライバルが上、超えれば優勝。初優勝�
   const win = contestResult(s0, top + 1);
   assert.equal(win.rank, 1);
   assert.equal(win.firstWin, true);
+  assert.equal(win.prize, CONTEST.prizes[0] + CONTEST.firstWinBonus);
   assert.equal(win.save.rep, 8 + CONTEST.winRep);
   assert.equal(win.save.contestBest, top + 1);
   assert.ok(win.save.events.includes('contestWon'));
   const again = contestResult(win.save, top + 2);
   assert.equal(again.firstWin, false);
+  assert.equal(again.prize, CONTEST.prizes[0]);
   assert.equal(again.save.rep, win.save.rep);
   assert.equal(again.best, true);
-  // 範囲外の点数は丸める
-  assert.equal(contestResult(s0, 9999).save.contestBest, CONTEST.maxScore);
+  // 満点より多い点数は丸める
+  assert.equal(contestResult(s0, 9999).save.contestBest, CONTEST_MAX);
+});
+
+test('大会は出ると次の大会まで待つ（途中でやめても同じ）', () => {
+  const MIN = 60_000;
+  const s0 = addEvent(createInitialSave(), 'contestNotice');
+  assert.equal(enterContest(createInitialSave(), 0).ok, false);
+  const a = enterContest(s0, 1000 * MIN);
+  assert.equal(a.ok, true);
+  assert.equal(contestWaitMinutes(a.save, 1000 * MIN), CONTEST.cooldownMinutes);
+  assert.equal(enterContest(a.save, 1010 * MIN).ok, false);
+  assert.equal(contestWaitMinutes(a.save, 1010 * MIN), CONTEST.cooldownMinutes - 10);
+  assert.equal(enterContest(a.save, (1000 + CONTEST.cooldownMinutes) * MIN).ok, true);
+});
+
+test('大会の満点は風の回数ぶんの合計で、ライバルは満点に届かない', () => {
+  assert.equal(CONTEST_MAX, CONTEST.waves.reduce((s, w) => s + w.count, 0));
+  assert.ok(Math.max(...CONTEST.rivals.map((r) => r.score)) < CONTEST_MAX);
 });
 
 test('図鑑は同じものを二度載せない', () => {

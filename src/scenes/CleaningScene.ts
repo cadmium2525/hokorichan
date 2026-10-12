@@ -58,6 +58,8 @@ export type CleaningOptions = {
   /** ポインター入力を受け取る要素（canvas） */
   element: HTMLElement;
   onCollect: (dustId: number) => void;
+  /** 風で流されて面の外へ出てしまった（大会用） */
+  onMiss?: (dustId: number) => void;
   onSuctionChange?: (active: boolean) => void;
 };
 
@@ -92,6 +94,8 @@ export class CleaningScene implements GameScene {
   private helper: { model: HokorichanModel; pos: THREE.Vector3; size: number; speed: number; radius: number; munch: number } | null = null;
   /** 部屋の掃除では主人公が道具を持って立つ（近景では道具だけ） */
   private heroSprite: CharacterSprite | null = null;
+  /** 風（ワールド単位/秒）。ホコリが流され、面の外へ出ると取りこぼし */
+  private wind = new THREE.Vector2();
   private heroDrift = 0;
   private lowWidth = 260;
   private readonly lastTip = new THREE.Vector3();
@@ -261,6 +265,10 @@ export class CleaningScene implements GameScene {
     h.munch = 1.2;
     this.particles.burst(this.sparkle, h.pos.clone().setY(this.surface.y + h.size), 14, 2.4 * this.scale, 0.3 * this.scale);
     return n;
+  }
+
+  setWind(x: number, z: number): void {
+    this.wind.set(x, z);
   }
 
   /** まだ残っているホコリの数 */
@@ -490,6 +498,22 @@ export class CleaningScene implements GameScene {
           d.object.rotation.y += dt * 6;
         } else if (active && dist < this.radius * 1.7) {
           d.object.rotation.y += dt * 4;
+        }
+        if (this.wind.lengthSq() > 0) {
+          // 1個ずつ少し速さを変えて流す
+          const k = 0.75 + 0.5 * Math.abs(Math.sin(d.phase * 3.1));
+          d.home.x += this.wind.x * k * dt;
+          d.home.z += this.wind.y * k * dt;
+          d.object.rotation.y += dt * 3;
+          const sf = this.surface;
+          const m = 0.25;
+          if (d.home.x < sf.minX - m || d.home.x > sf.maxX + m || d.home.z < sf.minZ - m || d.home.z > sf.maxZ + m) {
+            d.state = 'gone';
+            this.scene.remove(d.object);
+            this.particles.burst(this.sparkle, d.home.clone().setY(y + 0.2), 3, 0.6, 0.1);
+            this.opts.onMiss?.(d.id);
+            continue;
+          }
         }
         d.object.position.set(d.home.x, y + Math.max(0, Math.sin(time * 2 + d.phase)) * 0.04 * this.scale, d.home.z);
         continue;

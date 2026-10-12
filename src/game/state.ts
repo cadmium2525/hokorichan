@@ -7,6 +7,7 @@ import {
   AREA_REP,
   COLLECT_LINES,
   CONTEST,
+  CONTEST_MAX,
   CONTEST_REP,
   CONTEST_XP,
   DUST_TYPES,
@@ -106,6 +107,8 @@ export type SaveData = {
   dex: Dex;
   /** 大掃除大会の自己ベスト（集めた数） */
   contestBest: number;
+  /** 最後に大会に出た時刻（次の大会まで待つ） */
+  contestAt: number;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -157,6 +160,7 @@ export function createInitialSave(): SaveData {
     events: [],
     dex: { dust: [], items: [], people: [] },
     contestBest: 0,
+    contestAt: 0,
   };
 }
 
@@ -205,17 +209,30 @@ export function contestRanking(score: number, youName = 'ほこりちゃんチ�
   return list.sort((a, b) => b.score - a.score || (a.you ? 1 : 0) - (b.you ? 1 : 0));
 }
 
-/** 大会の結果を反映する。賞金・自己ベスト・初優勝（評判と出来事） */
+/** 次の大会までの残り分（0なら出られる） */
+export function contestWaitMinutes(save: SaveData, now: number, speed = 1): number {
+  if (save.contestAt <= 0) return 0;
+  const passed = ((now - save.contestAt) / MINUTE) * speed;
+  return Math.max(0, Math.ceil(CONTEST.cooldownMinutes - passed));
+}
+
+/** 出場する（出た時刻を記録。途中でやめても次の大会まで待つ） */
+export function enterContest(save: SaveData, now: number, speed = 1): { save: SaveData; ok: boolean } {
+  if (!hasEvent(save, 'contestNotice') || contestWaitMinutes(save, now, speed) > 0) return { save, ok: false };
+  return { save: { ...save, contestAt: now }, ok: true };
+}
+
+/** 大会の結果を反映する。賞金・自己ベスト・初優勝（ごほうび・評判・出来事） */
 export function contestResult(
   save: SaveData,
   score: number,
 ): { save: SaveData; rank: number; prize: number; won: boolean; firstWin: boolean; best: boolean } {
-  const s = Math.max(0, Math.min(Math.floor(score), CONTEST.maxScore));
+  const s = Math.max(0, Math.min(Math.floor(score), CONTEST_MAX));
   const ranking = contestRanking(s);
   const rank = ranking.findIndex((e) => e.you) + 1;
-  const prize = CONTEST.prizes[rank - 1] ?? 0;
   const won = rank === 1;
   const firstWin = won && !hasEvent(save, 'contestWon');
+  const prize = (CONTEST.prizes[rank - 1] ?? 0) + (firstWin ? CONTEST.firstWinBonus : 0);
   let next: SaveData = { ...save, coins: save.coins + prize, contestBest: Math.max(save.contestBest, s) };
   if (firstWin) next = addEvent({ ...next, rep: next.rep + CONTEST.winRep }, 'contestWon');
   return { save: next, rank, prize, won, firstWin, best: s > save.contestBest };

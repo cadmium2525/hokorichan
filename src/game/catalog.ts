@@ -215,26 +215,33 @@ export type Rival = { name: string; score: number };
 
 export const CONTEST = {
   /** 制限時間（秒） */
-  seconds: 75,
-  /** はじめに通りに散らばっているホコリの数 */
-  dust: 30,
-  /** 残りがこれより減ると、風で次のホコリが飛んでくる */
-  refillBelow: 12,
-  refill: 10,
-  /** 点数の上限（保存データの丸め用） */
-  maxScore: 999,
+  seconds: 45,
+  /** 風でホコリが飛んでくるタイミング（開始からの秒）と数。合計が満点 */
+  waves: [
+    { at: 0, count: 15 },
+    { at: 15, count: 15 },
+    { at: 30, count: 15 },
+  ] as ReadonlyArray<{ at: number; count: number }>,
   mix: { cotton: 4, sand: 3, pollen: 2, fur: 2, flour: 1, lint: 1 } as Partial<Record<DustType, number>>,
-  /** ほかのチーム（点数は制限時間内に集めたホコリの数）。いちばん上を超えれば優勝 */
+  /** 風の強さ（ワールド単位/秒）。ホコリが流され、通りの外へ出たら取りこぼし */
+  wind: 0.45,
+  /** ほかのチーム（点数は集めたホコリの数）。いちばん上を超えれば優勝 */
   rivals: [
-    { name: '八百屋さんチーム', score: 40 },
-    { name: '小学校のPTA', score: 60 },
-    { name: '町内会 青年部', score: 80 },
+    { name: '八百屋さんチーム', score: 20 },
+    { name: '小学校のPTA', score: 27 },
+    { name: '町内会 青年部', score: 34 },
   ] as readonly Rival[],
-  /** 順位ごとの賞金（1位〜4位） */
-  prizes: [300, 120, 80, 50] as const,
-  /** 初優勝でもらえる評判 */
+  /** 順位ごとの賞金（1位〜4位）。ふだんの掃除1回ぶんくらい */
+  prizes: [40, 20, 10, 5] as const,
+  /** 初優勝のごほうび */
+  firstWinBonus: 300,
   winRep: 3,
+  /** 次の大会までの待ち時間（実時間・分）。くり返して稼げないように */
+  cooldownMinutes: 60,
 };
+
+/** 大会の満点（飛んでくるホコリの合計） */
+export const CONTEST_MAX = CONTEST.waves.reduce((s, w) => s + w.count, 0);
 
 // ---- 図鑑 ----
 

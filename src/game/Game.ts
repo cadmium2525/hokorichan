@@ -32,6 +32,7 @@ import {
   AREA_NAMES,
   AREA_REP,
   CONTEST,
+  CONTEST_MAX,
   DUST_TYPES,
   DUSTS,
   FRIEND_UNLOCK_XP,
@@ -73,6 +74,8 @@ import {
   completeRequest,
   contestDue,
   contestResult,
+  contestWaitMinutes,
+  enterContest,
   createSession,
   dampChance,
   deliverRequest,
@@ -185,12 +188,22 @@ const STREET_INTRO: StoryStep[] = [
 const CONTEST_NOTICE: StoryStep[] = [
   {
     speaker: 'grandma',
-    text: '町内会長のわたしから、おしらせよ。<br>こんど商店街で<b>町内会の大掃除大会</b>をやるの。ほこりちゃんと一緒に出てみない？',
+    text: '町内会長のわたしから、おしらせよ。<br>こんど商店街で<b>町内会の大掃除大会</b>をやるの。あなたも出てみない？',
     button: '出たい！',
   },
   {
+    speaker: 'grandma',
+    text: 'ほこりちゃんは……大きすぎて一人で通りが片づいちゃうから、<b>審査員席</b>で応援してもらうわね。<br>集めたホコリは町内会でまとめて引き取るわ。',
+    button: 'なるほど',
+  },
+  {
     speaker: 'narration',
-    text: '<b>掲示板</b>から大掃除大会に出られるよ。<br>' + CONTEST.seconds + '秒で、いちばん多くホコリを集めたチームが優勝！ 何度でも挑戦できる。',
+    text:
+      '<b>掲示板</b>から大掃除大会に出られるよ。<br>' +
+      CONTEST.seconds +
+      '秒のあいだに風で3回ホコリが飛んでくる。いちばん多く集めたチームが優勝！<br>大会は' +
+      CONTEST.cooldownMinutes +
+      '分ごとに開かれるよ。',
     button: 'わかった',
   },
 ];
@@ -230,7 +243,7 @@ export class Game {
   private mode: Mode = 'BOOT';
   private overlay: Overlay = 'none';
   /** 大掃除大会の最中なら開始時刻 */
-  private contest: { startedAt: number; lastLeft: number } | null = null;
+  private contest: { startedAt: number; lastLeft: number; wave: number; seed: number; missed: number } | null = null;
   /** 大会で初優勝した（戻ったら任命のお話） */
   private contestFirstWin = false;
   private readonly hud: Hud;
@@ -334,12 +347,9 @@ export class Game {
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session && this.contest) {
       const sess = this.session;
       const top = Math.max(...CONTEST.rivals.map((r) => r.score));
-      // バーは「優勝ライン（いちばん強いチーム＋1）」までの進み具合
-      this.hud.setCleaningStatus(`大掃除大会 ⏱ のこり${this.contestLeft()}秒`, sess.collected.size, top + 1, top + 1);
+      // 満点に対する進み具合。目盛りは優勝ライン（いちばん強いチーム＋1）
+      this.hud.setCleaningStatus(`大掃除大会 ⏱ のこり${this.contestLeft()}秒`, sess.collected.size, CONTEST_MAX, top + 1);
       const buttons: ButtonSpec[] = [];
-      if (this.cleaning?.hasHelper && helperStats(s).sneeze) {
-        buttons.push({ action: 'sneeze', label: 'くしゃみ！', sub: this.sneezeLeft ? '1回だけ広く吸い込む' : 'つかった', variant: 'accent', disabled: !this.sneezeLeft });
-      }
       buttons.push({ action: 'goHome', label: 'やめる', sub: '賞金なし', variant: 'secondary' });
       this.hud.setActions(buttons);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
@@ -611,8 +621,11 @@ export class Game {
     return Math.max(0, Math.ceil(CONTEST.seconds - (this.now - this.contest.startedAt) / 1000));
   }
 
-  /** 大掃除大会：商店街通りで制限時間内にできるだけ集める */
+  /** 大掃除大会：商店街通りで、風で飛んでくるホコリを制限時間内にできるだけ集める（ほこりちゃんは審査員席） */
   private startContest(): void {
+    const entered = enterContest(this.save, this.now, this.params.speed);
+    if (!entered.ok) return;
+    this.commit(entered.save);
     this.closeModal();
     this.clearScenes();
     this.sessionCount++;
@@ -620,47 +633,81 @@ export class Game {
     this.pendingDamp = false;
     this.lostRequestId = null;
     this.speedRequestId = null;
+    this.sneezeLeft = false;
     const tool = bestTool(this.save);
-    const types = rollDustTypes({ dust: CONTEST.mix }, CONTEST.dust, createRandom(seed ^ 0x51ed));
-    const together = canCleanTogether(this.save);
-    const stats = helperStats(this.save);
-    this.sneezeLeft = together && stats.sneeze;
-    const view = this.petView();
+    const first = CONTEST.waves[0];
+    const types = rollDustTypes({ dust: CONTEST.mix }, first.count, createRandom(seed ^ 0x51ed));
     const scene = new CleaningScene({
       seed,
-      dustCount: CONTEST.dust,
+      dustCount: first.count,
       dustTypes: types,
       layout: buildContest(seed),
       tool,
       hero: this.hero,
       element: this.hud.canvas,
-      helper: together ? { accessory: view.accessory, shape: view.shape, tint: view.tint, speedMul: stats.speedMul, radiusMul: stats.radiusMul } : undefined,
       onCollect: (id) => this.onCollect(id),
+      onMiss: () => this.onContestMiss(),
       onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),
     });
+    this.blowWind(scene, seed, 0);
     this.session = createSession(this.sessionCount, { id: 'contest', rewardBase: 0 }, types.slice(0, scene.dustTotal), this.now);
     this.spot = null;
-    this.contest = { startedAt: this.now, lastLeft: CONTEST.seconds };
+    this.contest = { startedAt: this.now, lastLeft: CONTEST.seconds, wave: 1, seed, missed: 0 };
     this.cleaning = scene;
     this.mode = 'CLEANING';
     this.autoFinishTimer = 0;
     this.setScene(scene);
     this.syncInput();
     this.sound.play('happy');
-    this.hud.hint(`よーい、スタート！\n${CONTEST.seconds}秒でたくさん集めよう`);
+    this.hud.hint(`よーい、スタート！\n風で流されて通りの外へ出る前に集めよう`);
     this.refreshHud();
   }
 
-  /** 風に運ばれて、次のホコリが通りに飛んでくる */
-  private refillContest(): void {
+  /** 風向きは波ごとに変わる（画面の右上・右下・左下・左上のどれか） */
+  private blowWind(scene: CleaningScene, seed: number, wave: number): void {
+    const dirs: Array<[number, number]> = [
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+      [-1, -1],
+    ];
+    const [x, z] = dirs[(seed + wave * 3) % dirs.length];
+    const k = CONTEST.wind / Math.SQRT2;
+    scene.setWind(x * k, z * k);
+  }
+
+  /** 風で通りの外へ飛んでいった */
+  private onContestMiss(): void {
+    if (!this.contest) return;
+    this.contest.missed++;
+    this.checkContestOver();
+  }
+
+  /** 最後の風のあと、通りにホコリが残っていなければ終わる */
+  private checkContestOver(): void {
+    const c = this.contest;
+    if (!c || !this.cleaning || c.wave < CONTEST.waves.length) return;
+    if (this.cleaning.idleDust === 0 && this.autoFinishTimer <= 0) this.autoFinishTimer = 0.8;
+  }
+
+  /** 決まった時刻に、風に乗って次のホコリが飛んでくる */
+  private nextWave(): void {
+    const c = this.contest;
     const session = this.session;
-    if (!session || !this.cleaning) return;
-    const seed = session.total * 7919 + this.sessionCount;
-    const types = rollDustTypes({ dust: CONTEST.mix }, CONTEST.refill, createRandom(seed));
+    if (!c || !session || !this.cleaning) return;
+    const wave = CONTEST.waves[c.wave];
+    if (!wave) return;
+    const elapsed = (this.now - c.startedAt) / 1000;
+    if (elapsed < wave.at) return;
+    c.wave++;
+    const seed = c.seed + c.wave * 7919;
+    const types = rollDustTypes({ dust: CONTEST.mix }, wave.count, createRandom(seed));
     const n = this.cleaning.spawnDust(types, seed);
+    this.blowWind(this.cleaning, c.seed, c.wave);
     session.types.push(...types.slice(0, n));
     session.total = session.types.length;
-    if (n > 0 && session.total <= CONTEST.dust + CONTEST.refill) this.hud.toast('風に乗って、ホコリが飛んできた！', 1600);
+    this.sound.play('dry');
+    this.hud.toast(`風に乗って、ホコリが飛んできた！（${c.wave}/${CONTEST.waves.length}）`, 1600);
   }
 
   private endContest(): void {
@@ -690,12 +737,18 @@ export class Game {
     if (!type) return;
     this.hud.hint(null);
     this.sound.play('collect');
+    if (this.contest) {
+      // 大会のホコリは町内会が引き取る（バッグには入らない）
+      this.sound.play('collect');
+      this.checkContestOver();
+      this.refreshHud();
+      return;
+    }
     const dex = dexAdd({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + 1 } }, 'dust', type);
     this.commit(dex.save);
     if (dex.added) this.hud.toast(`図鑑に「${DUSTS[type].name}」を記録した！`, 2000);
     this.hud.bump('bag');
-    if (!this.contest && session.collected.size === session.total) this.autoFinishTimer = 0.8;
-    if (this.contest) this.refreshHud();
+    if (session.collected.size === session.total) this.autoFinishTimer = 0.8;
   }
 
   /** 落とし物を見つけた → その場で依頼達成 */
@@ -928,7 +981,7 @@ export class Game {
     this.openOverlay('board', {
       title: '掲示板',
       className: 'modal--map',
-      body: boardBody(this.save, this.minutesToNextRequest()),
+      body: boardBody(this.save, this.minutesToNextRequest(), contestWaitMinutes(this.save, this.now, this.params.speed)),
       buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
     });
   }
@@ -941,7 +994,7 @@ export class Game {
     this.save = next;
     writeSave(next);
     if (notify && added > 0 && hasEvent(next, 'town')) this.hud.toast('掲示板に新しい依頼が届いた！', 2400);
-    if (this.overlay === 'board') this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest()));
+    if (this.overlay === 'board') this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest(), contestWaitMinutes(this.save, this.now, this.params.speed)));
   }
 
   // ---- 入力 ----
@@ -1090,7 +1143,7 @@ export class Game {
         this.commit(done.save);
         this.hud.bump('coins');
         this.hud.toast(`${done.request.client}「ありがとう！」 +${done.request.reward}・★${done.request.rep}`, 2600);
-        this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest()));
+        this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest(), contestWaitMinutes(this.save, this.now, this.params.speed)));
         return;
       }
       case 'openPlay':
@@ -1227,7 +1280,7 @@ export class Game {
       this.sound.play('tap');
       this.openOverlay('confirm', {
         title: '大会をやめる？',
-        body: `途中でやめると賞金はもらえないよ。<br>集めたホコリ（${session.collected.size}個）はバッグに入っているよ。`,
+        body: `途中でやめると賞金はもらえないよ。<br>次の大会は${CONTEST.cooldownMinutes}分後。`,
         buttons: [
           { action: 'closeModal', label: '続ける', variant: 'secondary' },
           { action: 'leaveNow', label: 'やめる', variant: 'primary' },
@@ -1356,7 +1409,7 @@ export class Game {
         if (left <= 5 && left > 0) this.sound.play('tap');
       }
       if (left <= 0) this.endContest();
-      else if (this.cleaning && this.session && this.cleaning.idleDust < CONTEST.refillBelow) this.refillContest();
+      else this.nextWave();
     }
     if (this.cleaning && this.mode === 'CLEANING') {
       const off = this.cleaning.offscreenDust();
@@ -1377,7 +1430,7 @@ export class Game {
       this.refreshTimer = 1;
       this.tickRequests(true);
       if (this.overlay === 'map') this.hud.updateModalBody(mapBody(this.save, this.mapArea, this.now, this.params.speed));
-      if (this.overlay === 'board') this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest()));
+      if (this.overlay === 'board') this.hud.updateModalBody(boardBody(this.save, this.minutesToNextRequest(), contestWaitMinutes(this.save, this.now, this.params.speed)));
     }
     if (this.scene) {
       this.scene.update(dt, time);
