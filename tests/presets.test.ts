@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PRESETS, TWEAKS } from '../src/dev/presets.ts';
 import { sanitize } from '../src/game/save.ts';
-import { cityTownDue, contestDue, landMeetingDue, rainyActive, rainyDue, warehouseDue, canDeliverRainy, chapter } from '../src/game/state.ts';
+import { worldLetterDue, earthWrapDue, cityTownDue, contestDue, landMeetingDue, rainyActive, rainyDue, warehouseDue, canDeliverRainy, chapter } from '../src/game/state.ts';
 
 const get = (id: string) => {
   const p = PRESETS.find((x) => x.id === id);
@@ -27,6 +27,9 @@ test('山場の直前の場面は、その出来事が起きる状態になっ�
   assert.equal(rainyActive(get('rainyReady')), true);
   assert.equal(canDeliverRainy(get('rainyReady')), true);
   assert.equal(rainyActive(get('ch3done')), false);
+  assert.equal(worldLetterDue(get('worldDue')), true);
+  assert.equal(chapter(get('ch4')), 4);
+  assert.equal(earthWrapDue(get('earthWrapDue')), true);
 });
 
 test('すぐ足す操作は保存データを壊さない', () => {

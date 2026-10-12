@@ -14,6 +14,7 @@ let message = '';
 const ALL_EVENTS: EventId[] = [
   'town', 'friend', 'board', 'landMeeting', 'container', 'street', 'together',
   'contestNotice', 'contestWon', 'warehouseLetter', 'warehouse', 'sky', 'cityTown', 'rainy', 'rainyDone',
+  'worldLetter', 'world', 'earthWrap',
 ];
 
 function save(next: SaveData, note: string): void {

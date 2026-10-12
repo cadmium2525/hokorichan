@@ -1,7 +1,7 @@
 // 開発用：章や山場の直前など、確かめたい場面の保存データをすぐ作る。
 // ゲームの仕組み（state.ts）だけを使う純粋な関数なので、テストでも検証できる。
 
-import { ACCESSORIES, DUST_TYPES, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
+import { ACCESSORIES, DUST_TYPES, EARTH_WRAP_XP, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
 import { capacityOf, createInitialSave, emptyBag, type Bag, type EventId, type SaveData } from '../game/state.ts';
 
 export type Preset = { id: string; group: string; name: string; note: string; make: (hero: Hero) => SaveData };
@@ -121,6 +121,54 @@ export const PRESETS: readonly Preset[] = [
         events: [...CH3_EVENTS, 'cityTown', 'rainy', 'rainyDone'],
       }),
   },
+  {
+    id: 'worldDue',
+    group: '4章 地球編',
+    name: '世界ほこり機構が来る直前',
+    note: '3章クリア・倉庫いっぱい。帰ると手紙→丘へ',
+    make: (h) =>
+      base(h, {
+        growthXp: 5000,
+        habitat: 5,
+        coins: 3000,
+        rep: 25,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH3_EVENTS, 'cityTown', 'rainy', 'rainyDone'],
+      }),
+  },
+  {
+    id: 'ch4',
+    group: '4章 地球編',
+    name: '丘で世界のおそうじ',
+    note: '成長8000・地域満タン',
+    make: (h) =>
+      base(h, {
+        growthXp: 8000,
+        habitat: 6,
+        coins: 3000,
+        rep: 28,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH3_EVENTS, 'cityTown', 'rainy', 'rainyDone', 'worldLetter', 'world'],
+      }),
+  },
+  {
+    id: 'earthWrapDue',
+    group: '4章 地球編',
+    name: '地球をひと回りする直前',
+    note: '丘いっぱい（成長30000）。帰ると4章の山場',
+    make: (h) =>
+      base(h, {
+        growthXp: EARTH_WRAP_XP,
+        habitat: 6,
+        coins: 5000,
+        rep: 30,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH3_EVENTS, 'cityTown', 'rainy', 'rainyDone', 'worldLetter', 'world'],
+      }),
+  },
 ];
 
 // ---- 部分的な書きかえ（いまの保存データに足す） ----
@@ -134,7 +182,7 @@ export const TWEAKS: readonly Tweak[] = [
   { id: 'tools', name: '道具ぜんぶ', apply: (s) => ({ ...s, tools: ['hand', 'rag', 'mop', 'vacuum'] }) },
   { id: 'acc', name: 'アクセサリーぜんぶ', apply: (s) => ({ ...s, accessories: ACCESSORIES.map((a) => a.id) }) },
   { id: 'spots', name: '掃除場所を満タン', apply: (s) => ({ ...s, spots: Object.fromEntries(Object.keys(s.spots).map((k) => [k, { fullness: 1, at: 0 }])) as SaveData['spots'] }) },
-  { id: 'sky', name: '空の雲を満タン', apply: (s) => ({ ...s, sky: { fullness: 1, at: 0 } }) },
+  { id: 'sky', name: '空の雲・地球の地域を満タン', apply: (s) => ({ ...s, sky: { fullness: 1, at: 0 }, world: { fullness: 1, at: 0 } }) },
   { id: 'contest', name: '大会の待ち時間を消す', apply: (s) => ({ ...s, contestAt: 0 }) },
   { id: 'requests', name: '依頼をすぐ届く状態に', apply: (s) => ({ ...s, requests: [], requestClock: 0 }) },
   { id: 'dry', name: 'しっとりを乾かす', apply: (s) => ({ ...s, damp: false }) },

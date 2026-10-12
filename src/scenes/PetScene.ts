@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { HABITATS, type AccessoryId, type Habitat, type PetShape } from '../game/catalog.ts';
 import { petDisplaySize } from '../game/state.ts';
+import { createRandom } from '../game/rng.ts';
 import { HokorichanModel, type Expression } from '../render/hokorichan.ts';
 import { Particles } from '../render/particles.ts';
 import { dropTexture, heartTexture, PALETTE, sparkleTexture, woodTexture } from '../render/proceduralArt.ts';
@@ -61,8 +62,52 @@ const WAREHOUSE_HEIGHT = 5.4;
 
 /** 空き地のすみか（4=コンテナ、5=倉庫）の壁の高さ */
 function yardHeight(habitat: Habitat): number {
+  if (habitat >= 6) return HILL_TOP;
   return habitat === 5 ? WAREHOUSE_HEIGHT : CONTAINER_HEIGHT;
 }
+
+/** 丘（4章）では、ほこりちゃんの頭のてっぺんまで映す */
+const HILL_TOP = 15;
+
+/** 4章：町はずれの丘。まわりに小さな家や木を置いて、山のような大きさを見せる */
+function buildHillYard(): THREE.Group {
+  const g = new THREE.Group();
+  const grass = new THREE.Mesh(new THREE.BoxGeometry(60, 0.4, 60), new THREE.MeshLambertMaterial({ color: '#a9d68f' }));
+  grass.position.y = -0.2;
+  const mound = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#98c97c', flatShading: true }));
+  mound.scale.y = 0.12;
+  mound.position.copy(CASE_CENTER);
+  g.add(grass, mound);
+  // 比べるための小さな町（家・木・倉庫）
+  const rng = createRandom(7);
+  const roofs = ['#f4a7b9', '#a58fd0', '#6fb7a0', '#e8a868', '#5f6f86'];
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2 + rng() * 0.3;
+    const d = 11.5 + rng() * 6;
+    const x = CASE_CENTER.x + Math.cos(a) * d;
+    const z = CASE_CENTER.z + Math.sin(a) * d;
+    if (i % 3 === 0) {
+      const tree = new THREE.Mesh(new THREE.IcosahedronGeometry(0.5, 0), new THREE.MeshLambertMaterial({ color: '#7fb77e', flatShading: true }));
+      tree.position.set(x, 0.7, z);
+      const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.5, 0.15), new THREE.MeshLambertMaterial({ color: '#9c6438' }));
+      trunk.position.set(x, 0.25, z);
+      g.add(tree, trunk);
+      continue;
+    }
+    const house = new THREE.Group();
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.8), new THREE.MeshLambertMaterial({ color: '#fff4e2' }));
+    wall.position.y = 0.35;
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(0.75, 0.5, 4), new THREE.MeshLambertMaterial({ color: roofs[i % roofs.length], flatShading: true }));
+    roof.rotation.y = Math.PI / 4;
+    roof.position.y = 0.95;
+    house.add(wall, roof);
+    house.position.set(x, 0, z);
+    house.rotation.y = rng() * Math.PI;
+    g.add(house);
+  }
+  return g;
+}
+
 
 /** 倉庫の板壁（クリームの羽目板に木の枠） */
 function warehouseTexture(): THREE.CanvasTexture {
@@ -295,7 +340,10 @@ export class PetScene implements GameScene {
     }
     // コンテナは空き地（屋外）。部屋は隠す
     this.room.visible = habitat < 4;
-    if (habitat >= 4) {
+    if (habitat >= 6) {
+      this.habitatGroup = buildHillYard();
+      this.seat.set(CASE_CENTER.x, 0.6, CASE_CENTER.z);
+    } else if (habitat >= 4) {
       this.habitatGroup = buildContainerYard(habitat as 4 | 5);
       this.seat.set(CASE_CENTER.x, CASE_FLOOR_Y, CASE_CENTER.z);
     } else if (habitat === 0) {

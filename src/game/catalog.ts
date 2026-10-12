@@ -32,7 +32,7 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- ホコリの種類 ----
 
-export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk' | 'ash';
 
 export type DustDef = {
   id: DustType;
@@ -55,10 +55,11 @@ export const DUSTS: Record<DustType, DustDef> = {
   flour: { id: 'flour', name: '粉ぼこり', colors: ['#fbf8f2', '#efe9df', '#f6f1e6', '#e6ddd0'], tint: '#ffffff', trait: 'さらさら', traitDesc: '湿気に強くなる' },
   soot: { id: 'soot', name: 'すす', colors: ['#6e6a78', '#5a5664', '#8a8696', '#4a4654'], tint: '#b8b4c8', trait: 'いぶし銀', traitDesc: '毛並みがちょっと渋いグレーになる（見た目）' },
   chalk: { id: 'chalk', name: 'チョークの粉', colors: ['#ffffff', '#f6cfd8', '#cfe6f8', '#fbe9a0'], tint: '#f6dde6', trait: 'すべすべ', traitDesc: '空を飛ぶのが速くなる' },
+  ash: { id: 'ash', name: '火山灰', colors: ['#8a8292', '#a39aa8', '#6e6676', '#c4b8b0'], tint: '#cfc6e6', trait: 'ほかほか', traitDesc: '世界のおそうじで、長押しが短くてすむ' },
   kosa: { id: 'kosa', name: '黄砂', colors: ['#e8c27a', '#d9ad5c', '#f2d699', '#c99a4a'], tint: '#f0cf8a', trait: 'ずっしり', traitDesc: '空のおそうじで吸い込む範囲が広がる' },
 };
 
-export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk'];
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk', 'ash'];
 
 // ---- 掃除場所 ----
 
@@ -140,7 +141,7 @@ export const SPOT_READY_RATIO = 0.3;
 
 // ---- ほこりちゃんの住まい ----
 
-export type Habitat = 0 | 1 | 2 | 3 | 4 | 5;
+export type Habitat = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export type HabitatDef = { name: string; capacity: number; price: number; inner: number };
 
@@ -152,6 +153,7 @@ export const HABITATS: Record<Habitat, HabitatDef> = {
   3: { name: 'ケース（大）', capacity: 300, price: 300, inner: 3.3 },
   4: { name: '空き地のコンテナ', capacity: 1000, price: 0, inner: 4.6 },
   5: { name: '空き地の倉庫', capacity: 5000, price: 1500, inner: 9.0 },
+  6: { name: '町はずれの丘', capacity: 30000, price: 0, inner: 18.0 },
 };
 
 /** 1章の山場で買う空き地（コンテナ付き）の値段 */
@@ -181,6 +183,7 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
   kosa: { client: '市役所の人', line: '黄砂のサンプルを研究所に送りたいんです' },
   soot: { client: '駅長さん', line: 'すすを集めて、記念の墨をつくろうと思いまして' },
   chalk: { client: '先生', line: 'チョークの粉で、図工の色砂をつくりたいの' },
+  ash: { client: '世界ほこり機構', line: '火山灰の標本を、各国の博物館に配りたいのです' },
 };
 
 // ---- アクセサリー ----
@@ -199,10 +202,12 @@ export type AccessoryId =
   | 'goggles'
   | 'propeller'
   | 'cloudpin'
-  | 'rainhat';
+  | 'rainhat'
+  | 'aurora'
+  | 'globecap';
 
 /** chapter：その章になるとショップに入荷する。reward はお店では買えない（出来事のごほうび） */
-export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3; reward?: boolean };
+export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 | 4; reward?: boolean };
 
 export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'ribbon', name: 'リボン', price: 0, chapter: 1 },
@@ -220,6 +225,9 @@ export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'propeller', name: 'プロペラぼうし', price: 280, chapter: 3 },
   { id: 'cloudpin', name: '雲の髪かざり', price: 350, chapter: 3 },
   { id: 'rainhat', name: 'レインハット', price: 0, chapter: 3, reward: true },
+  // 4章（地球編）
+  { id: 'aurora', name: 'オーロラのリボン', price: 600, chapter: 4 },
+  { id: 'globecap', name: '地球儀ぼうし', price: 900, chapter: 4 },
 ];
 
 export const ACCESSORY_IDS: readonly AccessoryId[] = ACCESSORIES.map((a) => a.id);
@@ -282,7 +290,7 @@ export const CONTEST_MAX = CONTEST.waves.reduce((s, w) => s + w.count, 0);
 // ---- 図鑑 ----
 
 /** 図鑑に載る町の人 */
-export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher';
+export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent';
 
 export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }> = [
   { id: 'mother', name: 'お母さん', note: 'お小遣いをくれる。空き地の購入をすすめた' },
@@ -294,6 +302,7 @@ export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }>
   { id: 'grandma', name: 'おばあちゃん', note: '猫5匹と暮らす。じつは町内会長' },
   { id: 'stationMaster', name: '駅長さん', note: '電車のすすに悩んでいる。時刻表に厳しい' },
   { id: 'teacher', name: '先生', note: 'チョークの粉で図工をしたい。生徒思い' },
+  { id: 'agent', name: '世界ほこり機構の人', note: '地球規模のホコリ担当。いつも真顔' },
 ];
 
 export const PERSON_IDS: readonly PersonId[] = PEOPLE.map((p) => p.id);
@@ -339,6 +348,7 @@ export const DUST_WORDS: Record<DustType, { adj: string; noun: string }> = {
   kosa: { adj: 'こがね', noun: 'さばく' },
   soot: { adj: 'いぶし', noun: 'すみ' },
   chalk: { adj: 'パステル', noun: 'こくばん' },
+  ash: { adj: 'ほかほか', noun: 'かざん' },
 };
 
 /** 1種類がこの割合以上なら「純」毛並み */
@@ -367,3 +377,25 @@ export function furName(id: string): string {
 export function furParts(id: string): DustType[] {
   return id.startsWith('pure:') ? [id.slice(5) as DustType] : (id.split('+') as DustType[]);
 }
+
+// ---- 4章 地球編：世界のおそうじ（地球儀） ----
+
+export const WORLD = {
+  /** 満タンのときに地球にあるホコリの地域の数 */
+  maxPatches: 10,
+  /** 空から満タンまで（実時間・分） */
+  regenMinutes: 60,
+  /** 1地域で集まるホコリの数 */
+  perPatch: 120,
+  /** 1地域あたりのお礼（世界ほこり機構から） */
+  coinPerPatch: 25,
+  /** 地域の種類と割合（砂嵐＝黄砂、火山＝火山灰） */
+  mix: { kosa: 5, ash: 4, sand: 1 } as Partial<Record<DustType, number>>,
+  /** 長押しで吸い込むのにかかる秒数 */
+  holdSeconds: 0.9,
+  /** 遊べる時間（秒） */
+  seconds: 45,
+};
+
+/** 4章の山場：ほこりちゃんが地球を一周してふかふかに包む（丘がいっぱいになったら） */
+export const EARTH_WRAP_XP = 30000;

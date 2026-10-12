@@ -51,7 +51,7 @@ import { buttonHtml, escapeHtml } from './hud.ts';
 import { accessoryIcon, characterSprite, heroSprite, spotIcon, toolIcon, type SpriteOptions } from './sprites.ts';
 import type { CharacterId } from '../render/pixelCharacters.ts';
 
-export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'narration';
+export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'narration';
 
 const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; id: CharacterId }> = {
   mother: { name: 'お母さん', id: 'mother' },
@@ -63,6 +63,7 @@ const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; i
   grandma: { name: 'おばあちゃん', id: 'grandma' },
   stationMaster: { name: '駅長さん', id: 'stationMaster' },
   teacher: { name: '先生', id: 'teacher' },
+  agent: { name: '世界ほこり機構の人', id: 'agent' },
 };
 
 function speakerOf(speaker: Speaker, hero: Hero, className: string, opts: SpriteOptions = {}): { name: string; sprite: string } {
@@ -173,7 +174,9 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
           buy('buyHome', String(next.level), next.price),
         )
       : `<p class="note">${
-          save.habitat >= 5
+          save.habitat >= 6
+            ? 'ほこりちゃんは町はずれの丘で暮らしています（世界ほこり機構の手配）'
+            : save.habitat >= 5
             ? 'ほこりちゃんは空き地の倉庫で暮らしています'
             : save.habitat >= 4
               ? 'ほこりちゃんは空き地のコンテナで暮らしています（倉庫は市役所の許可がいるそうです）'
@@ -181,7 +184,7 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
         }</p>`;
   } else {
     const ch = chapter(save);
-    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編' } as const;
+    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編', 4: '地球編' } as const;
     items = ACCESSORIES.map((a) => {
       const has = save.accessories.includes(a.id);
       if (!has && a.chapter > ch) return row('<span class="px-icon px-icon--lg acc-locked">？</span>', '？？？', `${a.chapter}章（${CHAPTER_NAMES[a.chapter]}）で入荷`, owned('入荷待ち'));
@@ -473,4 +476,22 @@ function rainyCard(save: SaveData): string {
       <ul class="need">${rows}</ul>
       ${buttonHtml({ action: 'deliverRainy', label: ready ? '届ける！' : 'まだ足りない', sub: ready ? '梅雨を終わらせる' : 'バッグの数', variant: 'primary', disabled: !ready })}
     </div>`;
+}
+
+// ---- 世界のおそうじ（4章） ----
+
+export function worldResultBody(opts: { hero: Hero; patches: number; reward: number; got: Partial<Record<DustType, number>>; bag: number }): string {
+  const got = DUST_TYPES.filter((t) => (opts.got[t] ?? 0) > 0).map((t) => dustChip(t, opts.got[t])).join('');
+  return `
+    <div class="allowance">
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: 'joy' })}
+      <div class="allowance__coin">+${opts.reward}</div>
+      ${characterSprite('agent', 'sprite sprite--lg', { pose: 'give', flip: true })}
+    </div>
+    <div class="bubble bubble--mother">世界ほこり機構「${opts.patches}地域の清掃を確認しました。ご協力に感謝します」</div>
+    <dl class="result">
+      <dt>きれいにした地域</dt><dd>${opts.patches}か所</dd>
+      <dt>バッグ</dt><dd>${opts.bag}個</dd>
+    </dl>
+    <div class="chips chips--dust">${got}</div>`;
 }

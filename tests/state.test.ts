@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { FUR_IDS, furId, furName, RAINY, SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { EARTH_WRAP_XP, WORLD, FUR_IDS, furId, furName, RAINY, SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   canFly,
+  canWorld,
+  earthWrapDue,
+  finishWorld,
+  moveToHill,
+  worldHoldSeconds,
+  worldLetterDue,
+  worldPatches,
+  worldReward,
   furOf,
   canDeliverRainy,
   cityTownDue,
@@ -521,6 +529,27 @@ test('毛並み図鑑：ランクが上がるときに、そのランクのあ�
   // 名前
   assert.equal(furName('pure:cotton'), '純わたぐも毛並み');
   assert.equal(furName(furId('soot', 'pollen')), 'いぶしひまわり毛並み');
-  assert.equal(FUR_IDS.length, 9 + 36);
+  assert.equal(FUR_IDS.length, DUST_TYPES.length + (DUST_TYPES.length * (DUST_TYPES.length - 1)) / 2);
   assert.equal(new Set(FUR_IDS).size, FUR_IDS.length);
+});
+
+test('4章：倉庫がいっぱいで世界ほこり機構→丘へ。地域は使うと減り時間で戻る。丘いっぱいで山場', () => {
+  const MIN = 60_000;
+  let s: SaveData = addEvent({ ...createInitialSave(), habitat: 5, growthXp: 5000 }, 'rainyDone');
+  assert.equal(worldLetterDue(s), true);
+  assert.equal(worldLetterDue({ ...s, growthXp: 4999 }), false);
+  s = moveToHill(s);
+  assert.equal(s.habitat, 6);
+  assert.equal(chapter(s), 4);
+  assert.equal(canWorld(s), true);
+  assert.equal(worldLetterDue(s), false);
+  assert.equal(worldPatches(s, 0), WORLD.maxPatches);
+  s = finishWorld(s, 0, 10 * MIN);
+  assert.equal(worldPatches(s, 10 * MIN), 0);
+  assert.equal(worldPatches(s, (10 + WORLD.regenMinutes) * MIN), WORLD.maxPatches);
+  assert.equal(worldReward(4), 4 * WORLD.coinPerPatch);
+  assert.ok(worldHoldSeconds({ ...s, diet: { ...s.diet, cotton: 50, ash: 50 } }) < worldHoldSeconds(s));
+  assert.equal(earthWrapDue(s), false);
+  assert.equal(earthWrapDue({ ...s, growthXp: EARTH_WRAP_XP }), true);
+  assert.equal(rankFor(EARTH_WRAP_XP).name, '地球級');
 });

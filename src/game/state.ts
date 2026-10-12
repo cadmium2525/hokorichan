@@ -20,6 +20,8 @@ import {
   furId,
   PERSON_IDS,
   RAINY,
+  WORLD,
+  EARTH_WRAP_XP,
   SHAPE_LIMITS,
   SKY,
   SPOT_IDS,
@@ -81,7 +83,10 @@ export type EventId =
   | 'sky'
   | 'cityTown'
   | 'rainy'
-  | 'rainyDone';
+  | 'rainyDone'
+  | 'worldLetter'
+  | 'world'
+  | 'earthWrap';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -99,6 +104,9 @@ export const EVENT_IDS: readonly EventId[] = [
   'cityTown',
   'rainy',
   'rainyDone',
+  'worldLetter',
+  'world',
+  'earthWrap',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
@@ -140,6 +148,8 @@ export type SaveData = {
   sky: SpotState;
   /** いまのランクになってから食べたホコリ。ランクが上がるときに毛並みが決まる */
   rankDiet: Bag;
+  /** 地球のホコリの地域の積もり具合（4章） */
+  world: SpotState;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -151,7 +161,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -194,6 +204,7 @@ export function createInitialSave(): SaveData {
     contestAt: 0,
     sky: { fullness: 1, at: 0 },
     rankDiet: emptyBag(),
+    world: { fullness: 1, at: 0 },
   };
 }
 
@@ -273,8 +284,8 @@ export function contestResult(
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
-export function chapter(save: SaveData): 1 | 2 | 3 {
-  return save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
+export function chapter(save: SaveData): 1 | 2 | 3 | 4 {
+  return save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
 }
 
 // ---- まちと場所の解禁 ----
@@ -465,6 +476,50 @@ export function deliverRainy(save: SaveData): { save: SaveData; ok: boolean } {
   const accessories: AccessoryId[] = save.accessories.includes('rainhat') ? save.accessories : [...save.accessories, 'rainhat'];
   const next: SaveData = { ...save, bag, coins: save.coins + RAINY.reward, rep: save.rep + RAINY.rep, accessories, damp: false };
   return { save: addEvent(next, 'rainyDone'), ok: true };
+}
+
+// ---- 4章：地球編 ----
+
+/** 梅雨明けのあと倉庫がいっぱいになると、世界ほこり機構から手紙が届く */
+export function worldLetterDue(save: SaveData): boolean {
+  return save.habitat === 5 && hasEvent(save, 'rainyDone') && save.growthXp >= HABITATS[5].capacity && !hasEvent(save, 'worldLetter');
+}
+
+/** 手紙を読んだら町はずれの丘へお引っこし（世界ほこり機構の手配なので無料） */
+export function moveToHill(save: SaveData): SaveData {
+  if (save.habitat !== 5) return save;
+  return addEvent({ ...addEvent(save, 'worldLetter'), habitat: 6 }, 'world');
+}
+
+/** 世界のおそうじができる（丘に住んでから） */
+export function canWorld(save: SaveData): boolean {
+  return save.habitat >= 6;
+}
+
+/** いま地球にあるホコリの地域の数 */
+export function worldPatches(save: SaveData, now: number, speed = 1): number {
+  const elapsed = Math.max(0, now - save.world.at) * speed;
+  const fullness = Math.min(1, save.world.fullness + elapsed / (WORLD.regenMinutes * MINUTE));
+  return Math.floor(WORLD.maxPatches * fullness + 1e-9);
+}
+
+export function finishWorld(save: SaveData, remaining: number, now: number): SaveData {
+  return { ...save, world: { fullness: Math.max(0, Math.min(1, remaining / WORLD.maxPatches)), at: now } };
+}
+
+export function worldReward(patches: number): number {
+  return Math.max(0, Math.floor(patches)) * WORLD.coinPerPatch;
+}
+
+/** 長押しの秒数（火山灰の毛並み「ほかほか」で短くなる） */
+export function worldHoldSeconds(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('ash') ? WORLD.holdSeconds / (1 + r.ash * 1.5) : WORLD.holdSeconds;
+}
+
+/** 4章の山場：丘がいっぱい（地球をひと回りできる大きさ）になった */
+export function earthWrapDue(save: SaveData): boolean {
+  return save.habitat >= 6 && save.growthXp >= EARTH_WRAP_XP && !hasEvent(save, 'earthWrap');
 }
 
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
@@ -784,6 +839,9 @@ export const RANKS: readonly Rank[] = [
   { name: 'お部屋級', min: 100 },
   { name: 'おうち級', min: 300 },
   { name: 'ビル級', min: 1500 },
+  { name: '山級', min: 5000 },
+  { name: '大陸級', min: 12000 },
+  { name: '地球級', min: 22000 },
 ];
 
 export function rankFor(xp: number): Rank {

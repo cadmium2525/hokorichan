@@ -5,7 +5,7 @@
 export const CHAR_W = 32;
 export const CHAR_H = 32;
 
-export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher';
+export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Pose = 'idle' | 'walk' | 'run' | 'clean' | 'wipe' | 'surprise' | 'joy' | 'talk' | 'give';
 /** 掃除ポーズで手に持つ道具。hand（素手）と rag（ぞうきん）はしゃがんで拭く */
@@ -83,6 +83,7 @@ const CLOTH = {
   uniform: ['#8fa6d0', '#5d74a8', '#435a82', '#222e48'],
   coral: ['#f8e2a8', '#e8c070', '#c0944a', '#6a4a20'],
   capNavy: ['#6f84b0', '#3e5076', '#2c3a58', '#161e30'],
+  suit: ['#8a8696', '#5a5664', '#43404c', '#22202a'],
 } as const satisfies Record<string, Ramp>;
 
 const LOOKS: Record<CharacterId, Look> = {
@@ -97,6 +98,7 @@ const LOOKS: Record<CharacterId, Look> = {
   grandma: { hair: HAIR.grey, top: CLOTH.purple, bottom: null, shoes: CLOTH.shoeBrown, style: 'bun', glasses: true },
   stationMaster: { hair: HAIR.dark, top: CLOTH.uniform, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'cap' },
   teacher: { hair: HAIR.mom, top: CLOTH.coral, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'bob', glasses: true },
+  agent: { hair: HAIR.dark, top: CLOTH.suit, bottom: CLOTH.suit, shoes: CLOTH.shoeBrown, style: 'short', glasses: true },
 };
 
 const TOOL_RAMPS: Record<StickTool, { stick: Ramp; head: Ramp }> = {

@@ -256,7 +256,7 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6), lambert('#6b4a3a'));
       stem.position.y = 0.14;
       const blades = new THREE.Group();
-      blades.name = 'propeller';
+      blades.name = 'spin';
       for (const [k, color] of [[1, '#f2635a'], [-1, '#f6d55c']] as const) {
         const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.012, 0.045), lambert(color));
         blade.position.x = k * 0.075;
@@ -284,6 +284,33 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       const top = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), yellow);
       top.scale.y = 0.9;
       g.add(brim, top);
+      return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
+    }
+    case 'aurora': {
+      // オーロラのリボン：緑・水色・ラベンダー・ピンクの帯
+      const colors = ['#b3d67a', '#7fd0d0', '#c7b4e6', '#f4a7b9'];
+      for (const side of [-1, 1]) {
+        colors.forEach((c, i) => {
+          const band = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.12), lambert(c));
+          band.position.set(side * (0.06 + i * 0.045), 0.02 + Math.abs(side) * i * 0.012, 0);
+          band.rotation.z = side * 0.35;
+          g.add(band);
+        });
+      }
+      g.add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.05, 1), lambert('#ffffff')));
+      g.rotation.y = Math.PI / 4;
+      return { object: g, offset: new THREE.Vector3(-0.2, 0.04, 0.12) };
+    }
+    case 'globecap': {
+      // 地球儀ぼうし：小さな地球儀と木の台
+      const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 0.05, 10), lambert('#a0644a'));
+      const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.13, 1), new THREE.MeshLambertMaterial({ color: '#7fb3e0', flatShading: true }));
+      ball.position.y = 0.17;
+      const land = new THREE.Mesh(new THREE.IcosahedronGeometry(0.135, 0), new THREE.MeshLambertMaterial({ color: '#9cc97e', flatShading: true, transparent: true, opacity: 0.85 }));
+      land.position.y = 0.17;
+      land.scale.set(0.9, 1, 0.6);
+      ball.name = 'spin';
+      g.add(stand, ball, land);
       return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
     }
     case 'glasses':
@@ -471,7 +498,7 @@ export class HokorichanModel {
 
   /** 毎フレームの小さな動き（プロペラぼうしを回す）。speed は回る速さの倍率 */
   tick(dt: number, speed = 1): void {
-    const blades = this.accessory?.object.getObjectByName('propeller');
+    const blades = this.accessory?.object.getObjectByName('spin');
     if (blades) blades.rotation.y += dt * 6 * speed;
   }
 

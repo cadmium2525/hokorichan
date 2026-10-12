@@ -127,6 +127,14 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  aurora: [
+    ['.........', '.........', 'ab.....ga', 'abc.c.cga', 'abcccccga', 'abc.c.cga', 'ab.....ga', '.........', '.........'],
+    { a: '#7fd0d0', b: '#b3d67a', c: '#c7b4e6', g: '#f4a7b9' },
+  ],
+  globecap: [
+    ['...bgb...', '..bggbb..', '..bbgbb..', '...bbb...', '...kkk...', '.kkkkkkk.', '.........', '.........', '.........'],
+    { b: '#7fb3e0', g: '#9cc97e', k: '#a0644a' },
+  ],
   rainhat: [
     ['.........', '...yyy...', '..yyyyy..', '..ywyyy..', '..yyyyy..', 'ooooooooo', '.o.....o.', '.........', '.........'],
     { y: '#f6d55c', w: '#fff3a8', o: '#d9a83a' },
