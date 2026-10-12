@@ -16,6 +16,7 @@ import {
   LAND_PRICE,
   LOST_ITEMS,
   PERSON_IDS,
+  RAINY,
   SHAPE_LIMITS,
   SKY,
   SPOT_IDS,
@@ -74,7 +75,10 @@ export type EventId =
   | 'contestWon'
   | 'warehouseLetter'
   | 'warehouse'
-  | 'sky';
+  | 'sky'
+  | 'cityTown'
+  | 'rainy'
+  | 'rainyDone';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -89,6 +93,9 @@ export const EVENT_IDS: readonly EventId[] = [
   'warehouseLetter',
   'warehouse',
   'sky',
+  'cityTown',
+  'rainy',
+  'rainyDone',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
@@ -139,7 +146,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -273,6 +280,8 @@ export function friendUnlocked(save: SaveData): boolean {
 export function areaUnlocked(save: SaveData, area: Area): boolean {
   if (area === 'home') return true;
   if (area === 'friend') return friendUnlocked(save);
+  // 駅と学校は3章で、駅長さん・先生にたのまれてから
+  if (area === 'station' || area === 'school') return chapter(save) >= 3 && hasEvent(save, 'cityTown');
   return chapter(save) >= 2 && save.rep >= (AREA_REP[area] ?? 0);
 }
 
@@ -349,8 +358,9 @@ export function helperStats(save: SaveData): { speedMul: number; radiusMul: numb
   };
 }
 
-/** 粉ぼこりを食べていると湿気にくい */
+/** 粉ぼこりを食べていると湿気にくい。梅雨のあいだは必ずしっとりする */
 export function dampChance(save: SaveData): number {
+  if (rainyActive(save)) return 1;
   if (!activeTraits(save.diet).includes('flour')) return DAMP_CHANCE;
   return DAMP_CHANCE * Math.max(0.25, 1 - dietRatios(save.diet).flour * 3);
 }
@@ -384,9 +394,52 @@ export function warehouseDue(save: SaveData): boolean {
   return save.habitat === 4 && hasEvent(save, 'contestWon') && save.growthXp >= HABITATS[4].capacity && !hasEvent(save, 'warehouseLetter');
 }
 
+// ---- 3章：駅と学校、梅雨の大湿気事件 ----
+
+/** 駅長さん・先生が声をかけてくるころ（倉庫で空を飛んだあと） */
+export function cityTownDue(save: SaveData): boolean {
+  return chapter(save) >= 3 && hasEvent(save, 'sky') && !hasEvent(save, 'cityTown');
+}
+
+/** 梅雨が来るころ */
+export function rainyDue(save: SaveData): boolean {
+  return chapter(save) >= 3 && hasEvent(save, 'cityTown') && save.growthXp >= RAINY.xp && !hasEvent(save, 'rainy');
+}
+
+/** 梅雨のまっさいちゅう（町じゅうしっとり、空は飛べない） */
+export function rainyActive(save: SaveData): boolean {
+  return hasEvent(save, 'rainy') && !hasEvent(save, 'rainyDone');
+}
+
+/** 乾燥パウダー大作戦：バッグのホコリが足りているか */
+export function canDeliverRainy(save: SaveData): boolean {
+  return rainyActive(save) && DUST_TYPES.every((t) => save.bag[t] >= (RAINY.need[t] ?? 0));
+}
+
+/** 届けて梅雨を終わらせる。ごほうびはコイン・評判・レインハット */
+export function deliverRainy(save: SaveData): { save: SaveData; ok: boolean } {
+  if (!canDeliverRainy(save)) return { save, ok: false };
+  const bag = { ...save.bag };
+  for (const t of DUST_TYPES) bag[t] -= RAINY.need[t] ?? 0;
+  const accessories: AccessoryId[] = save.accessories.includes('rainhat') ? save.accessories : [...save.accessories, 'rainhat'];
+  const next: SaveData = { ...save, bag, coins: save.coins + RAINY.reward, rep: save.rep + RAINY.rep, accessories, damp: false };
+  return { save: addEvent(next, 'rainyDone'), ok: true };
+}
+
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
 export function canFly(save: SaveData): boolean {
   return save.habitat >= 5;
+}
+
+/** 梅雨のあいだは雨で飛べない */
+export function skyBlocked(save: SaveData): boolean {
+  return rainyActive(save);
+}
+
+/** 空を飛ぶ速さの倍率（チョークの粉の毛並み「すべすべ」で速くなる） */
+export function skySpeedMul(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('chalk') ? 1 + r.chalk * 1.5 : 1;
 }
 
 /** いま空に浮かんでいる雲の数 */
@@ -428,7 +481,7 @@ export function bestTool(save: SaveData): ToolDef {
 
 export function buyAccessory(save: SaveData, id: AccessoryId): { save: SaveData; ok: boolean } {
   const def = ACCESSORIES.find((a) => a.id === id);
-  if (!def || def.chapter > chapter(save) || save.accessories.includes(id) || save.coins < def.price) return { save, ok: false };
+  if (!def || def.reward || def.chapter > chapter(save) || save.accessories.includes(id) || save.coins < def.price) return { save, ok: false };
   return {
     save: { ...save, coins: save.coins - def.price, accessories: [...save.accessories, id], equippedAccessory: id },
     ok: true,
@@ -566,6 +619,8 @@ const AREA_CLIENT: Record<Area, string> = {
   flower: '花屋さん',
   bakery: 'パン屋さん',
   grandma: 'おばあちゃん',
+  station: '駅長さん',
+  school: '先生',
 };
 
 /** 今のプレイヤーが行ける掃除場所（道具・解禁を満たす） */

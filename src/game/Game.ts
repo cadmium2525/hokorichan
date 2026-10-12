@@ -37,6 +37,7 @@ import {
   CONTEST,
   CONTEST_MAX,
   DUST_TYPES,
+  RAINY,
   SKY,
   DUSTS,
   FRIEND_UNLOCK_XP,
@@ -77,6 +78,7 @@ import {
   collectDust,
   completeRequest,
   canFly,
+  cityTownDue,
   contestDue,
   contestResult,
   contestWaitMinutes,
@@ -84,11 +86,16 @@ import {
   createSession,
   dampChance,
   deliverRequest,
+  deliverRainy,
   dexAdd,
   dietRatios,
   finishSky,
   skyClouds,
+  rainyActive,
+  rainyDue,
+  skyBlocked,
   skyRadiusMul,
+  skySpeedMul,
   skyReward,
   warehouseDue,
   dry,
@@ -253,6 +260,43 @@ const WAREHOUSE_STORY: StoryStep[] = [
   },
 ];
 
+/** 3章：駅長さんと先生から声がかかる */
+const CITY_TOWN: StoryStep[] = [
+  {
+    speaker: 'stationMaster',
+    text: '町の清掃係さんですね。駅長です。<br>電車が<b>すす</b>を運んでくるので、ホームがいつも黒くて……。',
+    button: 'まかせて！',
+  },
+  { speaker: 'teacher', text: 'わたしは学校の先生よ。教室が<b>チョークの粉</b>でまっしろなの。放課後にお願いできる？', button: 'はい！' },
+  { speaker: 'narration', text: 'まちの北に<b>駅</b>と<b>学校</b>が開いた！<br>新しいホコリ「すす」「チョークの粉」が集まるよ。', button: 'わかった' },
+];
+
+/** 3章の山場：梅雨の大湿気事件 */
+const RAINY_START: StoryStep[] = [
+  { speaker: 'narration', text: '梅雨がやってきた。何日も雨がやまない……。<br>町じゅうのホコリがしっとりして、ほこりちゃんも<b>ぺしゃんこ</b>になった。', button: 'たいへん！' },
+  {
+    speaker: 'stationMaster',
+    text: '市役所から緊急のおしらせです。<br>「乾いたホコリを集めて<b>乾燥パウダー</b>をつくり、町じゅうにまいて湿気を吸わせる」とのこと。',
+    button: 'なるほど',
+  },
+  {
+    speaker: 'teacher',
+    text: '<b>粉ぼこり・黄砂・チョークの粉</b>を20個ずつ、掲示板の「乾燥パウダー大作戦」に届けてほしいそうよ。<br>雨のあいだは空は飛べないから、町で集めてね。',
+    button: '集めてくる！',
+  },
+];
+
+const RAINY_END: StoryStep[] = [
+  { speaker: 'narration', text: '乾燥パウダーを町じゅうにまいた。<br>しっとりしていた町が、みるみる乾いていく……！', button: '次へ' },
+  { speaker: 'narration', text: '雲のすきまから日がさした。梅雨明けだ！<br>ほこりちゃんは今までで一番<b>ふっかふか</b>になった。', button: 'やったー！' },
+  { speaker: 'mother', text: '町を乾かしたんですって？ えらいわね。<br>市役所の人がお礼に<b>レインハット</b>をくださったわよ。', button: 'ありがとう！' },
+  {
+    speaker: 'narration',
+    text: 'ごほうび：' + RAINY.reward + 'コイン・評判★+' + RAINY.rep + '・レインハット！<br>（3章 まち編 おしまい。4章「地球編」は準備中）',
+    button: 'やったー！',
+  },
+];
+
 const TOOL_HINT: Record<ToolId, string> = {
   hand: '指でなぞってホコリをつまもう',
   rag: 'なぞってぞうきんで拭き取ろう',
@@ -262,11 +306,27 @@ const TOOL_HINT: Record<ToolId, string> = {
 
 /** 掃除場所のある建物 */
 /** お小遣いをくれる人（図鑑用） */
-const RESULT_GIVER: Record<Area, PersonId> = { home: 'mother', friend: 'friendMom', flower: 'florist', bakery: 'baker', grandma: 'grandma' };
+const RESULT_GIVER: Record<Area, PersonId> = {
+  home: 'mother',
+  friend: 'friendMom',
+  flower: 'florist',
+  bakery: 'baker',
+  grandma: 'grandma',
+  station: 'stationMaster',
+  school: 'teacher',
+};
 
-const AREA_BUILDING: Record<Area, BuildingId> = { home: 'home', friend: 'friend', flower: 'flower', bakery: 'bakery', grandma: 'grandma' };
+const AREA_BUILDING: Record<Area, BuildingId> = {
+  home: 'home',
+  friend: 'friend',
+  flower: 'flower',
+  bakery: 'bakery',
+  grandma: 'grandma',
+  station: 'station',
+  school: 'school',
+};
 
-const BUILDING_IDS: readonly BuildingId[] = ['home', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma', 'board'];
+const BUILDING_IDS: readonly BuildingId[] = ['home', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma', 'board', 'station', 'school'];
 
 export class Game {
   private save: SaveData;
@@ -369,6 +429,7 @@ export class Game {
 
   private refreshHud(): void {
     const s = this.save;
+    this.syncRain();
     this.hud.setWallet(s.coins, bagTotal(s.bag), s.soundEnabled);
     if (this.mode === 'HOME') {
       this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), HABITATS[s.habitat].name, s.damp);
@@ -429,7 +490,8 @@ export class Game {
     });
     if (canFly(s)) {
       const clouds = skyClouds(s, this.now, this.params.speed);
-      buttons.push({ action: 'goSky', label: '空へ', sub: clouds > 0 ? `雲 ${clouds}こ` : '雲を待っている', variant: 'water', disabled: clouds === 0 });
+      const rain = skyBlocked(s);
+      buttons.push({ action: 'goSky', label: '空へ', sub: rain ? '雨で飛べない' : clouds > 0 ? `雲 ${clouds}こ` : '雲を待っている', variant: 'water', disabled: rain || clouds === 0 });
     }
     buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
@@ -487,6 +549,7 @@ export class Game {
     else if (contestDue(s)) this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
     else if (warehouseDue(s)) this.runStory(WAREHOUSE_LETTER, '市役所から', () => this.commit(addEvent(this.save, 'warehouseLetter')));
     else if (s.habitat >= 5 && !hasEvent(s, 'warehouse')) this.runStory(WAREHOUSE_STORY, 'お引っこし', () => this.commit(addEvent(this.save, 'warehouse')));
+    else if (rainyDue(s)) this.startRainy();
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
@@ -501,6 +564,8 @@ export class Game {
       if (areaUnlocked(s, 'bakery')) list.push({ id: 'baker', at: 'bakery' });
       if (areaUnlocked(s, 'grandma')) list.push({ id: 'grandma', at: 'grandma' });
     }
+    if (areaUnlocked(s, 'station')) list.push({ id: 'stationMaster', at: 'station' });
+    if (areaUnlocked(s, 'school')) list.push({ id: 'teacher', at: 'school' });
     return list;
   }
 
@@ -527,6 +592,13 @@ export class Game {
       this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
     } else if (contestDue(this.save)) {
       this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
+    } else if (cityTownDue(this.save)) {
+      this.runStory(CITY_TOWN, '駅と学校', () => {
+        this.commit(addEvent(this.save, 'cityTown'));
+        this.goTown(startAt);
+      });
+    } else if (rainyDue(this.save)) {
+      this.startRainy();
     }
   }
 
@@ -573,6 +645,16 @@ export class Game {
             this.openMap('friend');
           });
         } else this.openMap('friend');
+        return;
+      case 'station':
+      case 'school':
+        if (!areaUnlocked(this.save, id)) {
+          this.sound.play('deny');
+          this.hud.toast(id === 'station' ? '電車が通りすぎていった……（まだ用事はないみたい）' : 'チャイムが鳴っている……（まだ用事はないみたい）', 2600);
+          return;
+        }
+        this.sound.play('tap');
+        this.openMap(id);
         return;
       case 'flower':
       case 'bakery':
@@ -665,6 +747,35 @@ export class Game {
     this.refreshHud();
   }
 
+  /** 梅雨の大湿気事件のはじまり。ほこりちゃんはぺしゃんこに */
+  private startRainy(): void {
+    this.commit({ ...addEvent(this.save, 'rainy'), damp: true });
+    this.pet?.setView(this.petView());
+    this.syncRain();
+    this.refreshHud();
+    this.runStory(RAINY_START, '梅雨の大湿気事件', () => this.refreshHud());
+  }
+
+  /** 掲示板の「乾燥パウダー大作戦」に届ける */
+  private deliverRainyPowder(): void {
+    const r = deliverRainy(this.save);
+    if (!r.ok) {
+      this.sound.play('deny');
+      return;
+    }
+    this.commit(r.save);
+    this.sound.play('upgrade');
+    this.hud.bump('coins');
+    this.syncRain();
+    this.closeModal();
+    this.runStory(RAINY_END, '梅雨明け', () => this.refreshHud());
+  }
+
+  /** 梅雨のあいだは画面に雨を降らせる */
+  private syncRain(): void {
+    this.hud.setRain(rainyActive(this.save));
+  }
+
   /** 空のおそうじ：ほこりちゃんに乗って、黄砂や花粉の雲を吸い込む */
   private startSky(): void {
     const n = skyClouds(this.save, this.now, this.params.speed);
@@ -682,6 +793,7 @@ export class Game {
       clouds: types,
       pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
       radiusMul: skyRadiusMul(this.save),
+      speedMul: skySpeedMul(this.save),
       onCloud: (type) => this.onCloud(type),
     });
     this.sky = scene;
@@ -1231,8 +1343,12 @@ export class Game {
         this.town?.goToBuilding(this.petBuilding);
         return;
       case 'goSky':
-        if (this.mode !== 'HOME' || !canFly(this.save)) return;
+        if (this.mode !== 'HOME' || !canFly(this.save) || skyBlocked(this.save)) return;
         this.startSky();
+        return;
+      case 'deliverRainy':
+        if (this.mode !== 'TOWN') return;
+        this.deliverRainyPowder();
         return;
       case 'enterContest':
         if (this.mode !== 'TOWN' || !hasEvent(this.save, 'contestNotice')) return;
@@ -1537,6 +1653,9 @@ export class Game {
       case 'bakery':
       case 'grandma':
         return hasEvent(s, 'street') && areaUnlocked(s, id);
+      case 'station':
+      case 'school':
+        return areaUnlocked(s, id);
       default:
         return true;
     }
@@ -1551,8 +1670,12 @@ export class Game {
       lot: s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
       friend: '友だちの家の掃除',
       flower: '花粉が多い', bakery: '粉ぼこりが多い', grandma: '猫の毛が多い',
+      station: 'すすと砂ぼこり', school: 'チョークの粉',
     };
-    const order: BuildingId[] = s.habitat >= 4 ? ['lot', 'home', 'board', 'shop', 'friend', 'flower', 'bakery', 'grandma'] : ['home', 'board', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma'];
+    const order: BuildingId[] =
+      s.habitat >= 4
+        ? ['lot', 'home', 'board', 'shop', 'friend', 'flower', 'bakery', 'grandma', 'station', 'school']
+        : ['home', 'board', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma'];
     const items = order
       .filter((id) => this.townKnown(id) && (id !== 'lot' || s.habitat >= 4 || hasEvent(s, 'landMeeting')))
       .map((id) => `<button type="button" class="dest" data-action="walkTo" data-arg="${id}"><b>${this.townLabel(id)}</b><small>${notes[id] ?? ''}</small></button>`)
@@ -1577,6 +1700,10 @@ export class Game {
       case 'bakery':
       case 'grandma':
         return areaUnlocked(s, id) ? AREA_NAMES[id] : '？？？';
+      case 'station':
+        return '駅';
+      case 'school':
+        return '学校';
     }
   }
 

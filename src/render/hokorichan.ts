@@ -277,6 +277,15 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       g.quaternion.copy(FACE_ROTATION);
       return { object: g, offset: new THREE.Vector3(-0.2, 0.02, 0.18) };
     }
+    case 'rainhat': {
+      // レインハット：黄色の雨ぼうし（梅雨の大湿気事件のごほうび）
+      const yellow = lambert('#f6d55c');
+      const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.36, 0.04, 16), lambert('#e8c070'));
+      const top = new THREE.Mesh(new THREE.SphereGeometry(0.2, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), yellow);
+      top.scale.y = 0.9;
+      g.add(brim, top);
+      return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
+    }
     case 'glasses':
       return null; // 顔のテクスチャに描く
   }

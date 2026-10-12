@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
+import { RAINY, SPOTS, CONTEST, CONTEST_MAX, DUST_TYPES, SKY, CONTEST_REP, CONTEST_XP, FRIEND_UNLOCK_XP, HABITATS, LAND_PRICE, SPOT_READY_RATIO, spotDef, TOOLS, type DustType } from '../src/game/catalog.ts';
 import {
   canFly,
+  canDeliverRainy,
+  cityTownDue,
+  deliverRainy,
+  rainyActive,
+  rainyDue,
+  skyBlocked,
+  skySpeedMul,
   chapter,
   nextHabitat,
   contestDue,
@@ -451,4 +458,44 @@ test('早さの依頼の制限時間は15秒前後（短すぎず長すぎず）
     assert.ok(vac >= 12 && vac <= 18, `${spot.id}: ${vac}`);
     assert.ok(speedSeconds(spot, TOOLS.hand) > vac);
   }
+});
+
+test('3章：空を飛んだあと駅と学校が開き、育つと梅雨。届けると梅雨明け', () => {
+  let s: SaveData = { ...createInitialSave(), habitat: 5, growthXp: 1200 };
+  assert.equal(cityTownDue(s), false);
+  s = addEvent(s, 'sky');
+  assert.equal(cityTownDue(s), true);
+  assert.equal(areaUnlocked(s, 'station'), false);
+  s = addEvent(s, 'cityTown');
+  assert.equal(areaUnlocked(s, 'station'), true);
+  assert.equal(areaUnlocked(s, 'school'), true);
+  assert.equal(rainyDue(s), false);
+  s = { ...s, growthXp: RAINY.xp };
+  assert.equal(rainyDue(s), true);
+  s = addEvent(s, 'rainy');
+  assert.equal(rainyActive(s), true);
+  assert.equal(skyBlocked(s), true);
+  assert.equal(dampChance(s), 1);
+  assert.equal(canDeliverRainy(s), false);
+  const bag = { ...s.bag };
+  for (const [t, n] of Object.entries(RAINY.need)) bag[t as keyof typeof bag] = (n ?? 0) + 3;
+  s = { ...s, bag, coins: 10, rep: 20 };
+  assert.equal(canDeliverRainy(s), true);
+  const r = deliverRainy(s);
+  assert.equal(r.ok, true);
+  assert.equal(rainyActive(r.save), false);
+  assert.equal(skyBlocked(r.save), false);
+  assert.equal(r.save.coins, 10 + RAINY.reward);
+  assert.equal(r.save.rep, 20 + RAINY.rep);
+  assert.ok(r.save.accessories.includes('rainhat'));
+  for (const [t] of Object.entries(RAINY.need)) assert.equal(r.save.bag[t as keyof typeof bag], 3);
+  assert.equal(deliverRainy(r.save).ok, false);
+  // ごほうびのアクセサリーはお店では買えない
+  assert.equal(buyAccessory({ ...s, coins: 9999 }, 'rainhat').ok, false);
+});
+
+test('チョークの粉を食べると空を速く飛べる', () => {
+  const s0 = createInitialSave();
+  assert.equal(skySpeedMul(s0), 1);
+  assert.ok(skySpeedMul({ ...s0, diet: { ...s0.diet, cotton: 60, chalk: 40 } }) > 1);
 });

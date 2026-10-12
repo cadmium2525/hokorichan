@@ -32,7 +32,7 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- ホコリの種類 ----
 
-export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk';
 
 export type DustDef = {
   id: DustType;
@@ -53,10 +53,12 @@ export const DUSTS: Record<DustType, DustDef> = {
   fur: { id: 'fur', name: '猫の毛', colors: ['#f2c38f', '#ffffff', '#e8a868', '#d9d2c8'], tint: '#f4c08e', trait: 'もふもふ', traitDesc: '一緒の掃除で吸い寄せる範囲が広がる' },
   pollen: { id: 'pollen', name: '花粉', colors: ['#f6dd6a', '#f3cf4c', '#fbe9a0', '#e9c44a'], tint: '#ffe06a', trait: 'くしゃみ', traitDesc: '一緒の掃除で一度だけ「くしゃみ」で広く吸い込む' },
   flour: { id: 'flour', name: '粉ぼこり', colors: ['#fbf8f2', '#efe9df', '#f6f1e6', '#e6ddd0'], tint: '#ffffff', trait: 'さらさら', traitDesc: '湿気に強くなる' },
+  soot: { id: 'soot', name: 'すす', colors: ['#6e6a78', '#5a5664', '#8a8696', '#4a4654'], tint: '#b8b4c8', trait: 'いぶし銀', traitDesc: '毛並みがちょっと渋いグレーになる（見た目）' },
+  chalk: { id: 'chalk', name: 'チョークの粉', colors: ['#ffffff', '#f6cfd8', '#cfe6f8', '#fbe9a0'], tint: '#f6dde6', trait: 'すべすべ', traitDesc: '空を飛ぶのが速くなる' },
   kosa: { id: 'kosa', name: '黄砂', colors: ['#e8c27a', '#d9ad5c', '#f2d699', '#c99a4a'], tint: '#f0cf8a', trait: 'ずっしり', traitDesc: '空のおそうじで吸い込む範囲が広がる' },
 };
 
-export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa'];
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk'];
 
 // ---- 掃除場所 ----
 
@@ -70,10 +72,12 @@ export type SpotId =
   | 'friendRoom'
   | 'flowerShop'
   | 'bakery'
-  | 'grandmaRoom';
+  | 'grandmaRoom'
+  | 'station'
+  | 'classroom';
 
 /** 掃除場所がある建物 */
-export type Area = 'home' | 'friend' | 'flower' | 'bakery' | 'grandma';
+export type Area = 'home' | 'friend' | 'flower' | 'bakery' | 'grandma' | 'station' | 'school';
 
 export type SpotDef = {
   id: SpotId;
@@ -103,6 +107,8 @@ export const SPOTS: readonly SpotDef[] = [
   { id: 'flowerShop', area: 'flower', name: '花屋さん', desc: '花粉がふわふわ舞っている', maxDust: 22, rewardBase: 35, regenMinutes: 40, minTier: 0, dust: { pollen: 7, cotton: 2, sand: 1 } },
   { id: 'bakery', area: 'bakery', name: 'パン屋さん', desc: '粉ぼこりで床がまっしろ', maxDust: 24, rewardBase: 40, regenMinutes: 45, minTier: 0, dust: { flour: 8, cotton: 2 } },
   { id: 'grandmaRoom', area: 'grandma', name: 'おばあちゃんの家', desc: '猫が5匹いるたたみの部屋', maxDust: 28, rewardBase: 45, regenMinutes: 55, minTier: 0, dust: { fur: 8, cotton: 2 } },
+  { id: 'station', area: 'station', name: '駅のホーム', desc: '電車が運んでくるすすと砂ぼこり', maxDust: 30, rewardBase: 55, regenMinutes: 60, minTier: 0, dust: { soot: 7, sand: 2, cotton: 1 } },
+  { id: 'classroom', area: 'school', name: '学校の教室', desc: '黒板のチョークの粉がいっぱい', maxDust: 32, rewardBase: 60, regenMinutes: 60, minTier: 0, dust: { chalk: 7, cotton: 2, lint: 1 } },
 ];
 
 export const AREA_NAMES: Record<Area, string> = {
@@ -111,6 +117,8 @@ export const AREA_NAMES: Record<Area, string> = {
   flower: '花屋さん',
   bakery: 'パン屋さん',
   grandma: 'おばあちゃんの家',
+  station: '駅',
+  school: '学校',
 };
 
 /** 商店街の店や家は、評判（★）がこれだけたまると紹介してもらえる（2章から） */
@@ -171,6 +179,8 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
   pollen: { client: '花屋さん', line: '花粉を集めて新しい品種を育てたいの' },
   flour: { client: 'パン屋さん', line: '粉ぼこり……捨てるのはもったいなくてね' },
   kosa: { client: '市役所の人', line: '黄砂のサンプルを研究所に送りたいんです' },
+  soot: { client: '駅長さん', line: 'すすを集めて、記念の墨をつくろうと思いまして' },
+  chalk: { client: '先生', line: 'チョークの粉で、図工の色砂をつくりたいの' },
 };
 
 // ---- アクセサリー ----
@@ -188,10 +198,11 @@ export type AccessoryId =
   | 'cap'
   | 'goggles'
   | 'propeller'
-  | 'cloudpin';
+  | 'cloudpin'
+  | 'rainhat';
 
-/** chapter：その章になるとショップに入荷する */
-export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 };
+/** chapter：その章になるとショップに入荷する。reward はお店では買えない（出来事のごほうび） */
+export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3; reward?: boolean };
 
 export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'ribbon', name: 'リボン', price: 0, chapter: 1 },
@@ -208,6 +219,7 @@ export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'goggles', name: '飛行ゴーグル', price: 220, chapter: 3 },
   { id: 'propeller', name: 'プロペラぼうし', price: 280, chapter: 3 },
   { id: 'cloudpin', name: '雲の髪かざり', price: 350, chapter: 3 },
+  { id: 'rainhat', name: 'レインハット', price: 0, chapter: 3, reward: true },
 ];
 
 export const ACCESSORY_IDS: readonly AccessoryId[] = ACCESSORIES.map((a) => a.id);
@@ -270,7 +282,7 @@ export const CONTEST_MAX = CONTEST.waves.reduce((s, w) => s + w.count, 0);
 // ---- 図鑑 ----
 
 /** 図鑑に載る町の人 */
-export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma';
+export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher';
 
 export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }> = [
   { id: 'mother', name: 'お母さん', note: 'お小遣いをくれる。空き地の購入をすすめた' },
@@ -280,6 +292,8 @@ export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }>
   { id: 'florist', name: '花屋さん', note: '花粉で新しい品種をつくりたい' },
   { id: 'baker', name: 'パン屋さん', note: '粉ぼこりはパンのせい' },
   { id: 'grandma', name: 'おばあちゃん', note: '猫5匹と暮らす。じつは町内会長' },
+  { id: 'stationMaster', name: '駅長さん', note: '電車のすすに悩んでいる。時刻表に厳しい' },
+  { id: 'teacher', name: '先生', note: 'チョークの粉で図工をしたい。生徒思い' },
 ];
 
 export const PERSON_IDS: readonly PersonId[] = PEOPLE.map((p) => p.id);
@@ -299,4 +313,15 @@ export const SKY = {
   mix: { kosa: 6, pollen: 3, sand: 1 } as Partial<Record<DustType, number>>,
   /** 飛べる時間（秒） */
   seconds: 40,
+};
+
+// ---- 3章の山場：梅雨の大湿気事件 ----
+
+export const RAINY = {
+  /** 3章で、駅と学校が開いてから、ほこりちゃんがこれだけ育つと梅雨が来る */
+  xp: 2500,
+  /** 市役所の「乾燥パウダー大作戦」に届けるホコリ（乾いた粉で湿気を吸う） */
+  need: { flour: 20, kosa: 20, chalk: 20 } as Partial<Record<DustType, number>>,
+  reward: 500,
+  rep: 5,
 };

@@ -5,7 +5,7 @@ import { createRandom, randRange } from '../game/rng.ts';
 import { makeCanvas, PALETTE, toTexture } from './proceduralArt.ts';
 import { blockerOf, box, lambert, type Blocker } from './roomBuilder.ts';
 
-export type BuildingId = 'home' | 'shop' | 'friend' | 'lot' | 'flower' | 'bakery' | 'grandma' | 'board';
+export type BuildingId = 'home' | 'shop' | 'friend' | 'lot' | 'flower' | 'bakery' | 'grandma' | 'board' | 'station' | 'school';
 
 export type Building = {
   id: BuildingId;
@@ -195,6 +195,52 @@ function containerOnLot(): THREE.Group {
   return g;
 }
 
+/** 看板（文字はCanvasで描く） */
+function signTexture(text: string, bg: string, fg: string): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 48;
+  canvas.height = 16;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, 48, 16);
+    ctx.fillStyle = fg;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 24, 8.5);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  return tex;
+}
+
+/** 3章：駅（紺の屋根、ホームのひさし、看板） */
+function stationBuilding(): THREE.Group {
+  const g = house({ w: 4.0, d: 2.4, h: 2.0, wall: '#e8eef6', roof: '#5d74a8', door: '#8a8696' });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), new THREE.MeshBasicMaterial({ map: signTexture('えき', '#3e5076', '#ffffff') }));
+  sign.position.set(0, 1.55, 1.22);
+  const canopy = box(4.4, 0.08, 0.7, lambert({ color: '#c9c3bd' }));
+  canopy.position.set(0, 1.25, 1.5);
+  g.add(sign, canopy);
+  return g;
+}
+
+/** 3章：学校（赤茶の屋根、時計、看板） */
+function schoolBuilding(): THREE.Group {
+  const g = house({ w: 4.4, d: 2.6, h: 2.4, wall: '#f8ecd8', roof: '#c0703a', door: '#b8754f' });
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.5), new THREE.MeshBasicMaterial({ map: signTexture('がっこう', '#3f6b55', '#ffffff') }));
+  sign.position.set(0, 1.35, 1.32);
+  const clock = new THREE.Mesh(new THREE.CircleGeometry(0.28, 16), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+  clock.position.set(0, 2.05, 1.32);
+  const hand = box(0.04, 0.2, 0.01, lambert({ color: '#3b2622' }));
+  hand.position.set(0, 2.12, 1.34);
+  g.add(sign, clock, hand);
+  return g;
+}
+
 /** 3章：空き地に建てた倉庫 */
 function warehouseOnLot(): THREE.Group {
   const g = new THREE.Group();
@@ -302,17 +348,23 @@ export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
     a.rotation.x = 0.3;
     group.add(a);
   }
+  // 3章のまち：北の駅と学校（大通りから小道でつながる）
+  const stationObj = stationBuilding();
+  placeHouse(stationObj, 7.2 * K, -5.0 * K, 4.0, 2.4, mainZ);
+  const schoolObj = schoolBuilding();
+  placeHouse(schoolObj, -6.9 * K, -5.4 * K, 4.4, 2.6, mainZ);
+
   const boardObj = board();
   place(boardObj, -2.2 * K, mainZ + 1.3);
 
   // 木と花（端と建物のすき間）
   const trees: Array<[number, number]> = [
-    [-6.5, -6.5], [-6.8, 3.6], [6.6, -6.2], [6.6, 4.0], [-3.6, -6.6], [8.8, 4.4], [-8.6, 5.0], [-0.2, 9.6], [3.2, -6.4],
-    [-8.8, -8.8], [8.8, -8.6], [-8.8, -2.5], [8.9, 0.5], [4.5, -8.6], [-4.5, -8.8], [8.6, 9.4], [-8.6, 9.4],
+    [-6.8, 3.6], [6.6, 4.0], [-3.6, -6.6], [8.8, 4.4], [-8.6, 5.0], [-0.2, 9.6], [3.2, -6.4],
+    [-8.8, -8.8], [8.8, -8.6], [-9.3, -2.2], [8.9, 0.5], [4.5, -8.6], [-4.5, -8.8], [8.6, 9.4], [-8.6, 9.4],
     [0.6, -1.2], [-8.4, 7.4],
   ];
   trees.forEach(([x, z], i) => place(tree(i + 3), x * K, z * K));
-  const flowers: Array<[number, number]> = [[1.6, -4.6], [-5.6, 3.9], [5.6, 3.9], [-3.0, 5.5], [-2.6, -1.4], [1.0, 9.6], [-7.6, 9.6], [6.4, -3.6]];
+  const flowers: Array<[number, number]> = [[1.6, -4.6], [-5.6, 3.9], [5.6, 3.9], [-3.0, 5.5], [-2.6, -1.4], [1.0, 9.6], [-7.6, 9.6], [5.6, -3.0]];
   flowers.forEach(([x, z], i) => place(flowerPatch(i + 20), x * K, z * K, false));
 
   /** 入口は +Z 側。front=-1 なら -Z 側（空き地は道に面した奥側から入る） */
@@ -335,6 +387,8 @@ export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
       bakery: building('bakery', bakeryObj, 1.0, 3.0),
       grandma: building('grandma', grandmaObj, 1.2, 3.2),
       board: building('board', boardObj, 0.1, 1.9),
+      station: building('station', stationObj, 1.2, 3.4),
+      school: building('school', schoolObj, 1.3, 3.8),
     },
   };
 }

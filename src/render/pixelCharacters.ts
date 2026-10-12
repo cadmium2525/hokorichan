@@ -5,7 +5,7 @@
 export const CHAR_W = 32;
 export const CHAR_H = 32;
 
-export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma';
+export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Pose = 'idle' | 'walk' | 'run' | 'clean' | 'wipe' | 'surprise' | 'joy' | 'talk' | 'give';
 /** 掃除ポーズで手に持つ道具。hand（素手）と rag（ぞうきん）はしゃがんで拭く */
@@ -50,7 +50,7 @@ type Look = {
   /** ズボン（null ならワンピース） */
   bottom: Ramp | null;
   shoes: Ramp;
-  style: 'short' | 'bob' | 'bun' | 'chef';
+  style: 'short' | 'bob' | 'bun' | 'chef' | 'cap';
   apron?: Ramp;
   pocket?: string;
   clip?: string;
@@ -80,6 +80,9 @@ const CLOTH = {
   leaf: ['#c6e6a8', '#9cc97e', '#74a35a', '#3a5a2c'],
   orange: ['#f8d0a0', '#e8a868', '#c07c42', '#6a3e1e'],
   purple: ['#cdbdea', '#a58fd0', '#7d6aa8', '#43386a'],
+  uniform: ['#8fa6d0', '#5d74a8', '#435a82', '#222e48'],
+  coral: ['#f8e2a8', '#e8c070', '#c0944a', '#6a4a20'],
+  capNavy: ['#6f84b0', '#3e5076', '#2c3a58', '#161e30'],
 } as const satisfies Record<string, Ramp>;
 
 const LOOKS: Record<CharacterId, Look> = {
@@ -92,6 +95,8 @@ const LOOKS: Record<CharacterId, Look> = {
   florist: { hair: HAIR.girl, top: CLOTH.leaf, bottom: null, shoes: CLOTH.shoeBrown, style: 'bun', apron: RAMPS.white, pocket: '#f4a7b9' },
   baker: { hair: HAIR.dark, top: CLOTH.orange, bottom: null, shoes: CLOTH.shoeBrown, style: 'chef', apron: RAMPS.white, pocket: '#c07c42' },
   grandma: { hair: HAIR.grey, top: CLOTH.purple, bottom: null, shoes: CLOTH.shoeBrown, style: 'bun', glasses: true },
+  stationMaster: { hair: HAIR.dark, top: CLOTH.uniform, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'cap' },
+  teacher: { hair: HAIR.mom, top: CLOTH.coral, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'bob', glasses: true },
 };
 
 const TOOL_RAMPS: Record<StickTool, { stick: Ramp; head: Ramp }> = {
@@ -504,7 +509,7 @@ function drawHead(c: Canvas, look: Look, rig: Rig, facing: Facing, dy: number): 
     // 前髪（ぎざぎざの毛先）
     c.ellipse(cx, cy - 3.5, 8, 4.5, hair);
     for (const x of [cx - 5, cx - 1, cx + 3]) c.set(x, cy + 1, hair, 1);
-    if (look.style === 'short') {
+    if (look.style === 'short' || look.style === 'cap') {
       c.rect(cx - 8, cy + 2, cx - 8, cy + 3, RAMPS.skin, { flatTone: 1 });
       c.rect(cx + 7, cy + 2, cx + 7, cy + 3, RAMPS.skin, { flatTone: 2 });
     }
@@ -539,6 +544,14 @@ function hat(c: Canvas, look: Look, cx: number, cy: number, side: boolean): void
   if (look.style === 'chef') {
     c.ellipse(cx + (side ? 1 : 0), cy - 9, 5.5, 3.5, RAMPS.white);
     c.rect(cx - 5, cy - 7, cx + 4, cy - 5, RAMPS.white);
+  }
+  if (look.style === 'cap') {
+    // 駅長さんの制帽：紺の帽子に黒いつば、金のしるし
+    c.ellipse(cx, cy - 5, 8.6, 4.2, CLOTH.capNavy);
+    if (side) c.rect(cx - 10, cy - 2, cx - 4, cy - 2, CLOTH.capNavy, { flatTone: 3 });
+    else c.rect(cx - 7, cy - 2, cx + 6, cy - 2, CLOTH.capNavy, { flatTone: 3 });
+    c.dot(side ? cx - 4 : cx - 1, cy - 5, '#f6d55c');
+    c.dot(side ? cx - 3 : cx, cy - 5, '#f6d55c');
   }
   if (look.clip && !side) {
     c.dot(cx + 4, cy - 5, look.clip);

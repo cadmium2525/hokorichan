@@ -28,6 +28,8 @@ export type SkyOptions = {
   pet: { accessory: AccessoryId | null; shape: PetShape; tint: string };
   /** 吸い込む範囲の倍率（黄砂の毛並み） */
   radiusMul: number;
+  /** 飛ぶ速さの倍率（チョークの粉の毛並み） */
+  speedMul?: number;
   onCloud: (type: DustType) => void;
 };
 
@@ -257,7 +259,7 @@ export class SkyScene implements GameScene {
       const dz = this.target.z - this.pos.z;
       const d = Math.hypot(dx, dz);
       if (d > 0.1) {
-        const step = Math.min(d, FLY_SPEED * dt);
+        const step = Math.min(d, FLY_SPEED * (this.opts.speedMul ?? 1) * dt);
         this.pos.x += (dx / d) * step;
         this.pos.z += (dz / d) * step;
       }

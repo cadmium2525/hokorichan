@@ -1399,3 +1399,64 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
 }
+
+/* 梅雨（3章の山場）：画面に雨 */
+.stage--rain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    105deg,
+    rgba(160, 184, 240, 0) 0 14px,
+    rgba(160, 184, 240, 0.55) 14px 15px,
+    rgba(160, 184, 240, 0) 15px 31px
+  );
+  background-size: 64px 64px;
+  background-color: rgba(120, 140, 180, 0.12);
+  animation: rain-fall 0.5s linear infinite;
+}
+
+@keyframes rain-fall {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -16px 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage--rain::after {
+    animation: none;
+  }
+}
+
+.poster--rain {
+  border-color: #a9b8f0;
+  background: #f1f4ff;
+}
+
+.poster--rain .poster__title {
+  color: #4a90e2;
+}
+
+.need {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.need li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.need li.ok span {
+  color: #3cb878;
+  font-weight: 800;
+}

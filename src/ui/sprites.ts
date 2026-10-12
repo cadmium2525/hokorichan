@@ -57,6 +57,14 @@ export function heroSprite(hero: Hero, className = 'sprite', opts: SpriteOptions
 // ---- アイコン（9×9） ----
 
 const SPOT_ICONS: Record<SpotId, [string[], Record<string, string>]> = {
+  station: [
+    ['.........', 'kkkkkkkkk', 'kwwkwwkwk', 'kwwkwwkwk', 'kkkkkkkkk', 'yyyyyyyyy', 'sssssssss', 'sssssssss', 'rrrrrrrrr'],
+    { k: '#5d74a8', w: '#cfe6f8', y: '#f6d55c', s: '#c9c3bd', r: '#8a7a70' },
+  ],
+  classroom: [
+    ['kkkkkkkkk', 'kgggggggk', 'kgwgggwgk', 'kggwgwggk', 'kgggggggk', 'kkkkkkkkk', '.........', '.ddd.ddd.', '.d.d.d.d.'],
+    { k: '#a0644a', g: '#3f6b55', w: '#ffffff', d: '#d9a06a' },
+  ],
   window: [
     ['kkkkkkkkk', 'kbbbkbbbk', 'kbwbkbbbk', 'kbbbkbwbk', 'kkkkkkkkk', 'kbbbkbbbk', 'kbbbkbbbk', 'kkkkkkkkk', 'sssssssss'],
     { k: '#9aa3b5', b: '#bfe3f6', w: '#ffffff', s: '#c98b55' },
@@ -119,6 +127,10 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  rainhat: [
+    ['.........', '...yyy...', '..yyyyy..', '..ywyyy..', '..yyyyy..', 'ooooooooo', '.o.....o.', '.........', '.........'],
+    { y: '#f6d55c', w: '#fff3a8', o: '#d9a83a' },
+  ],
   bandana: [
     ['.........', '.........', '..aaaaa..', '.aawaaaa.', 'aaaaawaaa', '.aaaaaaa.', '...a.a...', '..a...a..', '.........'],
     { a: '#f6f0ea', w: '#f4a7b9' },

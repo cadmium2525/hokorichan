@@ -182,6 +182,11 @@ export class Hud {
     set(this.el.edgeRight, right, '▶');
   }
 
+  /** 梅雨のあいだは画面に雨を降らせる */
+  setRain(on: boolean): void {
+    this.stage.classList.toggle('stage--rain', on);
+  }
+
   /** 3Dの建物の上に出す名札。位置は stage に対する割合（0〜1） */
   setLabels(items: Array<{ id: string; text: string; x: number; y: number; action?: string }>): void {
     const layer = this.el.labels;

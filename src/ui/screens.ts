@@ -19,6 +19,7 @@ import {
   CONTEST,
   CONTEST_MAX,
   PEOPLE,
+  RAINY,
   type Area,
   type DustType,
   type Hero,
@@ -30,12 +31,14 @@ import {
   bagTotal,
   bestTool,
   canBuyLand,
+  canDeliverRainy,
   chapter,
   contestRanking,
   dexProgress,
   dietRatios,
   feedableAmount,
   nextHabitat,
+  rainyActive,
   REQUEST_MAX,
   spotStatus,
   type Request,
@@ -45,7 +48,7 @@ import { buttonHtml, escapeHtml } from './hud.ts';
 import { accessoryIcon, characterSprite, heroSprite, spotIcon, toolIcon, type SpriteOptions } from './sprites.ts';
 import type { CharacterId } from '../render/pixelCharacters.ts';
 
-export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'narration';
+export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'narration';
 
 const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; id: CharacterId }> = {
   mother: { name: 'お母さん', id: 'mother' },
@@ -55,6 +58,8 @@ const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; i
   florist: { name: '花屋さん', id: 'florist' },
   baker: { name: 'パン屋さん', id: 'baker' },
   grandma: { name: 'おばあちゃん', id: 'grandma' },
+  stationMaster: { name: '駅長さん', id: 'stationMaster' },
+  teacher: { name: '先生', id: 'teacher' },
 };
 
 function speakerOf(speaker: Speaker, hero: Hero, className: string, opts: SpriteOptions = {}): { name: string; sprite: string } {
@@ -211,12 +216,22 @@ export function playBody(save: SaveData): string {
 
 // ---- お小遣い（掃除の結果） ----
 
-const AREA_GIVER: Record<Area, Speaker> = { home: 'mother', friend: 'friendMom', flower: 'florist', bakery: 'baker', grandma: 'grandma' };
+const AREA_GIVER: Record<Area, Speaker> = {
+  home: 'mother',
+  friend: 'friendMom',
+  flower: 'florist',
+  bakery: 'baker',
+  grandma: 'grandma',
+  station: 'stationMaster',
+  school: 'teacher',
+};
 
 /** お小遣いをくれる人が言う「どこがきれいになったか」 */
 function placeWord(area: Area, spotName: string): string {
   if (area === 'home') return spotName;
   if (area === 'friend') return spotName.replace(/^友だちの(家の)?/, '');
+  if (area === 'station') return 'ホーム';
+  if (area === 'school') return '教室';
   return area === 'grandma' ? 'お部屋' : 'お店';
 }
 
@@ -321,8 +336,9 @@ export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0
     save.habitat >= 4 && nextArea
       ? `<p class="note">★${AREA_REP[nextArea]}になると「${escapeHtml(AREA_NAMES[nextArea])}」を紹介してもらえる</p>`
       : '';
-  const poster = save.events.includes('contestNotice') ? contestPoster(save, contestWait) : '';
+  const poster = save.events.includes('contestNotice') && !rainyActive(save) ? contestPoster(save, contestWait) : '';
   return `
+    ${rainyActive(save) ? rainyCard(save) : ''}
     ${poster}
     <div class="rep">評判 <b>★${save.rep}</b></div>
     ${list || '<p class="note">いまは依頼がないみたい</p>'}
@@ -416,4 +432,24 @@ export function skyResultBody(opts: { hero: Hero; clouds: number; reward: number
       <dt>バッグ</dt><dd>${opts.bag}個</dd>
     </dl>
     <div class="chips chips--dust">${got}</div>`;
+}
+
+// ---- 梅雨の大湿気事件（3章の山場） ----
+
+function rainyCard(save: SaveData): string {
+  const rows = DUST_TYPES.filter((t) => (RAINY.need[t] ?? 0) > 0)
+    .map((t) => {
+      const need = RAINY.need[t] ?? 0;
+      const have = save.bag[t];
+      return `<li class="${have >= need ? 'ok' : ''}">${dustChip(t)}<span>${Math.min(have, need)} / ${need}</span></li>`;
+    })
+    .join('');
+  const ready = canDeliverRainy(save);
+  return `
+    <div class="poster poster--rain">
+      <div class="poster__title">緊急！ 乾燥パウダー大作戦</div>
+      <p>乾いたホコリを集めて乾燥パウダーをつくり、町の湿気を吸わせます。（市役所）</p>
+      <ul class="need">${rows}</ul>
+      ${buttonHtml({ action: 'deliverRainy', label: ready ? '届ける！' : 'まだ足りない', sub: ready ? '梅雨を終わらせる' : 'バッグの数', variant: 'primary', disabled: !ready })}
+    </div>`;
 }

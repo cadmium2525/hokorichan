@@ -14,6 +14,7 @@ import {
   lambert,
   buildShell,
   plant,
+  wallDecal,
   type Blocker,
   type Room,
 } from './roomBuilder.ts';
@@ -663,6 +664,161 @@ export function buildContest(seed: number): SpotLayout {
   return contestLayout(seed);
 }
 
+// ---- 3章：駅のホームと学校の教室 ----
+
+/** ホームの床：コンクリートのタイルと、手前の黄色い点字ブロック */
+function platformTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(32, 32);
+  ctx.fillStyle = '#d8d2cc';
+  ctx.fillRect(0, 0, 32, 32);
+  ctx.fillStyle = '#c9c3bd';
+  for (let i = 0; i < 32; i += 8) {
+    ctx.fillRect(i, 0, 1, 32);
+    ctx.fillRect(0, i, 32, 1);
+  }
+  return toTexture(canvas, [4, 4]);
+}
+
+function timetableTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(32, 24);
+  ctx.fillStyle = '#3e5076';
+  ctx.fillRect(0, 0, 32, 24);
+  ctx.fillStyle = '#f6d55c';
+  for (let y = 4; y < 22; y += 4) {
+    ctx.fillRect(3, y, 6, 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(12, y, 16, 2);
+    ctx.fillStyle = '#f6d55c';
+  }
+  return toTexture(canvas);
+}
+
+function blackboardTexture(): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(48, 24);
+  ctx.fillStyle = '#3f6b55';
+  ctx.fillRect(0, 0, 48, 24);
+  ctx.fillStyle = '#ffffff';
+  // 先生の落書き（ほこりちゃんの絵と線）
+  ctx.fillRect(6, 6, 10, 1);
+  ctx.fillRect(6, 10, 14, 1);
+  ctx.fillRect(6, 14, 8, 1);
+  ctx.fillStyle = '#f6cfd8';
+  ctx.fillRect(30, 7, 8, 6);
+  ctx.fillRect(29, 9, 10, 3);
+  ctx.fillStyle = '#3b2622';
+  ctx.fillRect(32, 9, 1, 1);
+  ctx.fillRect(35, 9, 1, 1);
+  ctx.fillStyle = '#a0644a';
+  ctx.fillRect(0, 22, 48, 2);
+  return toTexture(canvas);
+}
+
+function stationLayout(seed: number): SpotLayout {
+  const g = new THREE.Group();
+  const half = 3.6;
+  buildShell(g, half, seed, { base: '#e8eef6', stripe: '#d6e0ee' }, platformTexture());
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, ry = 0) => {
+    obj.position.set(x, 0, z);
+    obj.rotation.y += ry;
+    g.add(obj);
+    blockers.push(blockerOf(obj));
+  };
+  // 手前の線路側のふちに点字ブロック
+  const tactile = box(half * 2, 0.02, 0.35, lambert({ color: '#f6d55c' }));
+  tactile.position.set(0, 0.01, half - 0.3);
+  g.add(tactile);
+  wallDecal(g, half, 'back', -1.2, 1.5, 1.6, 1.2, timetableTexture());
+  // ベンチ・柱・自動販売機
+  const bench = () => {
+    const b = new THREE.Group();
+    const seat = box(1.3, 0.08, 0.42, lambert({ color: '#5d74a8' }));
+    seat.position.y = 0.42;
+    const back = box(1.3, 0.4, 0.06, lambert({ color: '#5d74a8' }));
+    back.position.set(0, 0.66, -0.18);
+    b.add(seat, back);
+    for (const x of [-0.5, 0.5]) {
+      const leg = box(0.06, 0.42, 0.36, lambert({ color: '#8a8696' }));
+      leg.position.set(x, 0.21, 0);
+      b.add(leg);
+    }
+    return b;
+  };
+  place(bench(), 1.3, -half + 0.45);
+  place(bench(), -half + 0.45, 1.0, Math.PI / 2);
+  for (const [x, z] of [[-1.0, 0.6], [1.6, 1.2]]) {
+    const p = new THREE.Group();
+    const pillar = box(0.3, 2.6, 0.3, lambert({ color: '#c9c3bd' }));
+    pillar.position.y = 1.3;
+    p.add(pillar);
+    place(p, x, z);
+  }
+  const vending = frontBox(0.8, 1.7, 0.6, lambert({ color: '#f2635a' }), lambert({ map: shopFrontTexture('#f2635a') }));
+  vending.position.y = 0.85;
+  const v = new THREE.Group();
+  v.add(vending);
+  place(v, half - 0.5, -half + 0.4);
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.2, 0, -half - 0.2), new THREE.Vector3(half, 2.8, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
+function classroomLayout(seed: number): SpotLayout {
+  const g = new THREE.Group();
+  const half = 3.7;
+  buildShell(g, half, seed, { base: '#f8ecd8', stripe: '#f2dcc0' });
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, ry = 0) => {
+    obj.position.set(x, 0, z);
+    obj.rotation.y += ry;
+    g.add(obj);
+    blockers.push(blockerOf(obj));
+  };
+  wallDecal(g, half, 'back', 0.2, 1.5, 2.6, 1.2, blackboardTexture());
+  // 教卓と、生徒の机（2列×2）
+  const lectern = frontBox(1.2, 0.9, 0.55, lambert({ map: woodTexture(seed, PALETTE.wood) }), lambert({ map: woodTexture(seed + 1, PALETTE.wood, 1) }));
+  lectern.position.y = 0.45;
+  const lg = new THREE.Group();
+  lg.add(lectern);
+  place(lg, 0.2, -half + 1.0);
+  const desk = (i: number) => {
+    const d = new THREE.Group();
+    const top = box(0.8, 0.06, 0.55, lambert({ map: woodTexture(seed + 10 + i, PALETTE.woodLight) }));
+    top.position.y = 0.62;
+    d.add(top);
+    for (const [x, z] of [[-0.34, -0.22], [0.34, -0.22], [-0.34, 0.22], [0.34, 0.22]]) {
+      const leg = box(0.05, 0.6, 0.05, lambert({ color: '#8a8696' }));
+      leg.position.set(x, 0.3, z);
+      d.add(leg);
+    }
+    const chair = box(0.45, 0.06, 0.42, lambert({ color: PALETTE.woodLight }));
+    chair.position.set(0, 0.38, 0.5);
+    d.add(chair);
+    return d;
+  };
+  let i = 0;
+  for (const x of [-1.3, 1.3]) for (const z of [0.3, 2.0]) place(desk(i++), x, z);
+  // 窓ぎわのロッカー
+  const locker = frontBox(0.5, 1.2, 2.2, lambert({ color: '#cfd8e6' }), lambert({ color: '#b8c4d6' }));
+  locker.position.y = 0.6;
+  const lk = new THREE.Group();
+  lk.add(locker);
+  place(lk, -half + 0.35, -0.6);
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.2, 0, -half - 0.2), new THREE.Vector3(half, 2.8, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
 export function buildSpot(id: SpotId, seed: number): SpotLayout {
   switch (id) {
     case 'window':
@@ -685,5 +841,9 @@ export function buildSpot(id: SpotId, seed: number): SpotLayout {
       return shopLayout('bakery', seed);
     case 'grandmaRoom':
       return shopLayout('grandma', seed);
+    case 'station':
+      return stationLayout(seed);
+    case 'classroom':
+      return classroomLayout(seed);
   }
 }
