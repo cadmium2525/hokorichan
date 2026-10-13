@@ -222,7 +222,7 @@ function readParams(): DebugParams {
 type StoryStep = { speaker: Speaker; text: string; button: string; enter?: (scene: PetScene | null) => void };
 
 const HOW_TO =
-  '「おそうじ」で家の中の場所をえらんで、指でなぞってホコリを集めよう。<br>' +
+  '「おそうじ」で家の中の場所をえらんで、ホコリの上で指を止めてつまもう。<br>道具を買うと、なぞるだけでたくさん取れるようになるよ。<br>' +
   'ホコリには種類があって、何を食べさせるかで<b>毛並み</b>が変わるよ。<br>' +
   '「おでかけ」すると、<b>ショップ</b>で道具やケースを買えたり、<b>掲示板</b>で町の人の依頼を受けられるよ。<br>' +
   'ホコリは時間がたつとまた積もるから、待つ間は「あそぶ」でなでたり着せかえたりしよう！';
@@ -514,9 +514,9 @@ const SHRINK_STORY: StoryStep[] = [
 ];
 
 const TOOL_HINT: Record<ToolId, string> = {
-  hand: '指でなぞってホコリをつまもう',
-  rag: 'なぞってぞうきんで拭き取ろう',
-  mop: 'なぞってモップでからめ取ろう',
+  hand: 'ホコリの上で指を止めて、1個ずつつまもう',
+  rag: 'ゆっくりなぞって、ぞうきんで拭き取ろう（2個ずつ）',
+  mop: 'なぞってモップでからめ取ろう（4個ずつ）',
   vacuum: 'なぞって掃除機で吸い込もう',
 };
 

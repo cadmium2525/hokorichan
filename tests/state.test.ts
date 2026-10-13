@@ -864,3 +864,15 @@ test('町づくり：章になったら寄付でき、効き目がある', async
   const { sanitize } = await import('../src/game/save.ts');
   assert.deepEqual(sanitize(JSON.parse(JSON.stringify({ ...s, town: [...s.town, 'bogus'] }))).town, s.town);
 });
+
+test('道具は、上のものほど取りやすい（止める時間が短く、一度にたくさん、広く）', async () => {
+  const { TOOLS, TOOL_ORDER } = await import('../src/game/catalog.ts');
+  for (let i = 1; i < TOOL_ORDER.length; i++) {
+    const a = TOOLS[TOOL_ORDER[i - 1]];
+    const b = TOOLS[TOOL_ORDER[i]];
+    assert.ok(b.grab < a.grab, b.id);
+    assert.ok(b.maxAtOnce > a.maxAtOnce, b.id);
+    assert.ok(b.radius > a.radius, b.id);
+  }
+  assert.equal(TOOLS.vacuum.grab, 0);
+});

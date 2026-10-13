@@ -18,14 +18,19 @@ export type ToolDef = {
   pickTime: number;
   /** この半径倍率の内側のホコリを引き寄せる（0なら引き寄せない） */
   pull: number;
+  /** ホコリの上でこれだけ（秒）止めると取れる（0ならふれた瞬間） */
+  grab: number;
+  /** 一度に取れる数 */
+  maxAtOnce: number;
   desc: string;
 };
 
 export const TOOLS: Record<ToolId, ToolDef> = {
-  hand: { id: 'hand', name: '素手', tier: 0, price: 0, radius: 0.42, pickTime: 0.45, pull: 0, desc: '指でつまんで集める。' },
-  rag: { id: 'rag', name: 'ぞうきん', tier: 1, price: 30, radius: 0.6, pickTime: 0.34, pull: 0, desc: 'ひと拭きで広く取れる。' },
-  mop: { id: 'mop', name: 'ハンディモップ', tier: 2, price: 120, radius: 0.72, pickTime: 0.28, pull: 0, desc: '高いところに届く。' },
-  vacuum: { id: 'vacuum', name: '掃除機', tier: 3, price: 300, radius: 0.9, pickTime: 0.22, pull: 1.8, desc: '近くのホコリを吸い寄せる。' },
+  // 掃除機を基準に、それまでの道具は「止めて取る時間」「一度に取れる数」「届く広さ」で差をつける
+  hand: { id: 'hand', name: '素手', tier: 0, price: 0, radius: 0.38, pickTime: 0.45, pull: 0, grab: 0.22, maxAtOnce: 1, desc: '1個ずつ、指を止めてつまむ。' },
+  rag: { id: 'rag', name: 'ぞうきん', tier: 1, price: 30, radius: 0.5, pickTime: 0.36, pull: 0, grab: 0.12, maxAtOnce: 2, desc: '少しゆっくり拭くと、2個ずつ取れる。' },
+  mop: { id: 'mop', name: 'ハンディモップ', tier: 2, price: 120, radius: 0.64, pickTime: 0.28, pull: 0, grab: 0.05, maxAtOnce: 4, desc: 'なでるだけで4個ずつ。高いところに届く。' },
+  vacuum: { id: 'vacuum', name: '掃除機', tier: 3, price: 300, radius: 0.9, pickTime: 0.22, pull: 1.8, grab: 0, maxAtOnce: 99, desc: 'ふれた瞬間に吸い込み、近くのホコリも吸い寄せる。' },
 };
 
 export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];

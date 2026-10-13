@@ -1143,8 +1143,10 @@ export function availableSpots(save: SaveData): SpotDef[] {
  * 素手・ぞうきんしかないときは少しおまけする。
  */
 export function speedSeconds(spot: SpotDef, tool: ToolDef): number {
+  // 道具が弱いほど時間がかかるので、そのぶん長め
   const base = 10 + Math.round(spot.maxDust / 4);
-  return tool.tier <= 1 ? base + 5 : base;
+  const extra = [Math.round(spot.maxDust * 0.6), Math.round(spot.maxDust * 0.35), Math.round(spot.maxDust * 0.12), 0][tool.tier] ?? 0;
+  return base + extra;
 }
 
 /** 新しい依頼を1件つくる。行ける場所と手に入るホコリの中から選ぶ */

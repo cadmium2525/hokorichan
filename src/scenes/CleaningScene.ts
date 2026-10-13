@@ -32,6 +32,8 @@ type Dust = {
   sink: 'tool' | 'helper';
   t: number;
   phase: number;
+  /** 道具を止めている時間（道具ごとの grab 秒で取れる） */
+  grab: number;
 };
 
 /** 一緒に掃除するほこりちゃん（おうち級から） */
@@ -221,7 +223,7 @@ export class CleaningScene implements GameScene {
       object.position.copy(home);
       object.rotation.y = random() * Math.PI * 2;
       this.scene.add(object);
-      this.dusts.push({ id, object, home, state: 'idle', sink: 'tool', t: 0, phase: random() * Math.PI * 2 });
+      this.dusts.push({ id, object, home, state: 'idle', sink: 'tool', t: 0, phase: random() * Math.PI * 2, grab: 0 });
     });
   }
 
@@ -498,6 +500,9 @@ export class CleaningScene implements GameScene {
     const tool = this.opts.tool;
     const suction = new THREE.Vector3(this.smoothPoint.x, y + 0.12 * this.scale, this.smoothPoint.z);
     const helperMouth = this.updateHelper(dt, time, active);
+    // いま道具で取っているとちゅうの数（素手は1個ずつ、ぞうきんは2個ずつ…）
+    let busy = 0;
+    for (const d of this.dusts) if (d.state === 'sucking' && d.sink === 'tool') busy++;
     for (const d of this.dusts) {
       if (d.state === 'gone') continue;
       if (d.state === 'idle') {
@@ -505,10 +510,18 @@ export class CleaningScene implements GameScene {
         const dx = d.home.x - this.smoothPoint.x;
         const dz = d.home.z - this.smoothPoint.z;
         const dist = Math.hypot(dx, dz);
-        if (active && dist < this.radius) {
+        const inReach = active && dist < this.radius;
+        // 道具を止めている時間をためる（はなれると少しずつ戻る）
+        d.grab = inReach ? d.grab + dt : Math.max(0, d.grab - dt * 2);
+        if (inReach && d.grab >= tool.grab && busy < tool.maxAtOnce) {
           d.state = 'sucking';
           d.sink = 'tool';
           d.t = 0;
+          busy++;
+        } else if (inReach) {
+          // つまみかけ：ぷるぷるふるえる
+          d.object.rotation.y += dt * 10;
+          d.object.scale.setScalar(this.scale * (1 + Math.sin(time * 40) * 0.08 * Math.min(1, d.grab / Math.max(0.01, tool.grab))));
         } else if (this.helper && Math.hypot(d.home.x - this.helper.pos.x, d.home.z - this.helper.pos.z) < this.helper.radius) {
           // ほこりちゃんが転がりながら吸い込む
           d.state = 'sucking';
@@ -538,6 +551,7 @@ export class CleaningScene implements GameScene {
             continue;
           }
         }
+        if (!inReach) d.object.scale.setScalar(this.scale);
         d.object.position.set(d.home.x, y + Math.max(0, Math.sin(time * 2 + d.phase)) * 0.04 * this.scale, d.home.z);
         continue;
       }
