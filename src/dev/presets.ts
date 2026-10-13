@@ -1,7 +1,7 @@
 // 開発用：章や山場の直前など、確かめたい場面の保存データをすぐ作る。
 // ゲームの仕組み（state.ts）だけを使う純粋な関数なので、テストでも検証できる。
 
-import { ACCESSORIES, DUST_TYPES, EARTH_WRAP_XP, SOLAR_XP, CLUSTER_XP, PEEK_XP, FINAL_XP, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
+import { TOWN_PROJECTS, ACCESSORIES, DUST_TYPES, EARTH_WRAP_XP, SOLAR_XP, CLUSTER_XP, PEEK_XP, FINAL_XP, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
 import { capacityOf, createInitialSave, emptyBag, type Bag, type EventId, type SaveData } from '../game/state.ts';
 
 export type Preset = { id: string; group: string; name: string; note: string; make: (hero: Hero) => SaveData };
@@ -343,6 +343,7 @@ export const TWEAKS: readonly Tweak[] = [
   { id: 'contest', name: '大会の待ち時間を消す', apply: (s) => ({ ...s, contestAt: 0 }) },
   { id: 'requests', name: '依頼をすぐ届く状態に', apply: (s) => ({ ...s, requests: [], requestClock: 0 }) },
   { id: 'dry', name: 'しっとりを乾かす', apply: (s) => ({ ...s, damp: false }) },
+  { id: 'town', name: '町づくりぜんぶ', apply: (s) => ({ ...s, town: TOWN_PROJECTS.map((p) => p.id) }) },
   {
     id: 'dex',
     name: '図鑑をぜんぶ埋める',

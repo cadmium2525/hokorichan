@@ -6,6 +6,8 @@ import {
   FUR_IDS,
   DUST_TYPES,
   LOST_ITEMS,
+  TOWN_PROJECT_IDS,
+  type TownProjectId,
   TREASURES,
   PERSON_IDS,
   SPOT_IDS,
@@ -242,6 +244,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     bubbles: toSpotState(data.bubbles, now),
     loop: toCount(data.loop, 0),
     contestLosses: toCount(data.contestLosses, 0),
+    town: Array.isArray(data.town) ? [...new Set(data.town.filter((v): v is TownProjectId => TOWN_PROJECT_IDS.includes(v as TownProjectId)))] : [],
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }

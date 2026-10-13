@@ -17,6 +17,7 @@ import {
   LAND_PRICE,
   LOST_ITEMS,
   TREASURES,
+  TOWN_PROJECTS,
   BIG_REQUESTS,
   CONTEST,
   CONTEST_MAX,
@@ -49,6 +50,8 @@ import {
   REQUEST_MAX,
   spotStatus,
   spotTreasures,
+  hasProject,
+  townProjectsOpen,
   contestRivals,
   nextRepGoal,
   type Request,
@@ -372,6 +375,22 @@ function repGoal(save: SaveData): string {
   return save.rep >= goal ? '<small>（次の章へ進める評判です）</small>' : `<small>（次の章へは ★${goal}）</small>`;
 }
 
+/** 町づくり（寄付）：できたもの・寄付できるもの・まだ先のもの */
+function townProjectsHtml(save: SaveData): string {
+  const ch = chapter(save);
+  const rows = TOWN_PROJECTS.map((p) => {
+    const built = hasProject(save, p.id);
+    const later = ch < p.chapter;
+    const action = built
+      ? '<span class="owned">できた！</span>'
+      : later
+        ? `<span class="owned">${p.chapter}章から</span>`
+        : buttonHtml({ action: 'donate', arg: p.id, label: '寄付する', sub: `${p.price}コイン`, variant: 'primary', disabled: save.coins < p.price });
+    return `<div class="item ${built ? 'item--done' : ''}"><span class="item__text"><b>${escapeHtml(p.name)}</b><small>${later ? '？？？' : escapeHtml(p.perk)}</small></span>${action}</div>`;
+  }).join('');
+  return `<h3 class="dex__title">町づくり<span>寄付でできるもの</span></h3><p class="note note--left">町の清掃係として、コインを寄付して町をよくしよう。できたものは、まちに建つよ。</p><div class="items">${rows}</div>`;
+}
+
 export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0): string {
   const list = save.requests.map((r) => requestHtml(save, r)).join('');
   const next =
@@ -387,7 +406,8 @@ export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0
     ${poster}
     <div class="rep">評判 <b>★${save.rep}</b>${repGoal(save)}</div>
     ${list || '<p class="note">いまは依頼がないみたい</p>'}
-    ${next}${unlock}`;
+    ${next}${unlock}
+    ${townProjectsOpen(save) ? townProjectsHtml(save) : ''}`;
 }
 
 // ---- 空き地（1章の山場） ----

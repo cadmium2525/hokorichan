@@ -595,3 +595,33 @@ export const BIG_REQUEST_CHANCE = 0.3;
 
 /** 次の章へ進むのに必要な評判（章が切りかわる出来事ごと） */
 export const CHAPTER_REP = { warehouseLetter: 12, worldLetter: 30, spaceLetter: 45, galaxyLetter: 60, universeLetter: 75 } as const;
+
+// ---- 町づくり（コインの使い道。3章から、掲示板で寄付） ----
+
+export type TownProjectId = 'fountain' | 'clocktower' | 'arcade' | 'observatory' | 'museum' | 'statue';
+
+export type TownProjectDef = {
+  id: TownProjectId;
+  name: string;
+  price: number;
+  /** この章から寄付できる */
+  chapter: number;
+  /** できると、どうなるか（遊びの上で） */
+  perk: string;
+  /** できたときのお話（町の人のひとこと） */
+  line: string;
+};
+
+export const TOWN_PROJECTS: readonly TownProjectDef[] = [
+  { id: 'fountain', name: '公園の噴水', price: 4000, chapter: 3, perk: '公園に人が集まって、町の掃除場所のホコリが1.25倍の速さで積もる', line: '噴水のまわりで、みんなが休むようになったわ。……ホコリも、よく積もるわね。' },
+  { id: 'clocktower', name: '駅前の時計台', price: 6000, chapter: 3, perk: '町の人が時間を気にするようになり、依頼が15分ごとに届く（いままで20分）', line: '時計台ができて、時刻表どおりに依頼が届くようになりました。' },
+  { id: 'arcade', name: '商店街のアーケード', price: 8000, chapter: 3, perk: '屋根のおかげで、しっとりしにくくなる（半分）', line: 'アーケードのおかげで、雨の日もお客さんが来てくれるよ。' },
+  { id: 'observatory', name: '町の天文台', price: 12000, chapter: 4, perk: '宇宙・銀河・しゃぼん玉の遊ぶ時間が10秒のびる', line: '天文台から、ほこりちゃんがよく見えるの。理科の授業が楽しみだわ。' },
+  { id: 'museum', name: 'ほこりちゃん記念館', price: 20000, chapter: 4, perk: '宝物の話が町に広まって、掃除で宝物が見つかりやすくなる', line: '記念館に、宝物をかざらせてもらったよ。町の自慢だね。' },
+  { id: 'statue', name: 'ほこりちゃん像', price: 40000, chapter: 5, perk: '「町の名誉清掃係」になる（町の人の見る目が変わる）', line: '町内会長として、あなたを「町の名誉清掃係」に任命します。' },
+];
+
+export const TOWN_PROJECT_IDS: readonly TownProjectId[] = TOWN_PROJECTS.map((p) => p.id);
+
+/** 町づくりの効き目 */
+export const TOWN_PERKS = { fountainRegen: 1.25, clockMinutes: 15, arcadeDamp: 0.5, observatorySeconds: 10, museumTreasure: 0.8 };

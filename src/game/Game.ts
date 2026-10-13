@@ -54,6 +54,7 @@ import {
   RAINY,
   WORLD,
   SPACE,
+  TOWN_PROJECTS,
   CHAPTER_REP,
   GALAXY,
   BUBBLES,
@@ -118,6 +119,9 @@ import {
   canSpace,
   canGalaxy,
   canWakeUp,
+  donate,
+  hasProject,
+  observatoryBonus,
   chapter,
   repShortfall,
   wakeUp,
@@ -703,7 +707,8 @@ export class Game {
       this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), `${HABITATS[s.habitat].name}${s.loop > 0 ? `・${s.loop + 1}周目` : ''}`, s.damp);
       this.hud.setActions(this.homeButtons());
     } else if (this.mode === 'TOWN') {
-      this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
+      const title = hasProject(s, 'statue') ? '町の名誉清掃係 ・ ' : hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : '';
+      this.hud.setTownStatus(`${title}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
       this.hud.setActions([
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
         { action: 'walkHome', label: s.habitat >= 7 ? '駅から宇宙へ帰る' : s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
@@ -965,6 +970,7 @@ export class Game {
       warehouse: this.save.habitat >= 5,
       railway: areaUnlocked(this.save, 'station'),
       npcs: this.townNpcs(),
+      projects: this.save.town,
       phase: dayPhase(this.hour),
       onArrive: (id) => this.onArrive(id),
       onTalk: (id) => this.talkWith(id),
@@ -1315,7 +1321,8 @@ export class Game {
       onPop: (type) => this.onPop(type),
     });
     this.bubbles = scene;
-    this.bubbleGot = { popped: 0, got: {}, endsAt: this.now + BUBBLES.seconds * 1000, lastLeft: BUBBLES.seconds };
+    const seconds = BUBBLES.seconds + observatoryBonus(this.save);
+    this.bubbleGot = { popped: 0, got: {}, endsAt: this.now + seconds * 1000, lastLeft: seconds };
     this.mode = 'BUBBLES';
     this.setScene(scene);
     this.syncInput();
@@ -1373,7 +1380,8 @@ export class Game {
       onMote: (type) => this.onMote(type),
     });
     this.galaxy = scene;
-    this.galaxyGot = { motes: 0, got: {}, pending: {}, savedAt: this.now, endsAt: this.now + GALAXY.seconds * 1000, lastLeft: GALAXY.seconds };
+    const seconds = GALAXY.seconds + observatoryBonus(this.save);
+    this.galaxyGot = { motes: 0, got: {}, pending: {}, savedAt: this.now, endsAt: this.now + seconds * 1000, lastLeft: seconds };
     this.mode = 'GALAXY';
     this.setScene(scene);
     this.syncInput();
@@ -1454,7 +1462,8 @@ export class Game {
       },
     });
     this.space = scene;
-    this.spaceGot = { clusters: 0, bumps: 0, got: {}, endsAt: this.now + SPACE.seconds * 1000, lastLeft: SPACE.seconds };
+    const seconds = SPACE.seconds + observatoryBonus(this.save);
+    this.spaceGot = { clusters: 0, bumps: 0, got: {}, endsAt: this.now + seconds * 1000, lastLeft: seconds };
     this.mode = 'SPACE';
     this.setScene(scene);
     this.syncInput();
@@ -2345,6 +2354,29 @@ export class Game {
         this.closeModal();
         this.goHome();
         this.runStory(CONTAINER_STORY, 'お引っこし', () => this.pet?.playHappy());
+        return;
+      }
+      case 'donate': {
+        if (this.overlay !== 'board') return;
+        const def = TOWN_PROJECTS.find((p) => p.id === arg);
+        const r = def ? donate(this.save, def.id) : { save: this.save, ok: false };
+        if (!def || !r.ok) {
+          this.sound.play('deny');
+          return;
+        }
+        this.commit(r.save);
+        this.sound.play('reward');
+        this.hud.bump('coins');
+        this.runStory(
+          [
+            { speaker: 'narration', text: `町のみんなで、<b>${def.name}</b>をつくった！`, button: 'わあ！' },
+            { speaker: 'grandma', text: def.line, button: 'えへへ' },
+            { speaker: 'narration', text: `${def.perk}`, button: 'やったー！' },
+          ],
+          '町づくり',
+          // できたものが見えるように、まちを作りなおす
+          () => this.goTown('board'),
+        );
         return;
       }
       case 'dropRequest':

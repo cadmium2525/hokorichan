@@ -827,3 +827,40 @@ test('依頼はことわれる。大きな依頼の数や、未来の依頼時�
   const loaded = sanitize(JSON.parse(JSON.stringify(future)), now);
   assert.ok(refreshRequests(loaded, now + 21 * 60_000, createRandom(2)).requests.length > 0);
 });
+
+test('町づくり：章になったら寄付でき、効き目がある', async () => {
+  const s0 = await import('../src/game/state.ts');
+  const { TOWN_PROJECTS, TOWN_PERKS } = await import('../src/game/catalog.ts');
+  const base: ReturnType<typeof s0.createInitialSave> = { ...s0.createInitialSave(), habitat: 5, coins: 100000 };
+  // 2章ではまだ
+  assert.equal(s0.townProjectsOpen({ ...base, habitat: 4 }), false);
+  assert.equal(s0.canDonate({ ...base, habitat: 4 }, 'fountain'), false);
+  assert.equal(s0.townProjectsOpen(base), true);
+  // 章が足りないもの・コインが足りないもの
+  assert.equal(s0.canDonate(base, 'observatory'), false);
+  assert.equal(s0.canDonate({ ...base, coins: 10 }, 'fountain'), false);
+  let s: ReturnType<typeof s0.createInitialSave> = base;
+  for (const id of ['fountain', 'clocktower', 'arcade'] as const) {
+    const r = s0.donate(s, id);
+    assert.equal(r.ok, true, id);
+    s = r.save;
+  }
+  assert.equal(s.coins, 100000 - TOWN_PROJECTS.filter((p) => ['fountain', 'clocktower', 'arcade'].includes(p.id)).reduce((a, p) => a + p.price, 0));
+  assert.equal(s0.donate(s, 'fountain').ok, false); // 二重にはできない
+  assert.equal(s0.requestIntervalMinutes(s), TOWN_PERKS.clockMinutes);
+  assert.ok(s0.dampChance(s) < s0.dampChance(base));
+  // 噴水：同じ時間でも、よく積もる
+  const now = 10_000_000;
+  const spot = (await import('../src/game/catalog.ts')).spotDef('myroom');
+  const emptied = { ...s, spots: { ...s.spots, myroom: { fullness: 0, at: now } } };
+  const emptiedBase = { ...base, spots: { ...base.spots, myroom: { fullness: 0, at: now } } };
+  const later = now + 10 * 60_000;
+  assert.ok(s0.spotStatus(emptied, spot, later).fullness > s0.spotStatus(emptiedBase, spot, later).fullness);
+  // 天文台
+  const ch4 = { ...s, habitat: 6 as const };
+  assert.equal(s0.observatoryBonus(ch4), 0);
+  assert.equal(s0.observatoryBonus(s0.donate(ch4, 'observatory').save), TOWN_PERKS.observatorySeconds);
+  // 保存して読み直しても残る
+  const { sanitize } = await import('../src/game/save.ts');
+  assert.deepEqual(sanitize(JSON.parse(JSON.stringify({ ...s, town: [...s.town, 'bogus'] }))).town, s.town);
+});

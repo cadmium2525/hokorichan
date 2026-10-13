@@ -24,6 +24,9 @@ import {
   FAVORITE_MUL,
   TREASURES,
   TREASURE_CHANCE,
+  TOWN_PERKS,
+  TOWN_PROJECTS,
+  type TownProjectId,
   TREASURE_MIN_FULLNESS,
   type Treasure,
   FUR_IDS,
@@ -201,6 +204,8 @@ export type SaveData = {
   loop: number;
   /** 初優勝までに大会で負けた回数（ほかのチームが少しずつ弱くなる） */
   contestLosses: number;
+  /** 寄付してできた町づくり */
+  town: TownProjectId[];
 };
 
 export const REWARD_PER_DUST = 2;
@@ -261,6 +266,7 @@ export function createInitialSave(): SaveData {
     bubbles: { fullness: 1, at: 0 },
     loop: 0,
     contestLosses: 0,
+    town: [],
   };
 }
 
@@ -380,7 +386,8 @@ export function spotTreasures(save: SaveData, spot: SpotId): { found: Treasure[]
 export function rollTreasure(save: SaveData, spot: SpotId, fullness: number, random: () => number): Treasure | null {
   if (fullness < TREASURE_MIN_FULLNESS) return null;
   const { left } = spotTreasures(save, spot);
-  if (left.length === 0 || random() >= TREASURE_CHANCE) return null;
+  const chance = hasProject(save, 'museum') ? TOWN_PERKS.museumTreasure : TREASURE_CHANCE;
+  if (left.length === 0 || random() >= chance) return null;
   return left[Math.floor(random() * left.length)];
 }
 
@@ -550,8 +557,9 @@ export function helperStats(save: SaveData): { speedMul: number; radiusMul: numb
 /** 粉ぼこりを食べていると湿気にくい。梅雨のあいだは必ずしっとりする */
 export function dampChance(save: SaveData): number {
   if (rainyActive(save)) return 1;
-  if (!activeTraits(save.diet).includes('flour')) return DAMP_CHANCE;
-  return DAMP_CHANCE * Math.max(0.25, 1 - dietRatios(save.diet).flour * 3);
+  const base = hasProject(save, 'arcade') ? DAMP_CHANCE * TOWN_PERKS.arcadeDamp : DAMP_CHANCE;
+  if (!activeTraits(save.diet).includes('flour')) return base;
+  return base * Math.max(0.25, 1 - dietRatios(save.diet).flour * 3);
 }
 
 /** 一緒に掃除できるのは、おうち級（コンテナ）になってから */
@@ -860,6 +868,39 @@ export function wakeUp(save: SaveData): SaveData {
   };
 }
 
+// ---- 町づくり（寄付） ----
+
+export function hasProject(save: SaveData, id: TownProjectId): boolean {
+  return save.town.includes(id);
+}
+
+/** 寄付できるか（その章になっていて、まだできていなくて、コインが足りる） */
+export function canDonate(save: SaveData, id: TownProjectId): boolean {
+  const def = TOWN_PROJECTS.find((p) => p.id === id);
+  return !!def && chapter(save) >= def.chapter && !hasProject(save, id) && save.coins >= def.price;
+}
+
+export function donate(save: SaveData, id: TownProjectId): { save: SaveData; ok: boolean } {
+  const def = TOWN_PROJECTS.find((p) => p.id === id);
+  if (!def || !canDonate(save, id)) return { save, ok: false };
+  return { save: { ...save, coins: save.coins - def.price, town: [...save.town, id] }, ok: true };
+}
+
+/** 町づくりを掲示板に出すか（3章から） */
+export function townProjectsOpen(save: SaveData): boolean {
+  return chapter(save) >= 3;
+}
+
+/** 依頼が届く間隔（駅前の時計台で短くなる） */
+export function requestIntervalMinutes(save: SaveData): number {
+  return hasProject(save, 'clocktower') ? TOWN_PERKS.clockMinutes : REQUEST_INTERVAL_MINUTES;
+}
+
+/** 宇宙・銀河・しゃぼん玉で、のびる秒数（町の天文台） */
+export function observatoryBonus(save: SaveData): number {
+  return hasProject(save, 'observatory') ? TOWN_PERKS.observatorySeconds : 0;
+}
+
 // ---- 次の章へ進むための評判 ----
 
 /** いまの章から次の章へ進むのに必要な評判（もう進んだ・最後の章なら null） */
@@ -998,6 +1039,8 @@ export type SpotStatus = {
 };
 
 export function spotStatus(save: SaveData, def: SpotDef, now: number, speed = 1): SpotStatus {
+  // 公園の噴水があると、町の掃除場所は少し速く積もる
+  if (hasProject(save, 'fountain')) speed *= TOWN_PERKS.fountainRegen;
   const fullness = spotFullness(save.spots[def.id], def, now, speed);
   const perMinute = 1 / def.regenMinutes;
   return {
@@ -1144,7 +1187,7 @@ export function makeRequest(save: SaveData, id: number, random: () => number): R
  * random は依頼の中身を決めるのに使う。
  */
 export function refreshRequests(save: SaveData, now: number, random: () => number, speed = 1): SaveData {
-  const interval = (REQUEST_INTERVAL_MINUTES * MINUTE) / speed;
+  const interval = (requestIntervalMinutes(save) * MINUTE) / speed;
   let s = save;
   // 一度も届いていなければ、最初の2件をすぐ届ける
   if (s.requestSeq === 0 && s.requests.length === 0) s = { ...s, requestClock: now - interval };

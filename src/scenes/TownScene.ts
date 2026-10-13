@@ -2,6 +2,7 @@
 
 import * as THREE from 'three';
 import type { DayPhase } from '../game/clock.ts';
+import type { TownProjectId } from '../game/catalog.ts';
 import { glowTexture } from '../render/spaceArt.ts';
 import type { Hero } from '../game/catalog.ts';
 import { CharacterSprite, screenDelta } from '../render/characterSprite.ts';
@@ -43,6 +44,8 @@ export type TownOptions = {
   onTalk?: (id: CharacterId) => void;
   /** 時間帯（空の色と光） */
   phase?: DayPhase;
+  /** 町づくりでできたもの */
+  projects?: readonly TownProjectId[];
 };
 
 export class TownScene implements GameScene {
@@ -76,7 +79,7 @@ export class TownScene implements GameScene {
   constructor(opts: TownOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene, opts.phase);
-    this.town = buildTown({ lotOwned: opts.lotOwned, warehouse: opts.warehouse, railway: opts.railway });
+    this.town = buildTown({ lotOwned: opts.lotOwned, warehouse: opts.warehouse, railway: opts.railway, projects: opts.projects });
     this.scene.add(this.town.group);
     this.hero = new CharacterSprite(opts.hero);
     // 入口の少し手前（道側）に立ち、こちらを向いている

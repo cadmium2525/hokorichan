@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { createRandom, randRange } from '../game/rng.ts';
 import { makeCanvas, PALETTE, toTexture } from './proceduralArt.ts';
 import { blockerOf, box, lambert, type Blocker } from './roomBuilder.ts';
+import type { TownProjectId } from '../game/catalog.ts';
 
 export type BuildingId = 'home' | 'shop' | 'friend' | 'lot' | 'flower' | 'bakery' | 'grandma' | 'board' | 'station' | 'school';
 
@@ -455,7 +456,132 @@ function warehouseOnLot(): THREE.Group {
   return g;
 }
 
-export type TownOptions = { lotOwned: boolean; warehouse?: boolean; railway?: boolean };
+export type TownOptions = { lotOwned: boolean; warehouse?: boolean; railway?: boolean; projects?: readonly TownProjectId[] };
+
+// ---- 町づくりでできるもの ----
+
+/** 公園の噴水：石のふちに水、まんなかの柱から水しぶき */
+function fountain(): THREE.Group {
+  const g = new THREE.Group();
+  const stone = lambert({ color: '#d9d4cc' });
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.95, 0.3, 16), stone);
+  rim.position.y = 0.15;
+  const water = new THREE.Mesh(new THREE.CylinderGeometry(0.78, 0.78, 0.04, 16), lambert({ color: '#9fd2f0' }));
+  water.position.y = 0.28;
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.7, 8), stone);
+  pillar.position.y = 0.5;
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.2, 0.12, 12), stone);
+  bowl.position.y = 0.85;
+  const spray = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), lambert({ color: '#cfe7fb' }));
+  spray.position.y = 1.05;
+  g.add(rim, water, pillar, bowl, spray);
+  return g;
+}
+
+/** 駅前の時計台：細い塔に時計と、とんがり屋根 */
+function clocktower(): THREE.Group {
+  const g = new THREE.Group();
+  const tower = box(0.7, 2.8, 0.7, lambert({ color: '#f2e2c6' }));
+  tower.position.y = 1.4;
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.8, 4), lambert({ color: '#5d74a8' }));
+  roof.geometry.rotateY(Math.PI / 4);
+  roof.position.y = 3.2;
+  const face = new THREE.Mesh(new THREE.CircleGeometry(0.26, 16), lambert({ color: '#ffffff' }));
+  face.position.set(0, 2.3, 0.36);
+  const hand = box(0.04, 0.18, 0.02, lambert({ color: '#43404c' }));
+  hand.position.set(0, 2.36, 0.37);
+  const hand2 = box(0.14, 0.04, 0.02, lambert({ color: '#43404c' }));
+  hand2.position.set(0.05, 2.3, 0.37);
+  g.add(tower, roof, face, hand, hand2);
+  return g;
+}
+
+/** 商店街のアーケード：通りをまたぐピンクのアーチ */
+function arcadeArch(width: number): THREE.Group {
+  const g = new THREE.Group();
+  const post = lambert({ color: '#f4effa' });
+  for (const z of [-width / 2, width / 2]) {
+    const p = box(0.16, 1.9, 0.16, post);
+    p.position.set(0, 0.95, z);
+    g.add(p);
+  }
+  const beam = box(0.22, 0.32, width + 0.3, lambert({ map: signTexture('しょうてんがい', '#f4a7b9', '#ffffff') }));
+  beam.position.y = 2.0;
+  g.add(beam);
+  return g;
+}
+
+/** 町の天文台：まるい建物に白いドーム、空へ向いたすき間 */
+function observatory(): THREE.Group {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.85, 1.2, 14), lambert({ color: '#efe4cf' }));
+  base.position.y = 0.6;
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.82, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), lambert({ color: '#f6f0ea' }));
+  dome.position.y = 1.2;
+  const slit = box(0.2, 0.7, 0.9, lambert({ color: '#43404c' }));
+  slit.position.set(0, 1.55, 0.2);
+  slit.rotation.x = -0.6;
+  const door = box(0.4, 0.6, 0.05, lambert({ color: PALETTE.wood }));
+  door.position.set(0, 0.3, 0.84);
+  g.add(base, dome, slit, door);
+  return g;
+}
+
+/** ほこりちゃん記念館：柱のある白い建物と、ピンクの旗 */
+function museum(): THREE.Group {
+  const g = new THREE.Group();
+  const body = box(2.4, 1.4, 1.8, lambert({ color: '#fbfbf4' }));
+  body.position.y = 0.7;
+  const roof = box(2.7, 0.25, 2.1, lambert({ color: '#c7b4e6' }));
+  roof.position.y = 1.52;
+  const pediment = new THREE.Mesh(new THREE.ConeGeometry(1.4, 0.5, 3), lambert({ color: '#c7b4e6' }));
+  pediment.rotation.x = Math.PI / 2;
+  pediment.rotation.z = Math.PI;
+  pediment.scale.set(1, 0.2, 0.7);
+  pediment.position.set(0, 1.85, 0.95);
+  g.add(body, roof);
+  for (const x of [-0.9, -0.3, 0.3, 0.9]) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.3, 8), lambert({ color: '#ffffff' }));
+    c.position.set(x, 0.65, 1.0);
+    g.add(c);
+  }
+  const sign = box(1.6, 0.3, 0.05, lambert({ map: signTexture('きねんかん', '#f4a7b9', '#ffffff') }));
+  sign.position.set(0, 1.25, 0.92);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 6), lambert({ color: '#b8b0c8' }));
+  pole.position.set(1.0, 2.1, 0);
+  const flag = box(0.04, 0.28, 0.42, lambert({ color: '#f08a9a' }));
+  flag.position.set(1.0, 2.45, 0.22);
+  g.add(sign, pole, flag);
+  return g;
+}
+
+/** ほこりちゃん像：台の上に、白くてまるいほこりちゃん（目だけ） */
+function statue(): THREE.Group {
+  const g = new THREE.Group();
+  const pedestal = box(0.9, 0.6, 0.9, lambert({ color: '#d9d4cc' }));
+  pedestal.position.y = 0.3;
+  const plate = box(0.5, 0.18, 0.02, lambert({ color: '#f2c94c' }));
+  plate.position.set(0, 0.35, 0.46);
+  g.add(pedestal, plate);
+  const white = lambert({ color: '#fffaf2' });
+  const center = new THREE.Vector3(0, 1.05, 0);
+  const rng = createRandom(77);
+  for (let i = 0; i < 12; i++) {
+    const puff = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), white);
+    const dir = new THREE.Vector3(rng() - 0.5, rng() - 0.3, rng() - 0.5).normalize();
+    puff.position.copy(center).addScaledVector(dir, 0.3);
+    g.add(puff);
+  }
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.4, 1), white);
+  core.position.copy(center);
+  g.add(core);
+  for (const x of [-0.12, 0.12]) {
+    const eye = box(0.06, 0.1, 0.02, lambert({ color: '#3a2e3a' }));
+    eye.position.set(x, 1.1, 0.42);
+    g.add(eye);
+  }
+  return g;
+}
 
 /** 建物どうしの間隔の倍率（建物の大きさは変えない） */
 const SPACING = 1.3;
@@ -552,13 +678,27 @@ export function buildTown(opts: TownOptions = { lotOwned: false }): Town {
   const boardObj = board();
   place(boardObj, -2.2 * K, mainZ + 1.3);
 
-  // 木と花（端と建物のすき間）
+  // 町づくりでできたもの（寄付）
+  const built = new Set(opts.projects ?? []);
+  if (built.has('fountain')) place(fountain(), -0.8 * K, 5.1 * K);
+  if (built.has('clocktower')) place(clocktower(), 4.85 * K, -3.25 * K);
+  if (built.has('arcade')) {
+    for (const x of [-7.3 * K, -0.5 * K]) place(arcadeArch(1.5), x, southZ, false);
+  }
+  if (built.has('observatory')) place(observatory(), -3.55 * K, -4.3 * K);
+  if (built.has('museum')) place(museum(), 6.2 * K, 4.3 * K);
+  if (built.has('statue')) place(statue(), -2.15 * K, 0.25 * K);
+
+  // 木と花（端と建物のすき間）。記念館ができたら、その場所の木はない
   const trees: Array<[number, number]> = [
     [-6.8, 3.6], [6.6, 4.0], [-3.6, -6.6], [8.8, 4.4], [-8.6, 5.0], [-0.2, 9.6], [3.2, -6.4],
     [-8.8, -8.8], [8.8, -8.6], [-9.3, -2.2], [8.9, 0.5], [4.5, -8.6], [-4.5, -8.8], [8.6, 9.4], [-8.6, 9.4],
     [0.6, -1.2], [-8.4, 7.4],
   ];
-  trees.forEach(([x, z], i) => place(tree(i + 3), x * K, z * K));
+  trees.forEach(([x, z], i) => {
+    if (built.has('museum') && x === 6.6 && z === 4.0) return;
+    place(tree(i + 3), x * K, z * K);
+  });
   const flowers: Array<[number, number]> = [[1.6, -4.6], [-5.6, 3.9], [5.6, 3.9], [-3.0, 5.5], [-2.6, -1.4], [1.0, 9.6], [-7.6, 9.6], [5.6, -3.0]];
   flowers.forEach(([x, z], i) => place(flowerPatch(i + 20), x * K, z * K, false));
 

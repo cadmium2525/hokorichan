@@ -1,7 +1,7 @@
 // まちの人との会話。章や出来事に合わせてセリフが変わり、遊び方のヒントもまぜる。
 // 町の人は、ほこりちゃんがどれだけ大きくなっても真顔で普通に話す。
 
-import { FUR_IDS, RAINY, type PersonId } from './catalog.ts';
+import { FUR_IDS, RAINY, type PersonId, type TownProjectId } from './catalog.ts';
 import { areaUnlocked, chapter, contestRivals, hasEvent, rainyActive, type SaveData } from './state.ts';
 
 /** まちに立っている人（お母さん・機構の人・管制官さんはまちにいない） */
@@ -69,6 +69,15 @@ export function talkLines(id: TownPerson, save: SaveData): string[] {
       add(ch >= 6, '星雲のもやを食べると、かき集める指の幅が広がるんですって。先生も知らなかったわ。');
       break;
   }
+  // 町づくりでできたもの
+  const built = (id: TownProjectId) => save.town.includes(id);
+  if (id === 'florist') add(built('fountain'), '噴水のまわりに、花だんをつくったの。見ていってね。');
+  if (id === 'stationMaster') add(built('clocktower'), '時計台、1秒もくるいません。わたしが毎朝あわせていますから。');
+  if (id === 'baker') add(built('arcade'), 'アーケードのおかげで、雨の日もパンが売れるよ。ありがとう！');
+  if (id === 'teacher') add(built('observatory'), '天文台で、ほこりちゃんの観察日記をつけている子がいるのよ。');
+  if (id === 'grandma') add(built('museum'), '記念館の宝物、町の人がよく見に来るのよ。');
+  if (id === 'friend') add(built('statue'), 'ほこりちゃん像の前で、毎朝待ち合わせしてるんだ。');
+  if (id === 'shopkeeper') add(built('statue'), 'ほこりちゃん像のキーホルダー、いちばんの売れ筋なんですよ。');
   return lines;
 }
 
