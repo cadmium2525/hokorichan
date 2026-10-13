@@ -15,6 +15,10 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  BIG_REQUESTS,
+  BIG_REQUEST_CHANCE,
+  CHAPTER_REP,
+  REQUEST_SCALE,
   NOSTALGIA_MUL,
   NOSTALGIC_DUSTS,
   FAVORITE_MUL,
@@ -560,6 +564,10 @@ export function buyHabitat(save: SaveData): { save: SaveData; ok: boolean } {
 
 /** 町の清掃係になり、コンテナがいっぱいになったら市役所から倉庫の許可が届く */
 export function warehouseDue(save: SaveData): boolean {
+  return warehouseReady(save) && save.rep >= CHAPTER_REP.warehouseLetter;
+}
+
+function warehouseReady(save: SaveData): boolean {
   return save.habitat === 4 && hasEvent(save, 'contestWon') && save.growthXp >= HABITATS[4].capacity && !hasEvent(save, 'warehouseLetter');
 }
 
@@ -599,6 +607,10 @@ export function deliverRainy(save: SaveData): { save: SaveData; ok: boolean } {
 
 /** 梅雨明けのあと倉庫がいっぱいになると、世界ほこり機構から手紙が届く */
 export function worldLetterDue(save: SaveData): boolean {
+  return worldReady(save) && save.rep >= CHAPTER_REP.worldLetter;
+}
+
+function worldReady(save: SaveData): boolean {
   return save.habitat === 5 && hasEvent(save, 'rainyDone') && save.growthXp >= HABITATS[5].capacity && !hasEvent(save, 'worldLetter');
 }
 
@@ -643,6 +655,10 @@ export function earthWrapDue(save: SaveData): boolean {
 
 /** 4章の山場のあと、宇宙ほこり管制センターから連絡が来る */
 export function spaceLetterDue(save: SaveData): boolean {
+  return spaceReady(save) && save.rep >= CHAPTER_REP.spaceLetter;
+}
+
+function spaceReady(save: SaveData): boolean {
   return save.habitat === 6 && hasEvent(save, 'earthWrap') && !hasEvent(save, 'spaceLetter');
 }
 
@@ -698,6 +714,10 @@ export function solarDue(save: SaveData): boolean {
 
 /** 5章の山場のあと、銀河ほこり連合から呼び出しが来る */
 export function galaxyLetterDue(save: SaveData): boolean {
+  return galaxyReady(save) && save.rep >= CHAPTER_REP.galaxyLetter;
+}
+
+function galaxyReady(save: SaveData): boolean {
   return save.habitat === 7 && hasEvent(save, 'solar') && !hasEvent(save, 'galaxyLetter');
 }
 
@@ -744,6 +764,10 @@ export function clusterDue(save: SaveData): boolean {
 
 /** 6章の山場のあと、3つの機関がそろって迎えに来る */
 export function universeLetterDue(save: SaveData): boolean {
+  return universeReady(save) && save.rep >= CHAPTER_REP.universeLetter;
+}
+
+function universeReady(save: SaveData): boolean {
   return save.habitat === 8 && hasEvent(save, 'cluster') && !hasEvent(save, 'universeLetter');
 }
 
@@ -816,6 +840,26 @@ export function wakeUp(save: SaveData): SaveData {
     contestBest: save.contestBest,
     loop: save.loop + 1,
   };
+}
+
+// ---- 次の章へ進むための評判 ----
+
+/** いまの章から次の章へ進むのに必要な評判（もう進んだ・最後の章なら null） */
+export function nextRepGoal(save: SaveData): number | null {
+  if (save.habitat === 4 && !hasEvent(save, 'warehouseLetter')) return CHAPTER_REP.warehouseLetter;
+  if (save.habitat === 5 && !hasEvent(save, 'worldLetter')) return CHAPTER_REP.worldLetter;
+  if (save.habitat === 6 && !hasEvent(save, 'spaceLetter')) return CHAPTER_REP.spaceLetter;
+  if (save.habitat === 7 && !hasEvent(save, 'galaxyLetter')) return CHAPTER_REP.galaxyLetter;
+  if (save.habitat === 8 && !hasEvent(save, 'universeLetter')) return CHAPTER_REP.universeLetter;
+  return null;
+}
+
+/** 評判だけが足りなくて次の章へ進めないときの、あといくつ（ほかの条件がそろっていなければ null） */
+export function repShortfall(save: SaveData): number | null {
+  const ready = warehouseReady(save) || worldReady(save) || spaceReady(save) || galaxyReady(save) || universeReady(save);
+  const goal = nextRepGoal(save);
+  if (!ready || goal === null || save.rep >= goal) return null;
+  return goal - save.rep;
 }
 
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
@@ -1032,15 +1076,24 @@ export function speedSeconds(spot: SpotDef, tool: ToolDef): number {
 
 /** 新しい依頼を1件つくる。行ける場所と手に入るホコリの中から選ぶ */
 export function makeRequest(save: SaveData, id: number, random: () => number): Request {
+  const ch = chapter(save);
+  const scale = REQUEST_SCALE[ch] ?? REQUEST_SCALE[1];
+  // 4章からは、その章の依頼主の「大きな依頼」もまじる
+  const big = BIG_REQUESTS[ch];
+  if (big && random() < BIG_REQUEST_CHANCE) {
+    const dust = big.dust[Math.floor(random() * big.dust.length)];
+    const count = Math.round((big.count[0] + random() * (big.count[1] - big.count[0])) / 10) * 10;
+    return { id, kind: 'collect', client: big.client, line: big.line, dust, count, reward: big.reward, rep: 2 };
+  }
   const spots = availableSpots(save);
   const types = DUST_TYPES.filter((t) => spots.some((s) => (s.dust[t] ?? 0) > 0));
   const roll = random();
   const spot = spots[Math.floor(random() * spots.length)];
   if (roll < 0.45 && types.length > 0) {
     const dust = types[Math.floor(random() * types.length)];
-    const count = 5 + Math.floor(random() * 8);
+    const base = 5 + Math.floor(random() * 8);
     const c = COLLECT_LINES[dust];
-    return { id, kind: 'collect', client: c.client, line: c.line, dust, count, reward: 10 + count * 4, rep: 1 };
+    return { id, kind: 'collect', client: c.client, line: c.line, dust, count: base * scale.count, reward: Math.round((10 + base * 4) * scale.coin), rep: 1 };
   }
   if (roll < 0.75) {
     const seconds = speedSeconds(spot, bestTool(save));
@@ -1051,7 +1104,7 @@ export function makeRequest(save: SaveData, id: number, random: () => number): R
       line: `お客さんが来るの！ ${spot.name}を${seconds}秒以内にきれいにしてほしい`,
       spot: spot.id,
       seconds,
-      reward: 30 + spot.maxDust,
+      reward: Math.round((30 + spot.maxDust) * scale.coin),
       rep: 1,
     };
   }
@@ -1063,7 +1116,7 @@ export function makeRequest(save: SaveData, id: number, random: () => number): R
     line: `${spot.name}で${item.name}をなくしちゃったの。ホコリにまぎれてないかしら`,
     spot: spot.id,
     item: item.id,
-    reward: 50,
+    reward: Math.round(50 * scale.coin),
     rep: 2,
   };
 }

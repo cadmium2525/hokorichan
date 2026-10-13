@@ -566,3 +566,32 @@ export const PEEK_XP = 500000;
 
 /** 最後：すべてのほこり級。宇宙のまんなかがいっぱいになったら */
 export const FINAL_XP = 600000;
+
+// ---- 依頼と評判（章が進んでも意味があるように） ----
+
+/** 章ごとの、依頼のお礼（コイン）と、集める数の倍率 */
+export const REQUEST_SCALE: Record<number, { coin: number; count: number }> = {
+  1: { coin: 1, count: 1 },
+  2: { coin: 1.5, count: 1 },
+  3: { coin: 3, count: 2 },
+  4: { coin: 6, count: 3 },
+  5: { coin: 10, count: 4 },
+  6: { coin: 15, count: 5 },
+  7: { coin: 20, count: 6 },
+};
+
+export type BigRequestDef = { client: string; dust: DustType[]; count: [number, number]; reward: number; line: string };
+
+/** 大きな依頼（4章から）：その章の依頼主が、その章のホコリをたくさんほしがる */
+export const BIG_REQUESTS: Partial<Record<number, BigRequestDef>> = {
+  4: { client: '世界ほこり機構', dust: ['kosa', 'ash'], count: [300, 600], reward: 600, line: '各国の研究所に、まとめて送りたいのです' },
+  5: { client: '宇宙ほこり管制センター', dust: ['star', 'cosmic'], count: [1500, 3000], reward: 1200, line: '打ち上げの記念品にします、どうぞ' },
+  6: { client: '銀河ほこり連合', dust: ['nebula'], count: [3000, 6000], reward: 2000, line: '連合の受付を、星雲のもやでかざりたいのです' },
+  7: { client: '銀河ほこり連合', dust: ['other'], count: [10000, 20000], reward: 3500, line: 'よその宇宙のちりを、宇宙じゅうの博物館へ' },
+};
+
+/** 大きな依頼が来る割合 */
+export const BIG_REQUEST_CHANCE = 0.3;
+
+/** 次の章へ進むのに必要な評判（章が切りかわる出来事ごと） */
+export const CHAPTER_REP = { warehouseLetter: 12, worldLetter: 20, spaceLetter: 26, galaxyLetter: 32, universeLetter: 38 } as const;

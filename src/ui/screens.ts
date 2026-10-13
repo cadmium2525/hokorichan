@@ -17,6 +17,7 @@ import {
   LAND_PRICE,
   LOST_ITEMS,
   TREASURES,
+  BIG_REQUESTS,
   CONTEST,
   CONTEST_MAX,
   FUR_IDS,
@@ -47,6 +48,7 @@ import {
   REQUEST_MAX,
   spotStatus,
   spotTreasures,
+  nextRepGoal,
   type Request,
   type SaveData,
 } from '../game/state.ts';
@@ -349,12 +351,21 @@ function requestHtml(save: SaveData, r: Request): string {
     const item = LOST_ITEMS.find((i) => i.id === r.item);
     goal = `🔍 ${escapeHtml(spot?.name ?? '')}で${escapeHtml(item?.name ?? '落とし物')}をさがす`;
   }
+  // 4章からの「大きな依頼」（その章の依頼主から、たくさん）
+  const big = Object.values(BIG_REQUESTS).some((b) => b?.client === r.client && r.dust && b.dust.includes(r.dust));
   return `
-    <div class="request">
-      <div class="request__head"><b>${escapeHtml(r.client)}</b><span class="request__reward">+${r.reward}コイン ・ ★${r.rep}</span></div>
+    <div class="request ${big ? 'request--big' : ''}">
+      <div class="request__head"><b>${big ? '<span class="request__tag">大きな依頼</span>' : ''}${escapeHtml(r.client)}</b><span class="request__reward">+${r.reward}コイン ・ ★${r.rep}</span></div>
       <div class="request__line">「${escapeHtml(r.line)}」</div>
       <div class="request__goal"><span>${goal}</span>${button}</div>
     </div>`;
+}
+
+/** 次の章へ進むのに必要な評判（まだなら） */
+function repGoal(save: SaveData): string {
+  const goal = nextRepGoal(save);
+  if (goal === null) return '';
+  return save.rep >= goal ? '<small>（次の章へ進める評判です）</small>' : `<small>（次の章へは ★${goal}）</small>`;
 }
 
 export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0): string {
@@ -370,7 +381,7 @@ export function boardBody(save: SaveData, minutesToNext: number, contestWait = 0
   return `
     ${rainyActive(save) ? rainyCard(save) : ''}
     ${poster}
-    <div class="rep">評判 <b>★${save.rep}</b></div>
+    <div class="rep">評判 <b>★${save.rep}</b>${repGoal(save)}</div>
     ${list || '<p class="note">いまは依頼がないみたい</p>'}
     ${next}${unlock}`;
 }

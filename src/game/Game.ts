@@ -113,6 +113,7 @@ import {
   canSpace,
   canGalaxy,
   canWakeUp,
+  repShortfall,
   wakeUp,
   bubbleCount,
   bubbleReward,
@@ -855,6 +856,8 @@ export class Game {
         if (this.mode === 'HOME') this.runStory(PEEK_STORY, '次元超越級', () => this.refreshHud());
       }, 4200);
     }
+    else if (repShortfall(s) !== null)
+      this.hud.toast(`次の章へ進むには、評判があと★${repShortfall(s)}。掲示板の依頼をこなそう`, 3200);
     else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }

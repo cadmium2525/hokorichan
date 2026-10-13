@@ -416,7 +416,7 @@ test('図鑑は同じものを二度載せない', () => {
 });
 
 test('3章：清掃係になってコンテナがいっぱいになると倉庫の手紙。手紙のあとでだけ倉庫を買える', () => {
-  const base = { ...createInitialSave(), habitat: 4 as const, growthXp: HABITATS[4].capacity, coins: 5000 };
+  const base = { ...createInitialSave(), habitat: 4 as const, growthXp: HABITATS[4].capacity, coins: 5000, rep: 50 };
   assert.equal(warehouseDue(base), false);
   const won = addEvent(base, 'contestWon');
   assert.equal(warehouseDue(won), true);
@@ -535,7 +535,7 @@ test('毛並み図鑑：ランクが上がるときに、そのランクのあ�
 
 test('4章：倉庫がいっぱいで世界ほこり機構→丘へ。地域は使うと減り時間で戻る。丘いっぱいで山場', () => {
   const MIN = 60_000;
-  let s: SaveData = addEvent({ ...createInitialSave(), habitat: 5, growthXp: 5000 }, 'rainyDone');
+  let s: SaveData = addEvent({ ...createInitialSave(), habitat: 5, growthXp: 5000, rep: 50 }, 'rainyDone');
   assert.equal(worldLetterDue(s), true);
   assert.equal(worldLetterDue({ ...s, growthXp: 4999 }), false);
   s = moveToHill(s);
@@ -568,7 +568,7 @@ test('家具の中の点は、いちばん近いふちの外へ押し出され�
 test('5章：宇宙ほこり管制センターの連絡から月のとなりへ', async () => {
   const { spaceLetterDue, moveToSpace, chapter, canSpace, spaceClusters, finishSpace, spaceReward, solarDue, spaceCenter, addEvent, createInitialSave } = await import('../src/game/state.ts');
   const { SPACE, SOLAR_XP, HABITATS } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 6, growthXp: 30000 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 6, growthXp: 30000, rep: 50 };
   assert.equal(spaceLetterDue(s), false);
   s = addEvent(s, 'earthWrap');
   assert.equal(spaceLetterDue(s), true);
@@ -656,7 +656,7 @@ test('なつかしの味：4章から町のホコリは1個で何倍も育ち、
 test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ', async () => {
   const { galaxyLetterDue, moveToGalaxy, chapter, canGalaxy, galaxyNebulae, finishGalaxy, galaxyReward, clusterDue, addEvent, createInitialSave, dustValue } = await import('../src/game/state.ts');
   const { GALAXY, CLUSTER_XP, HABITATS, NOSTALGIA_MUL } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 7, growthXp: 80000 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 7, growthXp: 80000, rep: 50 };
   assert.equal(galaxyLetterDue(s), false);
   s = addEvent(s, 'solar');
   assert.equal(galaxyLetterDue(s), true);
@@ -677,7 +677,7 @@ test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ'
 test('終章：宇宙のまんなか・しゃぼん玉の宇宙・はみ出し・最後の場面', async () => {
   const { universeLetterDue, moveToUniverse, chapter, canBubbles, bubbleCount, finishBubbles, bubbleReward, peekDue, finaleDue, addEvent, createInitialSave, rankFor } = await import('../src/game/state.ts');
   const { BUBBLES, FINAL_XP, PEEK_XP, HABITATS } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 8, growthXp: 250000 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 8, growthXp: 250000, rep: 50 };
   assert.equal(universeLetterDue(s), false);
   s = addEvent(s, 'cluster');
   assert.equal(universeLetterDue(s), true);
@@ -744,4 +744,48 @@ test('夢からさめる：ホコリと図鑑とアクセサリーを引き継�
   // 保存して読み直しても周回数は残る
   assert.equal(sanitize(JSON.parse(JSON.stringify(next))).loop, 1);
   assert.equal(wakeUp(addEvent(next, 'finale')).loop, 2);
+});
+
+test('次の章へは評判も必要。評判だけ足りないときは、あといくつか分かる', async () => {
+  const { warehouseDue, worldLetterDue, spaceLetterDue, galaxyLetterDue, universeLetterDue, repShortfall, nextRepGoal, addEvent, createInitialSave } = await import('../src/game/state.ts');
+  const { CHAPTER_REP, HABITATS } = await import('../src/game/catalog.ts');
+  const cases = [
+    { due: warehouseDue, need: CHAPTER_REP.warehouseLetter, s: addEvent({ ...createInitialSave(), habitat: 4 as const, growthXp: HABITATS[4].capacity }, 'contestWon') },
+    { due: worldLetterDue, need: CHAPTER_REP.worldLetter, s: addEvent({ ...createInitialSave(), habitat: 5 as const, growthXp: HABITATS[5].capacity }, 'rainyDone') },
+    { due: spaceLetterDue, need: CHAPTER_REP.spaceLetter, s: addEvent({ ...createInitialSave(), habitat: 6 as const, growthXp: HABITATS[6].capacity }, 'earthWrap') },
+    { due: galaxyLetterDue, need: CHAPTER_REP.galaxyLetter, s: addEvent({ ...createInitialSave(), habitat: 7 as const, growthXp: HABITATS[7].capacity }, 'solar') },
+    { due: universeLetterDue, need: CHAPTER_REP.universeLetter, s: addEvent({ ...createInitialSave(), habitat: 8 as const, growthXp: HABITATS[8].capacity }, 'cluster') },
+  ];
+  for (const c of cases) {
+    const low = { ...c.s, rep: c.need - 3 };
+    assert.equal(c.due(low), false);
+    assert.equal(repShortfall(low), 3);
+    assert.equal(nextRepGoal(low), c.need);
+    const ok = { ...c.s, rep: c.need };
+    assert.equal(c.due(ok), true);
+    assert.equal(repShortfall(ok), null);
+  }
+  // 育ちきっていなければ、評判の案内は出さない
+  assert.equal(repShortfall({ ...cases[0].s, growthXp: 10, rep: 0 }), null);
+});
+
+test('依頼は章が進むほど大きくなり、4章からは大きな依頼もまじる', async () => {
+  const { makeRequest, createInitialSave } = await import('../src/game/state.ts');
+  const { createRandom } = await import('../src/game/rng.ts');
+  const { BIG_REQUESTS } = await import('../src/game/catalog.ts');
+  const avg = (habitat: 1 | 5 | 7, tools = ['hand'] as Array<'hand' | 'rag' | 'mop' | 'vacuum'>) => {
+    const random = createRandom(11);
+    const s = { ...createInitialSave(), habitat, tools, events: ['cityTown' as const, 'street' as const], rep: 30 };
+    const list = Array.from({ length: 200 }, (_, i) => makeRequest(s, i, random));
+    return { reward: list.reduce((a, r) => a + r.reward, 0) / list.length, list };
+  };
+  const ch1 = avg(1);
+  const ch3 = avg(5);
+  const ch5 = avg(7);
+  assert.ok(ch3.reward > ch1.reward * 2);
+  assert.ok(ch5.reward > ch3.reward * 2);
+  const big = ch5.list.filter((r) => r.client === BIG_REQUESTS[5]?.client);
+  assert.ok(big.length > 20 && big.length < 120);
+  for (const r of big) assert.ok(r.dust === 'star' || r.dust === 'cosmic');
+  assert.equal(ch1.list.some((r) => (r.count ?? 0) >= 300), false);
 });

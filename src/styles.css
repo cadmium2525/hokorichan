@@ -1695,3 +1695,26 @@ body {
     animation: none;
   }
 }
+
+.rep small {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+
+/* 大きな依頼（4章から） */
+.request--big {
+  border-color: #c7b4e6;
+  background: #f8f3ff;
+}
+
+.request__tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #9a86c6;
+  color: #fff;
+  font-size: 10px;
+  vertical-align: 1px;
+}
