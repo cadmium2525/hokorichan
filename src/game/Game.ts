@@ -247,7 +247,7 @@ const CONTEST_WIN: StoryStep[] = [
   { speaker: 'mother', text: 'まあ、清掃係ですって。えらいわね。<br>でも宿題もちゃんとするのよ。', button: 'はーい' },
   {
     speaker: 'narration',
-    text: '評判★+' + CONTEST.winRep + '！ <b>町の清掃係</b>になった。<br>（2章 ご近所編 おしまい。3章「まち編」は準備中）',
+    text: '評判★+' + CONTEST.winRep + '！ <b>町の清掃係</b>になった。<br>（2章 ご近所編 おしまい。ほこりちゃんがコンテナいっぱいに育ったら、3章「まち編」へ）',
     button: 'やったー！',
   },
 ];
@@ -304,7 +304,7 @@ const RAINY_END: StoryStep[] = [
   { speaker: 'mother', text: '町を乾かしたんですって？ えらいわね。<br>市役所の人がお礼に<b>レインハット</b>をくださったわよ。', button: 'ありがとう！' },
   {
     speaker: 'narration',
-    text: 'ごほうび：' + RAINY.reward + 'コイン・評判★+' + RAINY.rep + '・レインハット！<br>（3章 まち編 おしまい。4章「地球編」は準備中）',
+    text: 'ごほうび：' + RAINY.reward + 'コイン・評判★+' + RAINY.rep + '・レインハット！<br>（3章 まち編 おしまい。ほこりちゃんが倉庫いっぱいに育ったら、4章「地球編」へ）',
     button: 'やったー！',
   },
 ];
