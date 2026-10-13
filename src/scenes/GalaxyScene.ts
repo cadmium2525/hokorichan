@@ -149,7 +149,8 @@ export class GalaxyScene implements GameScene {
       this.listeners.push([type, listener]);
     };
     on('pointerdown', (e) => {
-      if (!this.inputEnabled || this.pointer || !e.isPrimary) return;
+      // 新しい1本目の指が来たら、前の指（離したお知らせが届かなかったもの）は終わりにする
+      if (!this.inputEnabled || !e.isPrimary) return;
       const p = this.groundAt(e.clientX, e.clientY);
       if (!p) return;
       e.preventDefault();
@@ -234,6 +235,11 @@ export class GalaxyScene implements GameScene {
     return this.motes.filter((m) => m.state === 'free').length;
   }
 
+  /** 吸いこんでいるとちゅう（まだ数えていない）のつぶの数 */
+  get inFlight(): number {
+    return this.motes.filter((m) => m.state === 'sucking').length;
+  }
+
   get eatenMotes(): number {
     return this.eaten;
   }
@@ -245,11 +251,22 @@ export class GalaxyScene implements GameScene {
   private writePositions(): void {
     const mouth = this.pet ? this.pet.mouthWorld(new THREE.Vector3()) : new THREE.Vector3();
     this.motes.forEach((m, i) => {
-      if (m.state === 'gone') this.positions.set([0, -1000, 0], i * 3);
+      const o = i * 3;
+      if (m.state === 'gone') {
+        this.positions[o] = 0;
+        this.positions[o + 1] = -1000;
+        this.positions[o + 2] = 0;
+      }
       else if (m.state === 'sucking') {
         const k = Math.min(1, m.t);
-        this.positions.set([m.fx + (mouth.x - m.fx) * k * k, 0.2 + (mouth.y - 0.2) * k * k, m.fz + (mouth.z - m.fz) * k * k], i * 3);
-      } else this.positions.set([m.x, 0.2, m.z], i * 3);
+        this.positions[o] = m.fx + (mouth.x - m.fx) * k * k;
+        this.positions[o + 1] = 0.2 + (mouth.y - 0.2) * k * k;
+        this.positions[o + 2] = m.fz + (mouth.z - m.fz) * k * k;
+      } else {
+        this.positions[o] = m.x;
+        this.positions[o + 1] = 0.2;
+        this.positions[o + 2] = m.z;
+      }
     });
     (this.points.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
   }

@@ -79,6 +79,7 @@ export class SkyScene implements GameScene {
 
   private readonly opts: SkyOptions;
   private readonly background: THREE.Texture;
+  private readonly sky: THREE.Texture;
   private readonly sea: THREE.Mesh;
   private readonly pet: HokorichanModel;
   private readonly rider: CharacterSprite;
@@ -103,7 +104,8 @@ export class SkyScene implements GameScene {
   constructor(opts: SkyOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene);
-    this.scene.background = this.skyGradient();
+    this.sky = this.skyGradient();
+    this.scene.background = this.sky;
 
     const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ map: seaTexture(opts.seed) }));
     sea.rotation.x = -Math.PI / 2;
@@ -167,7 +169,8 @@ export class SkyScene implements GameScene {
       this.listeners.push([type, listener]);
     };
     on('pointerdown', (e) => {
-      if (!this.inputEnabled || this.pointerId !== null || !e.isPrimary) return;
+      // 新しい1本目の指が来たら、前の指（離したお知らせが届かなかったもの）は終わりにする
+      if (!this.inputEnabled || !e.isPrimary) return;
       e.preventDefault();
       this.pointerId = e.pointerId;
       try {
@@ -251,6 +254,11 @@ export class SkyScene implements GameScene {
     return this.clouds.filter((c) => c.state === 'idle').length;
   }
 
+  /** 吸いこんでいるとちゅう（まだお礼に数えていない）の数 */
+  get inFlight(): number {
+    return this.clouds.filter((c) => c.state === 'sucking').length;
+  }
+
   update(dt: number, time: number): void {
     this.pet.tick(dt, 4);
     this.projectPointer();
@@ -327,6 +335,7 @@ export class SkyScene implements GameScene {
     this.particles.dispose();
     this.sparkle.dispose();
     this.background.dispose();
+    this.sky.dispose();
     disposeHierarchy(this.scene);
     this.scene.clear();
   }

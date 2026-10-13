@@ -29,6 +29,7 @@ import {
   type DustType,
   type Hero,
   type SpotId,
+  type Rival,
 } from '../game/catalog.ts';
 import {
   activeTraits,
@@ -48,6 +49,7 @@ import {
   REQUEST_MAX,
   spotStatus,
   spotTreasures,
+  contestRivals,
   nextRepGoal,
   type Request,
   type SaveData,
@@ -359,6 +361,7 @@ function requestHtml(save: SaveData, r: Request): string {
       <div class="request__head"><b>${big ? '<span class="request__tag">大きな依頼</span>' : ''}${escapeHtml(r.client)}</b><span class="request__reward">+${r.reward}コイン ・ ★${r.rep}</span></div>
       <div class="request__line">「${escapeHtml(r.line)}」</div>
       <div class="request__goal"><span>${goal}</span>${button}</div>
+      <button type="button" class="request__drop" data-action="dropRequest" data-arg="${r.id}">ことわる</button>
     </div>`;
 }
 
@@ -484,7 +487,8 @@ export function dexBody(save: SaveData, tab: DexTab = 'fur'): string {
 
 export function contestPoster(save: SaveData, wait: number): string {
   const won = save.events.includes('contestWon');
-  const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+  const rivals = contestRivals(save);
+  const top = Math.max(...rivals.map((r) => r.score));
   const button =
     wait > 0
       ? `<button type="button" class="btn btn--secondary" disabled><span class="btn__label">次の大会まで あと${wait}分</span></button>`
@@ -493,13 +497,13 @@ export function contestPoster(save: SaveData, wait: number): string {
     <div class="poster">
       <div class="poster__title">町内会 大掃除大会</div>
       <p>${CONTEST.seconds}秒のあいだに、風で${CONTEST.waves.length}回ホコリが飛んでくる（ぜんぶで${CONTEST_MAX}個）。<br>いちばん多く集めたチームが優勝！</p>
-      <p class="note">いちばん強い「${escapeHtml(CONTEST.rivals[CONTEST.rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}${won ? '' : `<br>初優勝で${CONTEST.firstWinBonus}コインと★${CONTEST.winRep}`}</p>
+      <p class="note">いちばん強い「${escapeHtml(rivals[rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}${won ? '' : `<br>初優勝で${CONTEST.firstWinBonus}コインと★${CONTEST.winRep}`}</p>
       ${button}
     </div>`;
 }
 
-export function contestResultBody(opts: { hero: Hero; score: number; rank: number; prize: number; won: boolean; best: boolean }): string {
-  const rows = contestRanking(opts.score)
+export function contestResultBody(opts: { hero: Hero; score: number; rank: number; prize: number; won: boolean; best: boolean; rivals: readonly Rival[] }): string {
+  const rows = contestRanking(opts.score, opts.rivals)
     .map((e, i) => `<li class="${e.you ? 'rank--you' : ''}"><span>${i + 1}位</span><b>${escapeHtml(e.name)}</b><span>${e.score}個</span></li>`)
     .join('');
   return `

@@ -23,6 +23,7 @@ import {
   createInitialSave,
   emptyBag,
   EVENT_IDS,
+  REQUEST_INTERVAL_MINUTES,
   SAVE_VERSION,
   type Bag,
   type Dex,
@@ -98,7 +99,8 @@ function toRequests(value: unknown): Request[] {
     if (kind === 'collect') {
       if (!DUST_TYPES.includes(r.dust as DustType)) continue;
       req.dust = r.dust as DustType;
-      req.count = Math.max(1, Math.min(toCount(r.count, 1), 999));
+      // 大きな依頼（終章で最大2万）も入るように
+      req.count = Math.max(1, Math.min(toCount(r.count, 1), 100_000));
     } else {
       if (!SPOT_IDS.includes(r.spot as SpotId)) continue;
       req.spot = r.spot as SpotId;
@@ -224,7 +226,9 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     spots: toSpots(data.spots, now) as SaveData['spots'],
     rep: toCount(data.rep, 0),
     requests: toRequests(data.requests),
-    requestClock: typeof data.requestClock === 'number' && Number.isFinite(data.requestClock) ? Math.max(0, data.requestClock) : 0,
+    // 端末の時計が進んでいたときなどに、未来の時刻のせいで依頼が届かなくならないよう、今から1回分までにおさえる
+    requestClock:
+      typeof data.requestClock === 'number' && Number.isFinite(data.requestClock) ? Math.min(Math.max(0, data.requestClock), now + REQUEST_INTERVAL_MINUTES * 60_000) : 0,
     // 番号が重ならないよう、残っている依頼の番号より大きくしておく
     requestSeq: Math.max(toCount(data.requestSeq, 0), ...toRequests(data.requests).map((r) => r.id)),
     events: toEvents(data.events),
@@ -237,6 +241,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     galaxy: toSpotState(data.galaxy, now),
     bubbles: toSpotState(data.bubbles, now),
     loop: toCount(data.loop, 0),
+    contestLosses: toCount(data.contestLosses, 0),
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }

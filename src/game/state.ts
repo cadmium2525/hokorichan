@@ -54,6 +54,7 @@ import {
   type Hero,
   type PersonId,
   type PetShape,
+  type Rival,
   type SpotDef,
   type SpotId,
   type ToolDef,
@@ -198,6 +199,8 @@ export type SaveData = {
   bubbles: SpotState;
   /** 夢からさめた回数（0 なら1周目） */
   loop: number;
+  /** 初優勝までに大会で負けた回数（ほかのチームが少しずつ弱くなる） */
+  contestLosses: number;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -257,6 +260,7 @@ export function createInitialSave(): SaveData {
     galaxy: { fullness: 1, at: 0 },
     bubbles: { fullness: 1, at: 0 },
     loop: 0,
+    contestLosses: 0,
   };
 }
 
@@ -308,8 +312,18 @@ export function contestDue(save: SaveData): boolean {
 export type ContestEntry = { name: string; score: number; you: boolean };
 
 /** 順位表。同点ならほかのチームが上（追いつくだけでは勝てない） */
-export function contestRanking(score: number, youName = 'ほこりちゃんチーム'): ContestEntry[] {
-  const rivals = CONTEST.rivals.map((r) => ({ name: r.name, score: r.score, you: false }));
+/**
+ * ほかのチームの点数。初優勝の前に何度も負けていると、3回目から少しずつ弱くなる
+ * （優勝しないと3章へ進めないので、苦手な人でもいつかは勝てるように）
+ */
+export function contestRivals(save: SaveData): readonly Rival[] {
+  if (hasEvent(save, 'contestWon')) return CONTEST.rivals;
+  const ease = Math.max(0, save.contestLosses - 1) * 3;
+  return CONTEST.rivals.map((r) => ({ name: r.name, score: Math.max(Math.round(r.score * 0.6), r.score - ease) }));
+}
+
+export function contestRanking(score: number, rivalList: readonly Rival[] = CONTEST.rivals, youName = 'ほこりちゃんチーム'): ContestEntry[] {
+  const rivals = rivalList.map((r) => ({ name: r.name, score: r.score, you: false }));
   const list = [...rivals, { name: youName, score, you: true }];
   return list.sort((a, b) => b.score - a.score || (a.you ? 1 : 0) - (b.you ? 1 : 0));
 }
@@ -331,16 +345,18 @@ export function enterContest(save: SaveData, now: number, speed = 1): { save: Sa
 export function contestResult(
   save: SaveData,
   score: number,
-): { save: SaveData; rank: number; prize: number; won: boolean; firstWin: boolean; best: boolean } {
+): { save: SaveData; rank: number; prize: number; won: boolean; firstWin: boolean; best: boolean; rivals: readonly Rival[] } {
   const s = Math.max(0, Math.min(Math.floor(score), CONTEST_MAX));
-  const ranking = contestRanking(s);
+  const rivals = contestRivals(save);
+  const ranking = contestRanking(s, rivals);
   const rank = ranking.findIndex((e) => e.you) + 1;
   const won = rank === 1;
   const firstWin = won && !hasEvent(save, 'contestWon');
   const prize = (CONTEST.prizes[rank - 1] ?? 0) + (firstWin ? CONTEST.firstWinBonus : 0);
   let next: SaveData = { ...save, coins: save.coins + prize, contestBest: Math.max(save.contestBest, s) };
   if (firstWin) next = addEvent({ ...next, rep: next.rep + CONTEST.winRep }, 'contestWon');
-  return { save: next, rank, prize, won, firstWin, best: s > save.contestBest };
+  else if (!won && !hasEvent(save, 'contestWon')) next = { ...next, contestLosses: save.contestLosses + 1 };
+  return { save: next, rank, prize, won, firstWin, best: s > save.contestBest, rivals };
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
@@ -1153,6 +1169,11 @@ export function findRequest(save: SaveData, kind: RequestKind, spot: SpotId): Re
 }
 
 /** 依頼を達成する（報酬と評判を受け取る） */
+/** 依頼をことわる（評判は下がらない）。こなせない依頼で掲示板がうまったままにならないように */
+export function dropRequest(save: SaveData, id: number): SaveData {
+  return { ...save, requests: save.requests.filter((r) => r.id !== id) };
+}
+
 export function completeRequest(save: SaveData, id: number): { save: SaveData; request: Request } | null {
   const request = save.requests.find((r) => r.id === id);
   if (!request) return null;

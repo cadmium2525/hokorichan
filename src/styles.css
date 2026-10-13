@@ -1578,6 +1578,7 @@ body {
 
 .finale--out {
   opacity: 0;
+  pointer-events: none;
   transition: opacity 1.4s ease;
 }
 
@@ -1758,4 +1759,18 @@ body {
 /* iOSで入力時に画面が拡大されないよう16px */
 .transfer__code:not([readonly]) {
   font-size: 16px;
+}
+
+/* 依頼をことわる（小さめ・右下） */
+.request__drop {
+  display: block;
+  margin: 4px 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  color: var(--ink-soft);
+  text-decoration: underline;
 }

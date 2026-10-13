@@ -1,8 +1,8 @@
 // まちの人との会話。章や出来事に合わせてセリフが変わり、遊び方のヒントもまぜる。
 // 町の人は、ほこりちゃんがどれだけ大きくなっても真顔で普通に話す。
 
-import { CONTEST, FUR_IDS, RAINY, type PersonId } from './catalog.ts';
-import { areaUnlocked, chapter, hasEvent, rainyActive, type SaveData } from './state.ts';
+import { FUR_IDS, RAINY, type PersonId } from './catalog.ts';
+import { areaUnlocked, chapter, contestRivals, hasEvent, rainyActive, type SaveData } from './state.ts';
 
 /** まちに立っている人（お母さん・機構の人・管制官さんはまちにいない） */
 export type TownPerson = Exclude<PersonId, 'mother' | 'agent' | 'controller' | 'clerk'>;
@@ -51,7 +51,7 @@ export function talkLines(id: TownPerson, save: SaveData): string[] {
       break;
     case 'grandma':
       add(true, '猫の毛は、もふもふの毛並みになるのよ。吸い寄せる範囲が広がるわ。', 'ランクが上がるときに食べていたもので、毛並みが決まるのよ。毛並み図鑑、見てごらん。');
-      add(hasEvent(save, 'contestNotice') && !hasEvent(save, 'contestWon'), `大会のいちばん強いチームは${Math.max(...CONTEST.rivals.map((r) => r.score))}個よ。流される前に追いかけなさいね。`);
+      add(hasEvent(save, 'contestNotice') && !hasEvent(save, 'contestWon'), `大会のいちばん強いチームは${Math.max(...contestRivals(save).map((r) => r.score))}個よ。流される前に追いかけなさいね。`);
       add(hasEvent(save, 'contestWon'), '町内会長として鼻が高いわ。清掃係さん、ありがとう。');
       break;
     case 'stationMaster':

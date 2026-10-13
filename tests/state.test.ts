@@ -568,7 +568,7 @@ test('家具の中の点は、いちばん近いふちの外へ押し出され�
 test('5章：宇宙ほこり管制センターの連絡から月のとなりへ', async () => {
   const { spaceLetterDue, moveToSpace, chapter, canSpace, spaceClusters, finishSpace, spaceReward, solarDue, spaceCenter, addEvent, createInitialSave } = await import('../src/game/state.ts');
   const { SPACE, SOLAR_XP, HABITATS } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 6, growthXp: 30000, rep: 50 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 6, growthXp: 30000, rep: 100 };
   assert.equal(spaceLetterDue(s), false);
   s = addEvent(s, 'earthWrap');
   assert.equal(spaceLetterDue(s), true);
@@ -625,10 +625,13 @@ test('なつかしの味：4章から町のホコリは1個で何倍も育ち、
   const { feed, feedableAmount, dustValue, favoriteDust, localDay, emptyBag, createInitialSave, furOf } = await import('../src/game/state.ts');
   const { NOSTALGIA_MUL, FAVORITE_MUL, NOSTALGIC_DUSTS } = await import('../src/game/catalog.ts');
   const base = createInitialSave();
-  // 3章まではふつう
+  // 2章まではふつう、3章は少しだけ（×2）
+  const ch2 = { ...base, habitat: 4 as const, growthXp: 500, bag: { ...emptyBag(), cotton: 10 } };
+  assert.equal(dustValue(ch2, 'cotton'), 1);
+  assert.equal(feed(ch2, 'cotton').growth, 10);
   const ch3 = { ...base, habitat: 5 as const, growthXp: 1000, bag: { ...emptyBag(), cotton: 10 } };
-  assert.equal(dustValue(ch3, 'cotton'), 1);
-  assert.equal(feed(ch3, 'cotton').growth, 10);
+  assert.equal(dustValue(ch3, 'cotton'), 2);
+  assert.equal(feed(ch3, 'cotton').growth, 20);
   // 4章：綿ぼこりは×10、黄砂（世界でも集まる）はふつう
   const ch4 = { ...base, habitat: 6 as const, growthXp: 10000, bag: { ...emptyBag(), cotton: 10, kosa: 10 } };
   const mul = NOSTALGIA_MUL[4] ?? 1;
@@ -656,7 +659,7 @@ test('なつかしの味：4章から町のホコリは1個で何倍も育ち、
 test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ', async () => {
   const { galaxyLetterDue, moveToGalaxy, chapter, canGalaxy, galaxyNebulae, finishGalaxy, galaxyReward, clusterDue, addEvent, createInitialSave, dustValue } = await import('../src/game/state.ts');
   const { GALAXY, CLUSTER_XP, HABITATS, NOSTALGIA_MUL } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 7, growthXp: 80000, rep: 50 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 7, growthXp: 80000, rep: 100 };
   assert.equal(galaxyLetterDue(s), false);
   s = addEvent(s, 'solar');
   assert.equal(galaxyLetterDue(s), true);
@@ -677,7 +680,7 @@ test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ'
 test('終章：宇宙のまんなか・しゃぼん玉の宇宙・はみ出し・最後の場面', async () => {
   const { universeLetterDue, moveToUniverse, chapter, canBubbles, bubbleCount, finishBubbles, bubbleReward, peekDue, finaleDue, addEvent, createInitialSave, rankFor } = await import('../src/game/state.ts');
   const { BUBBLES, FINAL_XP, PEEK_XP, HABITATS } = await import('../src/game/catalog.ts');
-  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 8, growthXp: 250000, rep: 50 };
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 8, growthXp: 250000, rep: 100 };
   assert.equal(universeLetterDue(s), false);
   s = addEvent(s, 'cluster');
   assert.equal(universeLetterDue(s), true);
@@ -788,4 +791,39 @@ test('依頼は章が進むほど大きくなり、4章からは大きな依頼�
   assert.ok(big.length > 20 && big.length < 120);
   for (const r of big) assert.ok(r.dust === 'star' || r.dust === 'cosmic');
   assert.equal(ch1.list.some((r) => (r.count ?? 0) >= 300), false);
+});
+
+test('大会：初優勝の前に何度も負けると、ほかのチームが少しずつ弱くなる', async () => {
+  const { contestResult, contestRivals, createInitialSave, addEvent } = await import('../src/game/state.ts');
+  const { CONTEST } = await import('../src/game/catalog.ts');
+  let s = addEvent({ ...createInitialSave(), habitat: 4 as const }, 'contestNotice');
+  const top0 = Math.max(...contestRivals(s).map((r) => r.score));
+  assert.equal(top0, Math.max(...CONTEST.rivals.map((r) => r.score)));
+  for (let i = 0; i < 6; i++) s = contestResult(s, 10).save;
+  assert.equal(s.contestLosses, 6);
+  const top6 = Math.max(...contestRivals(s).map((r) => r.score));
+  assert.ok(top6 < top0 && top6 >= Math.round(top0 * 0.6));
+  // どこまで負けても、下限より弱くはならない
+  for (let i = 0; i < 50; i++) s = contestResult(s, 0).save;
+  assert.equal(Math.max(...contestRivals(s).map((r) => r.score)), Math.round(top0 * 0.6));
+  const won = contestResult(s, top0);
+  assert.equal(won.won, true);
+  // 優勝したあとは、もとの強さ
+  assert.equal(Math.max(...contestRivals(won.save).map((r) => r.score)), top0);
+});
+
+test('依頼はことわれる。大きな依頼の数や、未来の依頼時計も読み直しでこわれない', async () => {
+  const { dropRequest, refreshRequests, createInitialSave } = await import('../src/game/state.ts');
+  const { sanitize } = await import('../src/game/save.ts');
+  const { createRandom } = await import('../src/game/rng.ts');
+  const now = 5_000_000_000;
+  const s = refreshRequests({ ...createInitialSave(), tutorialDone: true }, now, createRandom(1));
+  assert.ok(s.requests.length > 0);
+  const dropped = dropRequest(s, s.requests[0].id);
+  assert.equal(dropped.requests.length, s.requests.length - 1);
+  const big = { ...s, requests: [{ id: 99, kind: 'collect' as const, client: '銀河ほこり連合', line: 'x', dust: 'other' as const, count: 15000, reward: 3500, rep: 2 }] };
+  assert.equal(sanitize(JSON.parse(JSON.stringify(big)), now).requests[0].count, 15000);
+  const future = { ...s, requests: [], requestClock: now + 7 * 24 * 3600_000 };
+  const loaded = sanitize(JSON.parse(JSON.stringify(future)), now);
+  assert.ok(refreshRequests(loaded, now + 21 * 60_000, createRandom(2)).requests.length > 0);
 });

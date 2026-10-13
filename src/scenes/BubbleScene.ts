@@ -37,6 +37,8 @@ type Bubble = {
   type: DustType;
   sprite: THREE.Sprite;
   x: number;
+  /** ゆれを足した、見えている横の位置 */
+  drawX: number;
   y: number;
   r: number;
   phase: number;
@@ -128,6 +130,7 @@ export class BubbleScene implements GameScene {
         type,
         sprite,
         x: randRange(random, -VIEW_W / 2 + 1.2, VIEW_W / 2 - 1.2),
+        drawX: 0,
         y: 0,
         r,
         phase: random() * Math.PI * 2,
@@ -161,7 +164,7 @@ export class BubbleScene implements GameScene {
       let bestD = Infinity;
       for (const b of this.bubbles) {
         if (b.state !== 'float') continue;
-        const d = Math.hypot(b.x - vx, b.y - vy);
+        const d = Math.hypot(b.drawX - vx, b.y - vy);
         // 指は太いので、見た目より少し大きめに当たる
         if (d < b.r * 1.25 && d < bestD) {
           best = b;
@@ -180,7 +183,7 @@ export class BubbleScene implements GameScene {
   private pop(b: Bubble): void {
     b.state = 'pop';
     b.t = 0;
-    const at = this.toWorld(b.x, b.y).clone();
+    const at = this.toWorld(b.drawX, b.y).clone();
     this.particles.burst(this.sparkle, at, 10, 2.4, 0.35);
     // 中のちりが、ほこりちゃんへふりそそぐ
     const top = this.toWorld(b.x * 0.3, this.camera.bottom + this.halfH * 0.35, DEPTH + 2).clone();
@@ -237,7 +240,9 @@ export class BubbleScene implements GameScene {
       if (b.state === 'float') {
         b.y += rise * dt;
         const wobble = Math.sin(time * 1.3 + b.phase) * 0.6;
-        b.sprite.position.copy(this.toWorld(b.x + wobble * 0.5, b.y));
+        // 当たり判定も、見えている位置で
+        b.drawX = b.x + wobble * 0.5;
+        b.sprite.position.copy(this.toWorld(b.drawX, b.y));
         b.sprite.material.rotation = Math.sin(time + b.phase) * 0.1;
         if (b.y - b.r > this.camera.top) {
           b.state = 'missed';

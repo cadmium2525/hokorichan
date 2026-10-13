@@ -177,7 +177,8 @@ export class SpaceScene implements GameScene {
       if (r !== null) this.target = r;
     };
     on('pointerdown', (e) => {
-      if (!this.inputEnabled || this.pointer !== null || !e.isPrimary) return;
+      // 新しい1本目の指が来たら、前の指（離したお知らせが届かなかったもの）は終わりにする
+      if (!this.inputEnabled || !e.isPrimary) return;
       e.preventDefault();
       try {
         el.setPointerCapture(e.pointerId);
@@ -223,6 +224,11 @@ export class SpaceScene implements GameScene {
 
   get remaining(): number {
     return this.clusters.filter((c) => c.state === 'idle').length;
+  }
+
+  /** 吸いこんでいるとちゅう（まだお礼に数えていない）の数 */
+  get inFlight(): number {
+    return this.clusters.filter((c) => c.state === 'sucking').length;
   }
 
   private petPos(target: THREE.Vector3): THREE.Vector3 {

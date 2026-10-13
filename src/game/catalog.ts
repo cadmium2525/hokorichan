@@ -472,7 +472,7 @@ export const WORLD = {
   /** 空から満タンまで（実時間・分） */
   regenMinutes: 60,
   /** 1地域で集まるホコリの数 */
-  perPatch: 120,
+  perPatch: 300,
   /** 1地域あたりのお礼（世界ほこり機構から） */
   coinPerPatch: 25,
   /** 地域の種類と割合（砂嵐＝黄砂、火山＝火山灰） */
@@ -517,7 +517,7 @@ export const SOLAR_XP = 80000;
 export const NOSTALGIC_DUSTS: readonly DustType[] = ['cotton', 'lint', 'fur', 'pollen', 'flour', 'soot', 'chalk'];
 
 /** 章ごとの、なつかしの味の成長の倍率 */
-export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20, 6: 50, 7: 100 };
+export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 3: 2, 4: 10, 5: 20, 6: 50, 7: 100 };
 
 /** きょうの好物（なつかしの味から1日1つ）はさらにこの倍 */
 export const FAVORITE_MUL = 2;
@@ -594,4 +594,4 @@ export const BIG_REQUESTS: Partial<Record<number, BigRequestDef>> = {
 export const BIG_REQUEST_CHANCE = 0.3;
 
 /** 次の章へ進むのに必要な評判（章が切りかわる出来事ごと） */
-export const CHAPTER_REP = { warehouseLetter: 12, worldLetter: 20, spaceLetter: 26, galaxyLetter: 32, universeLetter: 38 } as const;
+export const CHAPTER_REP = { warehouseLetter: 12, worldLetter: 30, spaceLetter: 45, galaxyLetter: 60, universeLetter: 75 } as const;

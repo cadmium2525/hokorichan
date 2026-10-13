@@ -65,6 +65,8 @@ export function disposeHierarchy(root: THREE.Object3D): void {
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
     if (mesh.geometry) mesh.geometry.dispose();
+    // InstancedMesh は並べ方のバッファも持っているので、それも手放す
+    if ((obj as THREE.InstancedMesh).isInstancedMesh) (obj as THREE.InstancedMesh).dispose();
     const mat = mesh.material;
     if (Array.isArray(mat)) mat.forEach((m) => materials.add(m));
     else if (mat) materials.add(mat);

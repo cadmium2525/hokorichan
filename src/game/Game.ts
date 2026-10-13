@@ -54,6 +54,7 @@ import {
   RAINY,
   WORLD,
   SPACE,
+  CHAPTER_REP,
   GALAXY,
   BUBBLES,
   SKY,
@@ -104,11 +105,13 @@ import {
   cityTownDue,
   contestDue,
   contestResult,
+  contestRivals,
   contestWaitMinutes,
   enterContest,
   createSession,
   dampChance,
   deliverRequest,
+  dropRequest,
   deliverRainy,
   dexAdd,
   earthWrapDue,
@@ -303,7 +306,7 @@ const CONTEST_WIN: StoryStep[] = [
   { speaker: 'mother', text: 'まあ、清掃係ですって。えらいわね。<br>でも宿題もちゃんとするのよ。', button: 'はーい' },
   {
     speaker: 'narration',
-    text: '評判★+' + CONTEST.winRep + '！ <b>町の清掃係</b>になった。<br>（2章 ご近所編 おしまい。ほこりちゃんがコンテナいっぱいに育ったら、3章「まち編」へ）',
+    text: '評判★+' + CONTEST.winRep + '！ <b>町の清掃係</b>になった。<br>（2章 ご近所編 おしまい。ほこりちゃんがコンテナいっぱいに育って、評判が★' + CHAPTER_REP.warehouseLetter + 'になったら、3章「まち編」へ）',
     button: 'やったー！',
   },
 ];
@@ -360,7 +363,7 @@ const RAINY_END: StoryStep[] = [
   { speaker: 'mother', text: '町を乾かしたんですって？ えらいわね。<br>市役所の人がお礼に<b>レインハット</b>をくださったわよ。', button: 'ありがとう！' },
   {
     speaker: 'narration',
-    text: 'ごほうび：' + RAINY.reward + 'コイン・評判★+' + RAINY.rep + '・レインハット！<br>（3章 まち編 おしまい。ほこりちゃんが倉庫いっぱいに育ったら、4章「地球編」へ）',
+    text: 'ごほうび：' + RAINY.reward + 'コイン・評判★+' + RAINY.rep + '・レインハット！<br>（3章 まち編 おしまい。ほこりちゃんが倉庫いっぱいに育って、評判が★' + CHAPTER_REP.worldLetter + 'になったら、4章「地球編」へ）',
     button: 'やったー！',
   },
 ];
@@ -560,6 +563,8 @@ export class Game {
   /** この掃除で達成を狙える依頼 */
   private speedRequestId: number | null = null;
   private lostRequestId: number | null = null;
+  /** はみ出しの演出中（お話を見終わるまで） */
+  private peekShowing = false;
   /** この掃除にまぜた宝物（落とし物の依頼がないとき） */
   private spotTreasure: Treasure | null = null;
   private sneezeLeft = false;
@@ -583,7 +588,7 @@ export class Game {
     this.sound = new Sound(this.save.soundEnabled);
     this.hud = new Hud(
       root,
-      (action, arg) => this.onAction(action, arg),
+      (action, arg, fromModal) => this.onAction(action, arg, fromModal),
       (name, value, done) => this.onSlider(name, value, done),
     );
     this.renderer = new PixelRenderer(this.hud.canvas);
@@ -710,7 +715,7 @@ export class Game {
       this.hud.setActions([{ action: 'skyEnd', label: 'おりる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session && this.contest) {
       const sess = this.session;
-      const top = Math.max(...CONTEST.rivals.map((r) => r.score));
+      const top = Math.max(...contestRivals(s).map((r) => r.score));
       // 満点に対する進み具合。目盛りは優勝ライン（いちばん強いチーム＋1）
       this.hud.setCleaningStatus(`大掃除大会 ⏱ のこり${this.contestLeft()}秒`, sess.collected.size, CONTEST_MAX, top + 1);
       const buttons: ButtonSpec[] = [];
@@ -796,6 +801,7 @@ export class Game {
     this.spaceGot = null;
     this.galaxy = null;
     this.galaxyGot = null;
+    this.homeTrip = false;
     this.bubbles = null;
     this.bubbleGot = null;
     this.town = null;
@@ -839,8 +845,20 @@ export class Game {
     this.syncInput();
     this.refreshHud();
     const s = this.save;
+    // 章の出来事は、しっとりしていても先に（お知らせはそのあと重ねて出す）
+    const ran = this.runDueEvent(s);
     if (becameDamp) this.hud.toast('お留守番中に湿気でしっとり…「乾燥させる」でふかふかに！', 3200);
-    else if (landMeetingDue(s)) this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
+    else if (ran) return;
+    else if (repShortfall(s) !== null)
+      this.hud.toast(`次の章へ進むには、評判があと★${repShortfall(s)}。掲示板の依頼をこなそう`, 3200);
+    else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
+    else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
+    else this.installHint();
+  }
+
+  /** いま起きる出来事（お話）があれば始める。始めたら true */
+  private runDueEvent(s: SaveData): boolean {
+    if (landMeetingDue(s)) this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
     else if (contestDue(s)) this.runStory(CONTEST_NOTICE, 'おしらせ', () => this.commit(addEvent(this.save, 'contestNotice')));
     else if (warehouseDue(s)) this.runStory(WAREHOUSE_LETTER, '市役所から', () => this.commit(addEvent(this.save, 'warehouseLetter')));
     else if (s.habitat >= 5 && !hasEvent(s, 'warehouse')) this.runStory(WAREHOUSE_STORY, 'お引っこし', () => this.commit(addEvent(this.save, 'warehouse')));
@@ -872,20 +890,33 @@ export class Game {
         this.pet?.setView(this.petView());
         this.pet?.playHappy();
       });
-    else if (finaleDue(s)) this.startFinale();
+    // 一度に最後まで育ったときも、はみ出す場面を先に（そのあと最後の場面へ）
     else if (peekDue(s)) {
-      this.commit(addEvent(this.save, 'peek'));
+      if (this.peekShowing) return true;
+      this.peekShowing = true;
       this.hud.peek(this.petView().tint);
       this.sound.play('happy');
-      window.setTimeout(() => {
-        if (this.mode === 'HOME') this.runStory(PEEK_STORY, '次元超越級', () => this.refreshHud());
-      }, 4200);
+      // はみ出しが引っこんでから、ほかの画面が閉じるのを待ってお話。見終わったら記録する
+      const show = () => {
+        if (this.mode !== 'HOME') {
+          this.peekShowing = false; // 次に帰ってきたとき、もう一度
+          return;
+        }
+        if (this.overlay !== 'none') {
+          window.setTimeout(show, 800);
+          return;
+        }
+        this.runStory(PEEK_STORY, '次元超越級', () => {
+          this.peekShowing = false;
+          this.commit(addEvent(this.save, 'peek'));
+          this.runDueEvent(this.save);
+        });
+      };
+      window.setTimeout(show, 4200);
     }
-    else if (repShortfall(s) !== null)
-      this.hud.toast(`次の章へ進むには、評判があと★${repShortfall(s)}。掲示板の依頼をこなそう`, 3200);
-    else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
-    else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
-    else this.installHint();
+    else if (finaleDue(s)) this.startFinale();
+    else return false;
+    return true;
   }
 
   /** まちへ。startAt の建物の入口の前から歩き出す */
@@ -943,6 +974,9 @@ export class Game {
   /** まちで建物の入口に着いた */
   private onArrive(id: BuildingId): void {
     if (this.mode !== 'TOWN') return;
+    // 「〇〇へ帰る」で歩いていたかは、どこかに着いたら終わり（とちゅうで別の建物をタップしたときも）
+    const homeTrip = this.homeTrip;
+    this.homeTrip = false;
     switch (id) {
       case 'home':
         this.sound.play('tap');
@@ -991,8 +1025,7 @@ export class Game {
         return;
       case 'station':
       case 'school':
-        if (id === 'station' && this.save.habitat >= 6 && this.homeTrip) {
-          this.homeTrip = false;
+        if (id === 'station' && this.save.habitat >= 6 && homeTrip) {
           this.sound.play('happy');
           this.hud.toast(this.rideHomeText(), 2200);
           this.goHome();
@@ -1239,7 +1272,7 @@ export class Game {
     this.goHome();
     this.runStory(DREAM_WAKE, `${this.save.loop + 1}周目`, () => {
       this.commit({ ...this.save, tutorialDone: true });
-      this.hud.toast('2周目からは、お話を「とばす」で飛ばせるよ', 2800);
+      this.hud.toast('お話は「とばす」で飛ばせるよ', 2800);
     });
   }
 
@@ -1611,7 +1644,7 @@ export class Game {
     this.openOverlay('result', {
       title: r.won ? '優勝！' : '大会おわり',
       className: 'modal--result',
-      body: contestResultBody({ hero: this.hero, score, rank: r.rank, prize: r.prize, won: r.won, best: r.best }),
+      body: contestResultBody({ hero: this.hero, score, rank: r.rank, prize: r.prize, won: r.won, best: r.best, rivals: r.rivals }),
       buttons: [{ action: 'resultHome', label: r.firstWin ? '表彰式へ' : 'もどる', variant: 'primary' }],
     });
   }
@@ -1909,7 +1942,7 @@ export class Game {
   private transferCode: string | null = null;
   private pendingLoad: SaveData | null = null;
 
-  private openTransfer(error: string | null): void {
+  private openTransfer(error: string | null, typed = ''): void {
     const back = this.save.hero ? 'closeModal' : 'backToHero';
     this.openOverlay('transfer', {
       title: '引き継ぎ',
@@ -1917,11 +1950,16 @@ export class Game {
       body: transferBody(this.transferCode, error),
       buttons: [{ action: back, label: 'もどる', variant: 'secondary' }],
     });
+    // まちがっていたときも、貼りつけた文字は残す
+    const input = document.querySelector<HTMLTextAreaElement>('[data-ref="transferInput"]');
+    if (input && typed) input.value = typed;
   }
 
   private async makeCode(): Promise<void> {
     this.sound.play('tap');
-    this.transferCode = await encodeSave(this.save);
+    const code = await encodeSave(this.save);
+    if (this.overlay !== 'transfer') return;
+    this.transferCode = code;
     this.openTransfer(null);
   }
 
@@ -1942,10 +1980,12 @@ export class Game {
 
   private async loadCode(): Promise<void> {
     const input = document.querySelector<HTMLTextAreaElement>('[data-ref="transferInput"]');
-    const result = await decodeSave(input?.value ?? '', this.now);
+    const typed = input?.value ?? '';
+    const result = await decodeSave(typed, this.now);
+    if (this.overlay !== 'transfer') return;
     if (!result.ok) {
       this.sound.play('deny');
-      this.openTransfer(result.reason);
+      this.openTransfer(result.reason, typed);
       return;
     }
     this.pendingLoad = result.save;
@@ -2059,8 +2099,11 @@ export class Game {
 
   // ---- 入力 ----
 
-  private onAction(action: string, arg?: string): void {
+  private onAction(action: string, arg?: string, fromModal = true): void {
     this.sound.unlock();
+    // お話・確認・結果などの画面が出ているあいだは、その画面のボタンだけ受けつける
+    // （下のボタンや図鑑・？で、お話が消えたり、裏で別の遊びが始まったりしないように）
+    if (!fromModal && action !== 'sound' && ['story', 'confirm', 'result', 'hero', 'transfer', 'land', 'lot'].includes(this.overlay)) return;
     switch (action) {
       case 'sound': {
         const enabled = !this.save.soundEnabled;
@@ -2074,6 +2117,8 @@ export class Game {
         return;
       case 'openTransfer':
         this.sound.play('tap');
+        // 前に作ったコードは古いので、開くたびに作りなおしてもらう
+        this.transferCode = null;
         this.openTransfer(null);
         return;
       case 'makeCode':
@@ -2089,7 +2134,8 @@ export class Game {
         this.confirmLoad();
         return;
       case 'dex':
-        if (this.hud.blockingModalOpen) return;
+        // 時間で終わる遊びのとちゅうでは開かない（開いているあいだも時間が進むため）
+        if (this.hud.blockingModalOpen || (this.mode !== 'HOME' && this.mode !== 'TOWN')) return;
         this.sound.play('tap');
         this.openOverlay('help', {
           title: '図鑑',
@@ -2105,7 +2151,7 @@ export class Game {
         this.hud.updateModalBody(dexBody(this.save, this.dexTab), true);
         return;
       case 'help':
-        if (this.hud.blockingModalOpen) return;
+        if (this.hud.blockingModalOpen || (this.mode !== 'HOME' && this.mode !== 'TOWN')) return;
         this.sound.play('tap');
         this.openOverlay('help', {
           title: 'あそびかた',
@@ -2282,6 +2328,12 @@ export class Game {
         this.runStory(CONTAINER_STORY, 'お引っこし', () => this.pet?.playHappy());
         return;
       }
+      case 'dropRequest':
+        if (this.overlay !== 'board') return;
+        this.sound.play('tap');
+        this.commit(dropRequest(this.save, Number(arg)));
+        this.openBoard();
+        return;
       case 'deliver': {
         const done = deliverRequest(this.save, Number(arg));
         if (!done) {
@@ -2384,18 +2436,17 @@ export class Game {
       this.hud.toast(`毛並みが変わった！「${DUSTS.pollen.trait}」が使えるようになった`);
     } else if (growth > fed && !isFull(save)) {
       this.hud.toast(`なつかしの味！ ${fed}個で 成長+${growth}`, 2200);
+    } else if (repShortfall(save) !== null) {
+      this.hud.toast(`すみかがいっぱい！ 次の章へ進むには、評判があと★${repShortfall(save)}`, 3200);
     } else if (isFull(save)) {
       this.hud.toast(
         save.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : save.habitat < 3 ? 'ケースがいっぱい！ショップで大きくしよう' : 'すみかがいっぱい！',
       );
     }
-    if (landMeetingDue(save)) {
-      window.setTimeout(() => {
-        if (this.mode === 'HOME' && landMeetingDue(this.save)) {
-          this.runStory(LAND_MEETING, '家族会議', () => this.commit(addEvent(this.save, 'landMeeting')));
-        }
-      }, 2600);
-    }
+    // いっぱいになって章の出来事が起きるなら、食べ終わってすぐに（まちへ出なくても）
+    window.setTimeout(() => {
+      if (this.mode === 'HOME' && (this.overlay === 'none' || this.overlay === 'feed')) this.runDueEvent(this.save);
+    }, 2600);
   }
 
   private buy(action: string, arg?: string): void {
@@ -2592,7 +2643,7 @@ export class Game {
     const dt = this.lastTime === 0 ? 0 : Math.min(0.05, time - this.lastTime);
     this.lastTime = time;
 
-    if (this.autoFinishTimer > 0) {
+    if (this.autoFinishTimer > 0 && !this.hud.modalOpen) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
     }
@@ -2612,7 +2663,9 @@ export class Game {
       }
       // かき集めたつぶは、少しずつまとめてバッグへ
       if (this.now - this.galaxyGot.savedAt > 600) this.flushGalaxy();
-      if (left <= 0 || this.galaxy.remainingMotes === 0) this.endGalaxy();
+      // 最後に吸いこんでいるとちゅうのものも、数え終わってから（時間切れのあとは少しだけ待つ）
+      const over = left <= 0 || this.galaxy.remainingMotes === 0;
+      if (over && (this.galaxy.inFlight === 0 || this.now > this.galaxyGot.endsAt + 1500)) this.endGalaxy();
     }
     if (this.spaceGot && this.space && this.mode === 'SPACE' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));
@@ -2620,7 +2673,9 @@ export class Game {
         this.spaceGot.lastLeft = left;
         this.refreshHud();
       }
-      if (left <= 0 || this.space.remaining === 0) this.endSpace();
+      // 最後に吸いこんでいるとちゅうのものも、数え終わってから（時間切れのあとは少しだけ待つ）
+      const over = left <= 0 || this.space.remaining === 0;
+      if (over && (this.space.inFlight === 0 || this.now > this.spaceGot.endsAt + 1500)) this.endSpace();
     }
     if (this.worldGot && this.earth && this.mode === 'WORLD' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.worldGot.endsAt - this.now) / 1000));
@@ -2628,7 +2683,9 @@ export class Game {
         this.worldGot.lastLeft = left;
         this.refreshHud();
       }
-      if (left <= 0 || this.earth.remaining === 0) this.endWorld();
+      // 最後に吸いこんでいるとちゅうのものも、数え終わってから（時間切れのあとは少しだけ待つ）
+      const over = left <= 0 || this.earth.remaining === 0;
+      if (over && (this.earth.inFlight === 0 || this.now > this.worldGot.endsAt + 1500)) this.endWorld();
     }
     if (this.skyGot && this.sky && this.mode === 'SKY' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.skyGot.endsAt - this.now) / 1000));
@@ -2636,7 +2693,9 @@ export class Game {
         this.skyGot.lastLeft = left;
         this.refreshHud();
       }
-      if (left <= 0 || this.sky.remaining === 0) this.endSky();
+      // 最後に吸いこんでいるとちゅうのものも、数え終わってから（時間切れのあとは少しだけ待つ）
+      const over = left <= 0 || this.sky.remaining === 0;
+      if (over && (this.sky.inFlight === 0 || this.now > this.skyGot.endsAt + 1500)) this.endSky();
     }
     if (this.contest && this.mode === 'CLEANING' && !this.hud.modalOpen) {
       const left = this.contestLeft();

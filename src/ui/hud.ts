@@ -72,7 +72,7 @@ export class Hud {
 
   constructor(
     root: HTMLElement,
-    onAction: (action: string, arg?: string) => void,
+    onAction: (action: string, arg?: string, fromModal?: boolean) => void,
     onInput?: (name: string, value: number, done: boolean) => void,
   ) {
     root.innerHTML = `
@@ -108,7 +108,7 @@ export class Hud {
     root.addEventListener('click', (e) => {
       const target = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-action]');
       if (!target || target.disabled) return;
-      onAction(target.dataset.action as string, target.dataset.arg);
+      onAction(target.dataset.action as string, target.dataset.arg, !!target.closest('.modal-layer'));
     });
     // スライダー：動かしている間は input、指を離したら change
     const slider = (done: boolean) => (e: Event) => {
@@ -283,7 +283,10 @@ export class Hud {
       window.setTimeout(() => step('[data-step="2"]').classList.add('finale__text--show'), 1400);
       window.setTimeout(() => step('.finale__next').classList.add('finale__next--show'), 4400);
     });
+    let done = false;
     step('.finale__next').addEventListener('click', () => {
+      if (done) return;
+      done = true;
       el.classList.add('finale--out');
       window.setTimeout(() => el.remove(), 1600);
       onDone();

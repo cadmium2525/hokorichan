@@ -4,7 +4,7 @@
 // 読み込むときはチェックを確かめ、sanitize で今の版のセーブデータに整える。
 
 import { sanitize } from './save.ts';
-import type { SaveData } from './state.ts';
+import { SAVE_VERSION, type SaveData } from './state.ts';
 
 const PREFIX = 'HK1';
 
@@ -70,6 +70,9 @@ export async function decodeSave(code: string, now = Date.now()): Promise<Decode
     const json = m[1] === 'z' ? await pipe(body, new DecompressionStream('deflate-raw')) : body;
     const raw: unknown = JSON.parse(new TextDecoder().decode(json));
     if (typeof raw !== 'object' || raw === null || !('version' in raw)) return { ok: false, reason: 'ほこりちゃんのデータではないみたい' };
+    // 新しい版で作ったコードは、この版では正しく読めない（読むと白紙になってしまう）
+    const version = (raw as { version: unknown }).version;
+    if (typeof version !== 'number' || version > SAVE_VERSION) return { ok: false, reason: '新しい版のゲームで作ったコードみたい。ページを読みなおして、最新にしてからためしてね' };
     return { ok: true, save: sanitize(raw, now) };
   } catch {
     return { ok: false, reason: 'このブラウザでは読めないコードみたい' };

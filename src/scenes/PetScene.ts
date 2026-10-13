@@ -638,8 +638,10 @@ export class PetScene implements GameScene {
   }
 
   playHappy(): void {
-    const top = this.seat.clone().setY(this.seat.y + 1.0);
-    this.particles.burst(this.textures.sparkle, top, 14, 2.2, 0.3);
+    // 大きくなっても、頭の上で、見える大きさで
+    const s = Math.max(1, this.size);
+    const top = this.seat.clone().setY(this.seat.y + s);
+    this.particles.burst(this.textures.sparkle, top, 14, 2.2 * Math.sqrt(s), 0.3 * Math.sqrt(s));
     this.action = { kind: 'happy', t: 0, duration: 1.4 };
   }
 
@@ -741,7 +743,7 @@ export class PetScene implements GameScene {
       if (this.dripTimer <= 0) {
         this.dripTimer = 1.2 + Math.random();
         const p = this.pet.group.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * this.size * 0.6, this.size * 0.5, (Math.random() - 0.5) * this.size * 0.6));
-        this.particles.spawn(this.textures.drop, p, new THREE.Vector3(0, -0.3, 0), { life: 0.8, gravity: 1.5, scale: 0.16 });
+        this.particles.spawn(this.textures.drop, p, new THREE.Vector3(0, -0.3, 0), { life: 0.8, gravity: 1.5, scale: 0.16 * Math.max(1, Math.sqrt(this.size)) });
       }
     } else {
       this.blinkTimer -= dt;
@@ -772,6 +774,7 @@ export class PetScene implements GameScene {
         this.foodQueue--;
         this.foodTimer = 0.1;
         const mesh = new THREE.Mesh(this.foodGeo, this.foodMat);
+        mesh.scale.setScalar(Math.max(1, this.size * 0.4));
         const spread = Math.max(0.6, this.size);
         const from = this.seat.clone().add(new THREE.Vector3((Math.random() - 0.5) * spread, this.size + 0.8, (Math.random() - 0.5) * spread));
         mesh.position.copy(from);

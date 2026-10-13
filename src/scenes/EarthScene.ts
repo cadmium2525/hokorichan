@@ -120,6 +120,7 @@ export class EarthScene implements GameScene {
 
   private readonly opts: EarthOptions;
   private readonly background: THREE.Texture;
+  private readonly sky: THREE.Texture;
   private readonly globe = new THREE.Group();
   private readonly pet: HokorichanModel;
   private readonly rider: CharacterSprite;
@@ -138,7 +139,8 @@ export class EarthScene implements GameScene {
   constructor(opts: EarthOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene);
-    this.scene.background = this.spaceGradient();
+    this.sky = this.spaceGradient();
+    this.scene.background = this.sky;
 
     const earth = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 20), new THREE.MeshLambertMaterial({ map: earthTexture(opts.seed) }));
     this.globe.add(earth);
@@ -234,7 +236,9 @@ export class EarthScene implements GameScene {
       this.listeners.push([type, listener]);
     };
     on('pointerdown', (e) => {
-      if (!this.inputEnabled || this.pointer || !e.isPrimary) return;
+      // 新しい1本目の指が来たら、前の指（離したお知らせが届かなかったもの）は終わりにする
+      if (!this.inputEnabled || !e.isPrimary) return;
+      if (this.pointer?.patch && this.pointer.patch.state === 'idle') this.pointer.patch.progress = 0;
       e.preventDefault();
       try {
         el.setPointerCapture(e.pointerId);
@@ -300,6 +304,11 @@ export class EarthScene implements GameScene {
 
   get remaining(): number {
     return this.patches.filter((p) => p.state === 'idle').length;
+  }
+
+  /** 吸いこんでいるとちゅう（まだお礼に数えていない）の数 */
+  get inFlight(): number {
+    return this.patches.filter((p) => p.state === 'sucking').length;
   }
 
   update(dt: number, time: number): void {
@@ -372,6 +381,7 @@ export class EarthScene implements GameScene {
     this.particles.dispose();
     this.sparkle.dispose();
     this.background.dispose();
+    this.sky.dispose();
     disposeHierarchy(this.scene);
     this.scene.clear();
   }

@@ -31,3 +31,9 @@ test('こわれたコード・ちがうコードは読み込まない', async ()
   assert.equal((await decodeSave('')).ok, false);
   assert.equal(crc32(new TextEncoder().encode('123456789')), 0xcbf43926);
 });
+
+test('新しい版で作ったコードは、白紙にせず読み込まない', async () => {
+  const s = { ...PRESETS[1].make('boy'), version: 99 } as unknown as Parameters<typeof encodeSave>[0];
+  const r = await decodeSave(await encodeSave(s));
+  assert.equal(r.ok, false);
+});
