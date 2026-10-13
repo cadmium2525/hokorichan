@@ -37,6 +37,8 @@ export type TownOptions = {
   /** 建物の前に立っている町の人 */
   npcs?: Array<{ id: CharacterId; at: BuildingId }>;
   onArrive: (id: BuildingId) => void;
+  /** 町の人をタップして、そばまで歩いたら呼ばれる */
+  onTalk?: (id: CharacterId) => void;
 };
 
 export class TownScene implements GameScene {
@@ -46,7 +48,9 @@ export class TownScene implements GameScene {
   private readonly opts: TownOptions;
   private readonly town: Town;
   private readonly hero: CharacterSprite;
-  private readonly npcs: Array<{ sprite: CharacterSprite; pos: THREE.Vector3 }> = [];
+  private readonly npcs: Array<{ id: CharacterId; sprite: CharacterSprite; pos: THREE.Vector3 }> = [];
+  /** 話しかけに向かっている町の人 */
+  private talkTo: CharacterId | null = null;
   private lowWidth = 260;
   private readonly background: THREE.Texture;
   private readonly marker: THREE.Mesh;
@@ -100,7 +104,7 @@ export class TownScene implements GameScene {
     const sprite = new CharacterSprite(id);
     sprite.group.position.copy(pos);
     this.scene.add(sprite.group);
-    this.npcs.push({ sprite, pos });
+    this.npcs.push({ id, sprite, pos });
   }
 
   // ---- 入力 ----
@@ -119,6 +123,21 @@ export class TownScene implements GameScene {
     const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
     this.raycaster.setFromCamera(ndc, this.camera);
 
+    // 町の人をタップしたら、そばまで行って話しかける（板の透明部分が広いので画面上の距離で判定）
+    const npc = this.npcAt(e.clientX - rect.left, e.clientY - rect.top, rect.width, rect.height);
+    if (npc) {
+      // 画面の上で重ならないよう、主人公がいる側の真横（画面の左右）に立つ
+      const right = new THREE.Vector3(1, 0, -1).normalize();
+      const side = screenDelta(this.pos.x - npc.pos.x, this.pos.z - npc.pos.z).sx >= 0 ? 1 : -1;
+      let spot = npc.pos.clone().addScaledVector(right, 0.75 * side);
+      if (this.blocked(spot.x, spot.z)) spot = npc.pos.clone().addScaledVector(right, -0.75 * side);
+      const near = Math.hypot(this.pos.x - npc.pos.x, this.pos.z - npc.pos.z) < 1.0;
+      this.walkTo(near ? this.pos.clone() : spot, null);
+      this.talkTo = npc.id;
+      if (near) this.arrive();
+      return;
+    }
+
     // 建物をタップしたらその入口へ
     for (const b of Object.values(this.town.buildings)) {
       if (this.raycaster.intersectObject(b.hit, true).length > 0) {
@@ -133,8 +152,29 @@ export class TownScene implements GameScene {
     this.walkTo(hit, null);
   }
 
+  /** 画面上（CSS px）でタップ位置に一番近い町の人 */
+  private npcAt(x: number, y: number, w: number, h: number): { id: CharacterId; pos: THREE.Vector3 } | null {
+    let best: { id: CharacterId; pos: THREE.Vector3 } | null = null;
+    let bestD = Infinity;
+    for (const n of this.npcs) {
+      const p = this.tmp.copy(n.pos).setY(0.6).project(this.camera);
+      const sx = ((p.x + 1) / 2) * w;
+      const sy = ((1 - p.y) / 2) * h;
+      const dx = Math.abs(x - sx);
+      const dy = Math.abs(y - sy);
+      if (dx > 30 || dy > 44) continue;
+      const d = dx + dy;
+      if (d < bestD) {
+        bestD = d;
+        best = n;
+      }
+    }
+    return best;
+  }
+
   /** 建物の入口へ歩かせる（「家に帰る」ボタンなどから） */
   walkTo(point: THREE.Vector3, building: BuildingId | null): void {
+    this.talkTo = null;
     this.target = point.clone();
     this.goingTo = building;
     this.path = this.findPath(this.pos, this.target);
@@ -155,6 +195,7 @@ export class TownScene implements GameScene {
     this.target = null;
     this.path = [];
     this.goingTo = null;
+    this.talkTo = null;
     this.marker.visible = false;
   }
 
@@ -368,7 +409,7 @@ export class TownScene implements GameScene {
       this.pos.z = this.pos.z + Math.sign(dz) * step;
     } else {
       // 進めないので、そこで止まる（建物に向かっていて入口のそばなら入る）
-      if (last && this.goingTo && dist < 0.9) this.arrive();
+      if (last && (this.goingTo || this.talkTo) && dist < 0.9) this.arrive();
       else this.stop();
       return false;
     }
@@ -377,7 +418,15 @@ export class TownScene implements GameScene {
 
   private arrive(): void {
     const id = this.goingTo;
+    const talk = this.npcs.find((n) => n.id === this.talkTo);
     this.stop();
+    if (talk) {
+      // 向かい合って話す
+      const sd = screenDelta(talk.pos.x - this.pos.x, talk.pos.z - this.pos.z);
+      this.hero.facing = facingFromScreen(sd.sx, sd.sy, this.hero.facing);
+      this.opts.onTalk?.(talk.id);
+      return;
+    }
     if (id) {
       // 建物のほうを向く
       const c = this.town.buildings[id].hit.position;

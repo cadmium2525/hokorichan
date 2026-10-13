@@ -11,6 +11,7 @@ import { PetScene, type PetView } from '../scenes/PetScene.ts';
 import { EarthScene } from '../scenes/EarthScene.ts';
 import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
+import { pickTalk, type TownPerson } from './talk.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
 import { canShareImage, makePhotoCard, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
@@ -48,6 +49,7 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  PEOPLE,
   PERSON_IDS,
   SHAPE_PRESETS,
   spotDef,
@@ -652,6 +654,7 @@ export class Game {
       railway: areaUnlocked(this.save, 'station'),
       npcs: this.townNpcs(),
       onArrive: (id) => this.onArrive(id),
+      onTalk: (id) => this.talkWith(id),
     });
     this.setScene(this.town);
     this.refreshHud();
@@ -1255,6 +1258,8 @@ export class Game {
   }
 
   /** 吹き出しのお話を順に見せ、最後に done を呼ぶ */
+  private readonly lastTalk = new Map<TownPerson, string>();
+
   private runStory(steps: StoryStep[], title: string, done: () => void): void {
     this.story = steps;
     this.storyTitle = title;
@@ -1262,6 +1267,16 @@ export class Game {
     this.storyStep = 0;
     this.town?.stop();
     this.showStoryStep();
+  }
+
+  /** まちの人に話しかける（前回と同じセリフは続けない） */
+  private talkWith(id: CharacterId): void {
+    if (!PERSON_IDS.includes(id as PersonId) || id === 'mother' || id === 'agent') return;
+    const person = id as TownPerson;
+    const text = pickTalk(person, this.save, this.random, this.lastTalk.get(person));
+    this.lastTalk.set(person, text);
+    const name = PEOPLE.find((p) => p.id === person)?.name ?? '';
+    this.runStory([{ speaker: person as Speaker, text, button: 'うん' }], name, () => this.refreshHud());
   }
 
   /** 図鑑：お話に出てきた人を記録する */
