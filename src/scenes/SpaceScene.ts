@@ -20,8 +20,8 @@ const CENTER_R = 2.0;
 const BELT: [number, number] = [5.2, 6.2];
 /** 軌道を移る速さ（ワールド単位/秒） */
 const RADIAL_SPEED = 3.2;
-const PET_SIZE = 1.3;
-const PICK_R = 0.95;
+const PET_SIZE = 1.6;
+const PICK_R = 1.1;
 const ROCK_HIT_R = 0.6;
 
 export type SpaceOptions = {
@@ -147,7 +147,7 @@ export class SpaceScene implements GameScene {
       const a = rng() * Math.PI * 2;
       const d = i === 0 ? 0 : randRange(rng, 0.12, 0.38);
       s.position.set(Math.cos(a) * d, randRange(rng, 0.05, 0.35), Math.sin(a) * d);
-      s.scale.setScalar(randRange(rng, 0.28, 0.45));
+      s.scale.setScalar(randRange(rng, 0.4, 0.6));
       g.add(s);
     }
     return g;
@@ -206,16 +206,17 @@ export class SpaceScene implements GameScene {
   // ---- カメラ ----
 
   resize(aspect: number): void {
-    const r = ORBIT_MAX + 0.6;
-    const pts = [
-      new THREE.Vector3(r, 0, 0),
-      new THREE.Vector3(-r, 0, 0),
-      new THREE.Vector3(0, 0, r),
-      new THREE.Vector3(0, 0, -r),
-      new THREE.Vector3(0, CENTER_R + 1, 0),
-    ];
+    // 斜めから見ると軌道は横長のだ円になる。円周をぐるっと調べて、いちばん外の軌道と
+    // その上の星くず・ほこりちゃんが必ず画面に入るようにする
+    const r = ORBIT_MAX + 0.7;
+    const pts: THREE.Vector3[] = [new THREE.Vector3(0, CENTER_R + 1, 0)];
+    for (let i = 0; i < 48; i++) {
+      const a = (i / 48) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.cos(a) * r, -0.3, Math.sin(a) * r));
+      pts.push(new THREE.Vector3(Math.cos(a) * r, PET_SIZE, Math.sin(a) * r));
+    }
     this.camera.updateMatrixWorld();
-    fitOrthoToBox(this.camera, pts, aspect, 1.04);
+    fitOrthoToBox(this.camera, pts, aspect, 1.03);
   }
 
   // ---- 進行 ----
@@ -273,7 +274,7 @@ export class SpaceScene implements GameScene {
       if (c.state === 'gone') continue;
       if (c.state === 'idle') {
         c.group.rotation.y += dt * 0.8;
-        c.group.children.forEach((s, i) => s.scale.setScalar(0.3 + 0.1 * Math.sin(time * 4 + i * 1.7 + c.angle * 3)));
+        c.group.children.forEach((s, i) => s.scale.setScalar(0.45 + 0.12 * Math.sin(time * 4 + i * 1.7 + c.angle * 3)));
         if (c.group.position.distanceTo(pos) < PICK_R) {
           c.state = 'sucking';
           c.t = 0;
