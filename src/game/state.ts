@@ -877,6 +877,8 @@ export function hasProject(save: SaveData, id: TownProjectId): boolean {
 /** 寄付できるか（その章になっていて、まだできていなくて、コインが足りる） */
 export function canDonate(save: SaveData, id: TownProjectId): boolean {
   const def = TOWN_PROJECTS.find((p) => p.id === id);
+  // 記念館は、丘へ引っこして倉庫が空いてから（思い出の倉庫を改築する）
+  if (id === 'museum' && save.habitat < 6) return false;
   return !!def && chapter(save) >= def.chapter && !hasProject(save, id) && save.coins >= def.price;
 }
 
@@ -884,6 +886,16 @@ export function donate(save: SaveData, id: TownProjectId): { save: SaveData; ok:
   const def = TOWN_PROJECTS.find((p) => p.id === id);
   if (!def || !canDonate(save, id)) return { save, ok: false };
   return { save: { ...save, coins: save.coins - def.price, town: [...save.town, id] }, ok: true };
+}
+
+/** 思い出の倉庫が、記念館に改築されているか */
+export function museumBuilt(save: SaveData): boolean {
+  return hasProject(save, 'museum');
+}
+
+/** 表示用の場所の名前（記念館に改築したら、思い出の倉庫は「ほこりちゃん記念館」） */
+export function placeName(save: SaveData, name: string): string {
+  return museumBuilt(save) && name === '思い出の倉庫' ? 'ほこりちゃん記念館' : name;
 }
 
 /** 町づくりを掲示板に出すか（3章から） */

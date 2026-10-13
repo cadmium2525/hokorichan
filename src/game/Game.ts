@@ -64,6 +64,7 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  TREASURES,
   TREASURE_COINS,
   type Treasure,
   PEOPLE,
@@ -119,6 +120,8 @@ import {
   canSpace,
   canGalaxy,
   canWakeUp,
+  museumBuilt,
+  placeName,
   donate,
   hasProject,
   observatoryBonus,
@@ -748,7 +751,7 @@ export class Game {
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session) {
       const sess = this.session;
       const need = requiredCount(sess);
-      this.hud.setCleaningStatus(this.spot?.name ?? 'おそうじ中', sess.collected.size, sess.total, need);
+      this.hud.setCleaningStatus(this.spot ? placeName(s, this.spot.name) : 'おそうじ中', sess.collected.size, sess.total, need);
       const left = Math.max(0, need - sess.collected.size);
       const buttons: ButtonSpec[] = [];
       if (this.cleaning?.hasHelper && helperStats(s).sneeze) {
@@ -1124,7 +1127,11 @@ export class Game {
     const stats = helperStats(this.save);
     this.sneezeLeft = together && stats.sneeze;
 
-    const layout = buildSpot(def.id, seed);
+    // 記念館に改築したら、思い出の倉庫の中も豪華に（見つけた宝物をかざる）
+    const layout = buildSpot(def.id, seed, {
+      museum: museumBuilt(this.save),
+      treasures: TREASURES.filter((t) => this.save.dex.items.includes(t.id)).map((t) => t.color),
+    });
     const view = this.petView();
     const scene = new CleaningScene({
       seed,
@@ -1519,6 +1526,7 @@ export class Game {
       pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
       radiusMul: skyRadiusMul(this.save),
       speedMul: skySpeedMul(this.save),
+      phase: dayPhase(this.hour),
       onCloud: (type) => this.onCloud(type),
     });
     this.sky = scene;
@@ -1924,7 +1932,7 @@ export class Game {
   private openMap(area: Area): void {
     this.mapArea = area;
     this.openOverlay('map', {
-      title: area === 'home' ? (this.save.habitat >= 4 ? 'おうち：どこを掃除する？' : 'どこを掃除する？') : AREA_NAMES[area],
+      title: area === 'home' ? (this.save.habitat >= 4 ? 'おうち：どこを掃除する？' : 'どこを掃除する？') : placeName(this.save, AREA_NAMES[area]),
       className: 'modal--map',
       body: mapBody(this.save, area, this.now, this.params.speed),
       buttons:
@@ -2647,7 +2655,7 @@ export class Game {
       home: s.habitat >= 4 ? '家の掃除' : 'ほこりちゃんのいる家',
       shop: '道具・ケース・アクセサリー',
       board: s.requests.length > 0 ? `依頼 ${s.requests.length}件` : '依頼の掲示板',
-      lot: s.habitat >= 6 ? '写真と道具の倉庫（掃除）' : s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
+      lot: s.habitat >= 6 ? (museumBuilt(s) ? '宝物と写真の記念館（掃除）' : '写真と道具の倉庫（掃除）') : s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
       friend: '友だちの家の掃除',
       flower: '花粉が多い', bakery: '粉ぼこりが多い', grandma: '猫の毛が多い',
       station: s.habitat >= 7 ? 'すす・電車とロケットで月へ' : s.habitat >= 6 ? 'すす・電車で丘へ' : 'すすと砂ぼこり', school: 'チョークの粉',
@@ -2675,7 +2683,7 @@ export class Game {
       case 'board':
         return s.requests.length > 0 ? `掲示板（${s.requests.length}）` : '掲示板';
       case 'lot':
-        return s.habitat >= 6 ? '思い出の倉庫' : s.habitat >= 5 ? '倉庫' : s.habitat >= 4 ? 'コンテナ' : '空き地';
+        return s.habitat >= 6 ? placeName(s, '思い出の倉庫') : s.habitat >= 5 ? '倉庫' : s.habitat >= 4 ? 'コンテナ' : '空き地';
       case 'friend':
         return friendUnlocked(s) ? '友だちの家' : '？？？の家';
       case 'flower':

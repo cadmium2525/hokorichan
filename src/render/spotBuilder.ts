@@ -915,7 +915,152 @@ function oldWarehouseLayout(seed: number): SpotLayout {
   };
 }
 
-export function buildSpot(id: SpotId, seed: number): SpotLayout {
+/** 金のふちの額に入った写真 */
+function framedPhoto(seed: number): THREE.CanvasTexture {
+  const photo = photoTexture(seed);
+  const [canvas, ctx] = makeCanvas(26, 22);
+  ctx.fillStyle = '#c99a2e';
+  ctx.fillRect(0, 0, 26, 22);
+  ctx.fillStyle = '#f2c94c';
+  ctx.fillRect(1, 1, 24, 20);
+  ctx.fillStyle = '#fff2a8';
+  ctx.fillRect(1, 1, 24, 1);
+  ctx.drawImage(photo.image as HTMLCanvasElement, 3, 3);
+  photo.dispose();
+  return toTexture(canvas);
+}
+
+/** 大理石の市松もようの床 */
+function marbleTexture(repeat: number): THREE.CanvasTexture {
+  const [canvas, ctx] = makeCanvas(16, 16);
+  ctx.fillStyle = '#f6f0ea';
+  ctx.fillRect(0, 0, 16, 16);
+  ctx.fillStyle = '#e6dcd0';
+  ctx.fillRect(0, 0, 8, 8);
+  ctx.fillRect(8, 8, 8, 8);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(2, 11, 3, 1);
+  ctx.fillRect(10, 3, 4, 1);
+  return toTexture(canvas, [repeat, repeat]);
+}
+
+/**
+ * 思い出の倉庫を改築した「ほこりちゃん記念館」の中。
+ * 大理石の床と赤いじゅうたん、金の額の写真、見つけた宝物のガラスケース、
+ * まんなかに金のほこりちゃん像（ロープで囲む）、天井にシャンデリア、歴代の掃除道具のケース。
+ */
+function museumLayout(seed: number, treasures: readonly string[]): SpotLayout {
+  const g = new THREE.Group();
+  const half = 3.8;
+  buildShell(g, half, seed, { base: '#f8f0e2', stripe: '#efd9a8' }, marbleTexture(half));
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, block = true) => {
+    obj.position.set(x, 0, z);
+    g.add(obj);
+    if (block) blockers.push(blockerOf(obj));
+  };
+  const gold = lambert({ color: '#f2c94c' });
+  const marble = lambert({ color: '#efe9e0' });
+  const velvet = lambert({ color: '#d9506a' });
+  // 赤いじゅうたん（奥から手前へ）
+  const carpet = new THREE.Mesh(new THREE.PlaneGeometry(1.1, half * 2 - 0.4), new THREE.MeshLambertMaterial({ color: '#d9506a' }));
+  carpet.rotation.x = -Math.PI / 2;
+  carpet.position.set(0.6, 0.012, 0.2);
+  g.add(carpet);
+  // 金の額の写真（奥の壁は大きく、左の壁にも）
+  for (let i = 0; i < 4; i++) wallDecal(g, half, 'back', -2.6 + i * 1.75, 1.55 + (i % 2) * 0.35, 1.25, 1.05, framedPhoto(seed + i));
+  for (let i = 0; i < 3; i++) wallDecal(g, half, 'left', -2.5 + i * 1.9, 1.6 + ((i + 1) % 2) * 0.3, 1.2, 1.0, framedPhoto(seed + 20 + i));
+  // 宝物のガラスケース（左の壁ぞいに3つ。見つけた宝物をかざる）
+  for (let c = 0; c < 3; c++) {
+    const cg = new THREE.Group();
+    const stand = box(0.9, 0.7, 0.6, marble);
+    stand.position.y = 0.35;
+    const cloth = box(0.8, 0.04, 0.5, velvet);
+    cloth.position.y = 0.72;
+    const glass = box(0.9, 0.5, 0.6, new THREE.MeshLambertMaterial({ color: '#dff3ff', transparent: true, opacity: 0.3 }));
+    glass.position.y = 0.97;
+    const trim = box(0.94, 0.04, 0.64, gold);
+    trim.position.y = 1.24;
+    cg.add(stand, cloth, glass, trim);
+    const items = treasures.slice(c * 4, c * 4 + 4);
+    items.forEach((color, k) => {
+      const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), new THREE.MeshLambertMaterial({ color, flatShading: true }));
+      gem.position.set(-0.27 + k * 0.18, 0.82, (k % 2) * 0.12 - 0.06);
+      cg.add(gem);
+    });
+    cg.rotation.y = Math.PI / 2;
+    place(cg, -half + 0.45, -2.2 + c * 1.6);
+  }
+  // まんなかの金のほこりちゃん像と、ロープの囲い
+  const statue = new THREE.Group();
+  const pedestal = box(0.7, 0.55, 0.7, marble);
+  pedestal.position.y = 0.275;
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), lambert({ color: '#f2c94c', flatShading: true }));
+  body.position.y = 0.88;
+  const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.1, 6), lambert({ color: '#fff2a8' }));
+  crown.position.y = 1.25;
+  statue.add(pedestal, body, crown);
+  for (const x of [-0.11, 0.11]) {
+    const eye = box(0.05, 0.08, 0.02, lambert({ color: '#6b4a1a' }));
+    eye.position.set(x, 0.92, 0.33);
+    statue.add(eye);
+  }
+  for (const [x, z] of [[-0.75, -0.75], [0.75, -0.75], [-0.75, 0.75], [0.75, 0.75]] as const) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.6, 6), gold);
+    post.position.set(x, 0.3, z);
+    const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), gold);
+    ball.position.set(x, 0.63, z);
+    statue.add(post, ball);
+  }
+  for (const [x, z, w, d] of [[0, -0.75, 1.5, 0.04], [0, 0.75, 1.5, 0.04], [-0.75, 0, 0.04, 1.5], [0.75, 0, 0.04, 1.5]] as const) {
+    const rope = box(w, 0.04, d, velvet);
+    rope.position.set(x, 0.5, z);
+    statue.add(rope);
+  }
+  place(statue, 0.6, 0.4);
+  // 歴代の掃除道具（ガラスケースの中）
+  const tools = new THREE.Group();
+  const shelf = box(1.6, 0.6, 0.5, marble);
+  shelf.position.y = 0.3;
+  const toolGlass = box(1.6, 0.8, 0.5, new THREE.MeshLambertMaterial({ color: '#dff3ff', transparent: true, opacity: 0.3 }));
+  toolGlass.position.y = 1.0;
+  const rag = box(0.35, 0.05, 0.25, lambert({ color: '#f3d27a' }));
+  rag.position.set(-0.5, 0.63, 0);
+  const mop = box(0.05, 0.75, 0.05, lambert({ color: '#9a86c6' }));
+  mop.position.set(-0.05, 1.0, 0);
+  mop.rotation.z = 0.2;
+  const vac = box(0.35, 0.3, 0.25, lambert({ color: '#f4a7b9' }));
+  vac.position.set(0.45, 0.75, 0);
+  tools.add(shelf, toolGlass, rag, mop, vac);
+  place(tools, 2.3, -half + 0.35);
+  // 天井のシャンデリア（当たり判定なし）
+  const chandelier = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.04, 4, 16), gold);
+  ring.rotation.x = Math.PI / 2;
+  chandelier.add(ring);
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const light = new THREE.Mesh(new THREE.IcosahedronGeometry(0.06, 0), new THREE.MeshBasicMaterial({ color: '#fff2c4' }));
+    light.position.set(Math.cos(a) * 0.5, 0.08, Math.sin(a) * 0.5);
+    chandelier.add(light);
+  }
+  chandelier.position.set(0.6, 2.6, 0.4);
+  g.add(chandelier);
+  // すみの鉢植え
+  place(plant(seed + 9).object, 2.9, 2.9);
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.2, 0, -half - 0.2), new THREE.Vector3(half, 2.8, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
+/** 掃除場所の見た目。思い出の倉庫は、記念館に改築していれば豪華に */
+export function buildSpot(id: SpotId, seed: number, opts: { museum?: boolean; treasures?: readonly string[] } = {}): SpotLayout {
+  if (id === 'oldWarehouse' && opts.museum) return museumLayout(seed, opts.treasures ?? []);
   switch (id) {
     case 'window':
       return windowLayout();

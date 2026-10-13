@@ -50,6 +50,7 @@ import {
   REQUEST_MAX,
   spotStatus,
   spotTreasures,
+  placeName,
   hasProject,
   townProjectsOpen,
   contestRivals,
@@ -141,14 +142,14 @@ export function mapBody(save: SaveData, area: Area, now: number, speed: number):
       <button type="button" class="spot ${cls}" data-action="goSpot" data-arg="${def.id}" ${disabled ? 'disabled' : ''}>
         ${spotIcon(def.id)}
         <span class="spot__text">
-          <span class="spot__name">${escapeHtml(def.name)}${badge}</span>
+          <span class="spot__name">${escapeHtml(placeName(save, def.name))}${badge}</span>
           <span class="spot__desc">${escapeHtml(note)}</span>
           <span class="meter"><span style="width:${Math.round(st.fullness * 100)}%"></span></span>
         </span>
       </button>`;
   }).join('');
   return `
-    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite sprite--sm')}<span>${escapeHtml(AREA_NAMES[area])}</span><span>${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
+    <div class="map-head">${heroSprite(save.hero ?? 'boy', 'sprite sprite--sm')}<span>${escapeHtml(placeName(save, AREA_NAMES[area]))}</span><span>${toolIcon(tool.id)}${escapeHtml(tool.name)}</span></div>
     <div class="spots">${cards}</div>
     <p class="note">ホコリは時間がたつと少しずつ積もるよ</p>`;
 }

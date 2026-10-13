@@ -75,12 +75,15 @@ export class TownScene implements GameScene {
   private inputEnabled = true;
   private readonly listeners: Array<[string, EventListener]> = [];
   private readonly tmp = new THREE.Vector3();
+  /** 噴水の水しぶき（町づくりでできていれば） */
+  private readonly spray: THREE.Object3D | null;
 
   constructor(opts: TownOptions) {
     this.opts = opts;
     this.background = setupStage(this.scene, opts.phase);
     this.town = buildTown({ lotOwned: opts.lotOwned, warehouse: opts.warehouse, railway: opts.railway, projects: opts.projects });
     this.scene.add(this.town.group);
+    this.spray = this.town.group.getObjectByName('spray') ?? null;
     this.hero = new CharacterSprite(opts.hero);
     // 入口の少し手前（道側）に立ち、こちらを向いている
     const start = this.town.buildings[opts.startAt];
@@ -511,6 +514,10 @@ export class TownScene implements GameScene {
 
   update(dt: number, time: number): void {
     this.town.railway?.update(dt);
+    if (this.spray) {
+      this.spray.rotation.y += dt * 1.2;
+      this.spray.position.y = Math.sin(time * 6) * 0.03;
+    }
     const walking = this.move(dt);
     this.hero.group.position.copy(this.pos);
     this.hero.set(walking ? (this.running ? 'run' : 'walk') : 'idle');

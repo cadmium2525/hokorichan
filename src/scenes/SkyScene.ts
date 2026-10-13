@@ -10,6 +10,7 @@ import { Particles } from '../render/particles.ts';
 import { makeCanvas, sparkleTexture, toTexture } from '../render/proceduralArt.ts';
 import { createIsoCamera, disposeHierarchy } from '../render/threeUtils.ts';
 import { setupStage } from './sceneKit.ts';
+import type { DayPhase } from '../game/clock.ts';
 import type { GameScene } from './types.ts';
 
 /** 飛べる範囲（ワールド単位、中心から） */
@@ -31,24 +32,35 @@ export type SkyOptions = {
   /** 飛ぶ速さの倍率（チョークの粉の毛並み） */
   speedMul?: number;
   onCloud: (type: DustType) => void;
+  /** 時間帯（空と雲海の色） */
+  phase?: DayPhase;
 };
 
 type Cloud = { group: THREE.Group; type: DustType; pos: THREE.Vector3; state: 'idle' | 'sucking' | 'gone'; t: number; phase: number };
 
 /** 下に見える雲海（白い雲のかたまりを散らした水色の地面） */
-function seaTexture(seed: number): THREE.CanvasTexture {
+/** 時間帯ごとの空と雲海の色（上の空・下の空・雲海・雲・雲のかげ） */
+const SKY_COLORS: Record<DayPhase, { top: string; bottom: string; sea: string; cloud: string; shade: string }> = {
+  morning: { top: '#f6c0b0', bottom: '#fdeadc', sea: '#f6d6cc', cloud: '#fff6ee', shade: '#f8e2da' },
+  day: { top: '#8fcbef', bottom: '#e6f4fb', sea: '#b9e0f4', cloud: '#ffffff', shade: '#e3f3fb' },
+  evening: { top: '#c97a9a', bottom: '#f8c08a', sea: '#eaa27e', cloud: '#ffd8b4', shade: '#f2b896' },
+  night: { top: '#1e2246', bottom: '#3e4a7a', sea: '#38407a', cloud: '#6a72a8', shade: '#4e5690' },
+};
+
+function seaTexture(seed: number, phase: DayPhase): THREE.CanvasTexture {
   const rng = createRandom(seed);
+  const c = SKY_COLORS[phase];
   const [canvas, ctx] = makeCanvas(64, 64);
-  ctx.fillStyle = '#b9e0f4';
+  ctx.fillStyle = c.sea;
   ctx.fillRect(0, 0, 64, 64);
   for (let i = 0; i < 22; i++) {
     const x = Math.floor(rng() * 64);
     const y = Math.floor(rng() * 64);
     const w = 6 + Math.floor(rng() * 10);
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = c.cloud;
     ctx.fillRect(x, y, w, 3);
     ctx.fillRect(x + 2, y - 2, w - 4, 2);
-    ctx.fillStyle = '#e3f3fb';
+    ctx.fillStyle = c.shade;
     ctx.fillRect(x + 1, y + 3, w - 2, 1);
   }
   return toTexture(canvas, [6, 6]);
@@ -103,11 +115,12 @@ export class SkyScene implements GameScene {
 
   constructor(opts: SkyOptions) {
     this.opts = opts;
-    this.background = setupStage(this.scene);
-    this.sky = this.skyGradient();
+    const phase = opts.phase ?? 'day';
+    this.background = setupStage(this.scene, phase);
+    this.sky = this.skyGradient(phase);
     this.scene.background = this.sky;
 
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ map: seaTexture(opts.seed) }));
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshBasicMaterial({ map: seaTexture(opts.seed, phase) }));
     sea.rotation.x = -Math.PI / 2;
     sea.position.y = -3;
     this.sea = sea;
@@ -147,13 +160,23 @@ export class SkyScene implements GameScene {
     this.bindInput();
   }
 
-  private skyGradient(): THREE.Texture {
-    const [canvas, ctx] = makeCanvas(2, 64);
+  private skyGradient(phase: DayPhase): THREE.Texture {
+    const c = SKY_COLORS[phase];
+    const W = 48;
+    const [canvas, ctx] = makeCanvas(W, 64);
     const g = ctx.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, '#8fcbef');
-    g.addColorStop(1, '#e6f4fb');
+    g.addColorStop(0, c.top);
+    g.addColorStop(1, c.bottom);
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 2, 64);
+    ctx.fillRect(0, 0, W, 64);
+    if (phase === 'night') {
+      // 夜は星
+      const rng = createRandom(91);
+      for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = rng() < 0.3 ? '#fff6c8' : '#ffffff';
+        ctx.fillRect(Math.floor(rng() * W), Math.floor(rng() * 40), 1, 1);
+      }
+    }
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
