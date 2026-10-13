@@ -28,6 +28,7 @@ import {
   feedBody,
   skyResultBody,
   worldResultBody,
+  transferBody,
   spaceResultBody,
   galaxyResultBody,
   bubbleResultBody,
@@ -81,6 +82,7 @@ import {
 } from './catalog.ts';
 import { createRandom, type Random } from './rng.ts';
 import { loadSave, writeSave } from './save.ts';
+import { decodeSave, encodeSave } from './transfer.ts';
 import {
   addEvent,
   areaUnlocked,
@@ -186,7 +188,7 @@ import {
 
 export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'GALAXY' | 'BUBBLES' | 'RESULT';
 
-type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
+type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'transfer' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
 /** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
 type DebugParams = { seed: number | null; damp: boolean | null; speed: number; hour: number | null };
@@ -590,7 +592,30 @@ export class Game {
     this.bindLifecycle();
   }
 
+  /** データを消されにくくする（ブラウザにおねがい）。はじめのお話が終わってから一度だけ */
+  private protectStorage(): void {
+    try {
+      void navigator.storage?.persist?.();
+    } catch {
+      // 使えないブラウザでは何もしない
+    }
+  }
+
+  /** ホーム画面に追加していないときは、一度だけ案内する */
+  private installHint(): void {
+    const standalone = matchMedia('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (standalone || this.save.cleanedSessions < 3) return;
+    try {
+      if (localStorage.getItem('hokorichan.installHint')) return;
+      localStorage.setItem('hokorichan.installHint', '1');
+    } catch {
+      return;
+    }
+    this.hud.toast('ホーム画面に追加すると、データが消えにくくなるよ（「あそぶ」→「引き継ぎ」でバックアップも）', 4200);
+  }
+
   start(): void {
+    if (this.save.tutorialDone) this.protectStorage();
     this.resize();
     this.tickRequests(false);
     this.goHome();
@@ -860,6 +885,7 @@ export class Game {
       this.hud.toast(`次の章へ進むには、評判があと★${repShortfall(s)}。掲示板の依頼をこなそう`, 3200);
     else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
+    else this.installHint();
   }
 
   /** まちへ。startAt の建物の入口の前から歩き出す */
@@ -1773,6 +1799,7 @@ export class Game {
     ];
     this.runStory(intro, 'であい', () => {
       if (!this.save.tutorialDone) this.commit({ ...this.save, tutorialDone: true });
+      this.protectStorage();
     });
   }
 
@@ -1870,8 +1897,82 @@ export class Game {
       className: 'modal--sheet',
       sheet: true,
       body: playBody(this.save),
-      buttons: [{ action: 'closeModal', label: 'とじる', variant: 'secondary' }],
+      buttons: [
+        { action: 'openTransfer', label: '引き継ぎ', sub: 'コード', variant: 'secondary' },
+        { action: 'closeModal', label: 'とじる', variant: 'secondary' },
+      ],
     });
+  }
+
+  // ---- 引き継ぎコード ----
+
+  private transferCode: string | null = null;
+  private pendingLoad: SaveData | null = null;
+
+  private openTransfer(error: string | null): void {
+    const back = this.save.hero ? 'closeModal' : 'backToHero';
+    this.openOverlay('transfer', {
+      title: '引き継ぎ',
+      className: 'modal--map',
+      body: transferBody(this.transferCode, error),
+      buttons: [{ action: back, label: 'もどる', variant: 'secondary' }],
+    });
+  }
+
+  private async makeCode(): Promise<void> {
+    this.sound.play('tap');
+    this.transferCode = await encodeSave(this.save);
+    this.openTransfer(null);
+  }
+
+  private async copyCode(): Promise<void> {
+    if (!this.transferCode) return;
+    try {
+      await navigator.clipboard.writeText(this.transferCode);
+      this.hud.toast('コードをコピーしたよ', 1800);
+    } catch {
+      // コピーできないときは、文字を選んだ状態にして長押しでコピーしてもらう
+      const area = document.querySelector<HTMLTextAreaElement>('.transfer__code[readonly]');
+      area?.focus();
+      area?.select();
+      this.hud.toast('コードを長押ししてコピーしてね', 2200);
+    }
+    this.sound.play('happy');
+  }
+
+  private async loadCode(): Promise<void> {
+    const input = document.querySelector<HTMLTextAreaElement>('[data-ref="transferInput"]');
+    const result = await decodeSave(input?.value ?? '', this.now);
+    if (!result.ok) {
+      this.sound.play('deny');
+      this.openTransfer(result.reason);
+      return;
+    }
+    this.pendingLoad = result.save;
+    const s = result.save;
+    this.openOverlay('confirm', {
+      title: 'このデータで続きから？',
+      className: 'modal--story',
+      body: storyBody(
+        'narration',
+        s.hero ?? 'boy',
+        `<b>${rankFor(s.growthXp).name}</b>・${HABITATS[s.habitat].name}${s.loop > 0 ? `・${s.loop + 1}周目` : ''}<br>コイン ${s.coins}・バッグ ${bagTotal(s.bag)}個<br><small>いまの端末のデータは、このデータで上書きされます</small>`,
+      ),
+      buttons: [
+        { action: 'openTransfer', label: 'やめる', variant: 'secondary' },
+        { action: 'confirmLoad', label: '続きから', variant: 'primary' },
+      ],
+    });
+  }
+
+  private confirmLoad(): void {
+    if (!this.pendingLoad) return;
+    // ページを閉じるときの自動保存で古いデータに戻らないよう、手元のデータも入れかえてから保存する
+    this.save = this.pendingLoad;
+    writeSave(this.save);
+    this.pendingLoad = null;
+    // 読み込んだデータで、はじめから画面を作りなおす
+    location.reload();
   }
 
   /** あそぶ：ほこりちゃんの写真を撮ってシェアする */
@@ -1968,6 +2069,25 @@ export class Game {
         this.sound.play('tap');
         return;
       }
+      case 'backToHero':
+        this.showHeroSelect();
+        return;
+      case 'openTransfer':
+        this.sound.play('tap');
+        this.openTransfer(null);
+        return;
+      case 'makeCode':
+        void this.makeCode();
+        return;
+      case 'copyCode':
+        void this.copyCode();
+        return;
+      case 'loadCode':
+        void this.loadCode();
+        return;
+      case 'confirmLoad':
+        this.confirmLoad();
+        return;
       case 'dex':
         if (this.hud.blockingModalOpen) return;
         this.sound.play('tap');

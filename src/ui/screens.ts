@@ -88,7 +88,8 @@ export function heroSelectBody(): string {
       ${heroSprite(hero, 'sprite sprite--lg')}
       <span>${label}</span>
     </button>`;
-  return `<p>主人公をえらんでね</p><div class="hero-pick">${card('boy', '男の子')}${card('girl', '女の子')}</div>`;
+  return `<p>主人公をえらんでね</p><div class="hero-pick">${card('boy', '男の子')}${card('girl', '女の子')}</div>
+    <button type="button" class="link-btn" data-action="openTransfer">引き継ぎコードで続きから</button>`;
 }
 
 // ---- お話（吹き出し） ----
@@ -614,4 +615,25 @@ export function bubbleResultBody(opts: { hero: Hero; popped: number; reward: num
       <dt>バッグ</dt><dd>${opts.bag}個</dd>
     </dl>
     <div class="chips chips--dust">${got}</div>`;
+}
+
+// ---- 引き継ぎコード ----
+
+/** 引き継ぎの画面。code があれば、作ったコードを表示する */
+export function transferBody(code: string | null, error: string | null = null): string {
+  const made = code
+    ? `<textarea class="transfer__code" readonly rows="4" aria-label="引き継ぎコード">${escapeHtml(code)}</textarea>
+       ${buttonHtml({ action: 'copyCode', label: 'コードをコピー', sub: 'LINEやメモに貼って送る', variant: 'primary' })}`
+    : buttonHtml({ action: 'makeCode', label: '引き継ぎコードを作る', sub: 'いまのデータ', variant: 'primary' });
+  return `
+    <div class="transfer">
+      <h3 class="dex__title">この端末のデータを持っていく</h3>
+      <p class="note note--left">コードをコピーして、新しい端末の「コードで続きから」に貼りつけてね。<br>コードは長いので、手で打たずにコピー＆ペーストで。</p>
+      ${made}
+      <h3 class="dex__title">コードで続きから</h3>
+      <textarea class="transfer__code" data-ref="transferInput" rows="3" placeholder="HK1z. ではじまるコードを貼りつけ" aria-label="引き継ぎコードを入力"></textarea>
+      ${error ? `<p class="note transfer__error">${escapeHtml(error)}</p>` : ''}
+      ${buttonHtml({ action: 'loadCode', label: 'このコードで続きから', sub: 'いまのデータは上書き', variant: 'secondary' })}
+      <p class="note note--left"><small>ホーム画面に追加して遊ぶと、データが消えにくくなるよ。<br>ときどきコードを作って、メモに残しておくと安心。</small></p>
+    </div>`;
 }

@@ -1718,3 +1718,44 @@ body {
   font-size: 10px;
   vertical-align: 1px;
 }
+
+/* 引き継ぎ */
+.transfer {
+  display: grid;
+  gap: 8px;
+}
+
+.transfer__code {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: #fffaf4;
+  font: 12px/1.4 ui-monospace, Menlo, monospace;
+  color: var(--ink);
+  word-break: break-all;
+  resize: none;
+}
+
+.transfer__error {
+  color: #c0506a;
+}
+
+.link-btn {
+  display: block;
+  margin: 14px auto 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink-soft);
+  text-decoration: underline;
+}
+
+/* iOSで入力時に画面が拡大されないよう16px */
+.transfer__code:not([readonly]) {
+  font-size: 16px;
+}
