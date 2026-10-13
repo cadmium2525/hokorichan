@@ -329,9 +329,9 @@ export function feedBody(save: SaveData, favorite: DustType | null = null): stri
   const traits = activeTraits(save.diet);
   const traitText = traits.length ? traits.map((t) => `<b>${escapeHtml(DUSTS[t].trait)}</b>`).join('・') : 'まだ目立った毛並みはない';
   return `
+    ${room === 0 && bagTotal(save.bag) > 0 ? '<p class="note">おなかいっぱい（すみかがせまい）</p>' : ''}
     ${fav}
     ${rows || '<p class="note">バッグが空っぽ。掃除に行こう</p>'}
-    ${room === 0 && bagTotal(save.bag) > 0 ? '<p class="note">おなかいっぱい（すみかがせまい）</p>' : ''}
     <div class="row-title">これまで食べたもの</div>
     <div class="chips chips--dust">${eaten || '<small>まだなにも</small>'}</div>
     <div class="row-title">毛並み</div>
@@ -497,7 +497,7 @@ export function contestPoster(save: SaveData, wait: number): string {
     <div class="poster">
       <div class="poster__title">町内会 大掃除大会</div>
       <p>${CONTEST.seconds}秒のあいだに、風で${CONTEST.waves.length}回ホコリが飛んでくる（ぜんぶで${CONTEST_MAX}個）。<br>いちばん多く集めたチームが優勝！</p>
-      <p class="note">いちばん強い「${escapeHtml(rivals[rivals.length - 1].name)}」は${top}個。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}${won ? '' : `<br>初優勝で${CONTEST.firstWinBonus}コインと★${CONTEST.winRep}`}</p>
+      <p class="note">いちばん強い「${escapeHtml(rivals[rivals.length - 1].name)}」は${top}個（<b>${top + 1}個</b>で優勝）。${save.contestBest > 0 ? `自己ベスト ${save.contestBest}個` : ''}${won ? '' : `<br>初優勝で${CONTEST.firstWinBonus}コインと★${CONTEST.winRep}`}</p>
       ${button}
     </div>`;
 }
@@ -624,8 +624,10 @@ export function bubbleResultBody(opts: { hero: Hero; popped: number; reward: num
 // ---- 引き継ぎコード ----
 
 /** 引き継ぎの画面。code があれば、作ったコードを表示する */
-export function transferBody(code: string | null, error: string | null = null): string {
-  const made = code
+export function transferBody(code: string | null, error: string | null = null, canMake = true): string {
+  const made = !canMake
+    ? '<p class="note">この端末には、まだデータがないよ</p>'
+    : code
     ? `<textarea class="transfer__code" readonly rows="4" aria-label="引き継ぎコード">${escapeHtml(code)}</textarea>
        ${buttonHtml({ action: 'copyCode', label: 'コードをコピー', sub: 'LINEやメモに貼って送る', variant: 'primary' })}`
     : buttonHtml({ action: 'makeCode', label: '引き継ぎコードを作る', sub: 'いまのデータ', variant: 'primary' });

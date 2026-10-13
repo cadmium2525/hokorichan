@@ -83,8 +83,8 @@ export class Hud {
             <div class="pill" data-ref="bagPill" aria-label="バッグのホコリ">${ICONS.bag}<span data-ref="bag">0</span></div>
             <div class="spacer"></div>
             <button type="button" class="icon-btn" data-action="sound" data-ref="sound" aria-label="音のON/OFF"></button>
-            <button type="button" class="icon-btn" data-action="dex" aria-label="図鑑">${ICONS.dex}</button>
-            <button type="button" class="icon-btn" data-action="help" aria-label="遊び方">${ICONS.help}</button>
+            <button type="button" class="icon-btn" data-action="dex" data-ref="dexBtn" aria-label="図鑑">${ICONS.dex}</button>
+            <button type="button" class="icon-btn" data-action="help" data-ref="helpBtn" aria-label="遊び方">${ICONS.help}</button>
           </div>
           <div class="status" data-ref="status"></div>
         </header>
@@ -124,6 +124,12 @@ export class Hud {
     this.el.bag.textContent = String(bag);
     this.el.sound.innerHTML = soundEnabled ? ICONS.soundOn : ICONS.soundOff;
     this.el.sound.setAttribute('aria-pressed', String(soundEnabled));
+  }
+
+  /** 時間で終わる遊びのあいだは、図鑑と遊びかたを押せなくする（見た目も） */
+  setHeaderLocked(locked: boolean): void {
+    (this.el.dexBtn as HTMLButtonElement).disabled = locked;
+    (this.el.helpBtn as HTMLButtonElement).disabled = locked;
   }
 
   bump(which: 'coins' | 'bag'): void {

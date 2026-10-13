@@ -854,6 +854,8 @@ export function wakeUp(save: SaveData): SaveData {
     equippedAccessory: save.equippedAccessory,
     shape: { ...save.shape },
     contestBest: save.contestBest,
+    // まちと掲示板のはじめての説明は、もう知っているので出さない
+    events: ['town', 'board'],
     loop: save.loop + 1,
   };
 }
@@ -1129,7 +1131,7 @@ export function makeRequest(save: SaveData, id: number, random: () => number): R
     id,
     kind: 'lost',
     client: AREA_CLIENT[spot.area],
-    line: `${spot.name}で${item.name}をなくしちゃったの。ホコリにまぎれてないかしら`,
+    line: `${spot.name}で${item.name}をなくしてしまって……。ホコリにまぎれていないかな`,
     spot: spot.id,
     item: item.id,
     reward: Math.round(50 * scale.coin),

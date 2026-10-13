@@ -740,7 +740,7 @@ test('夢からさめる：ホコリと図鑑とアクセサリーを引き継�
   assert.equal(next.growthXp, 0);
   assert.equal(next.rep, 0);
   assert.deepEqual(next.tools, ['hand']);
-  assert.deepEqual(next.events, []);
+  assert.deepEqual(next.events, ['town', 'board']);
   assert.equal(next.tutorialDone, false);
   assert.equal(chapter(next), 1);
   assert.equal(canWakeUp(next), false);

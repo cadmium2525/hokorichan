@@ -1774,3 +1774,24 @@ body {
   color: var(--ink-soft);
   text-decoration: underline;
 }
+
+.icon-btn:disabled {
+  opacity: 0.35;
+}
+
+/* 下のパネル：中身だけスクロールして、ボタンはいつも見えるように */
+.modal-layer--sheet .modal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modal-layer--sheet .modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.modal-layer--sheet .modal__actions {
+  flex-shrink: 0;
+}

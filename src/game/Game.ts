@@ -118,6 +118,7 @@ import {
   canSpace,
   canGalaxy,
   canWakeUp,
+  chapter,
   repShortfall,
   wakeUp,
   bubbleCount,
@@ -218,6 +219,23 @@ const HOW_TO =
   'ホコリには種類があって、何を食べさせるかで<b>毛並み</b>が変わるよ。<br>' +
   '「おでかけ」すると、<b>ショップ</b>で道具やケースを買えたり、<b>掲示板</b>で町の人の依頼を受けられるよ。<br>' +
   'ホコリは時間がたつとまた積もるから、待つ間は「あそぶ」でなでたり着せかえたりしよう！';
+
+/** 「？」の遊びかた：いまの章で使うボタンの説明を足す */
+function howToNow(s: SaveData): string {
+  const ch = chapter(s);
+  if (ch === 1) return HOW_TO;
+  const lines = [
+    '「おでかけ」でまちへ。<b>おうち</b>や町の建物で掃除して、ホコリを集めよう。',
+    '「餌をあげる」で育てると、すみかいっぱいで次の章へ。<b>評判</b>（掲示板の依頼）も必要だよ。',
+  ];
+  if (ch >= 3) lines.push('「<b>空へ</b>」ほこりちゃんに乗って、なぞった方へ飛んで雲を吸いこむ。');
+  if (ch >= 4) lines.push('「<b>世界へ</b>」地球儀をなぞって回し、ホコリの地域を長押し。町のホコリは「なつかしの味」で何倍も育つよ。');
+  if (ch >= 5) lines.push('「<b>宇宙へ</b>」指をおいた所の軌道へ移る。内側ほど速く回るよ。');
+  if (ch >= 6) lines.push('「<b>銀河へ</b>」指でなでるように、星雲のもやを口へかき集める。');
+  if (ch >= 7) lines.push('「<b>しゃぼん玉へ</b>」浮かんでくる、よその宇宙をタップしてはじく。');
+  lines.push('ホコリは時間がたつとまた積もるよ。待つ間は「あそぶ」でなでたり着せかえたり。');
+  return lines.join('<br>');
+}
 
 const TOWN_INTRO: StoryStep[] = [
   {
@@ -679,6 +697,7 @@ export class Game {
   private refreshHud(): void {
     const s = this.save;
     this.syncRain();
+    this.hud.setHeaderLocked(this.mode !== 'HOME' && this.mode !== 'TOWN');
     this.hud.setWallet(s.coins, bagTotal(s.bag), s.soundEnabled);
     if (this.mode === 'HOME') {
       this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), `${HABITATS[s.habitat].name}${s.loop > 0 ? `・${s.loop + 1}周目` : ''}`, s.damp);
@@ -700,17 +719,17 @@ export class Game {
       this.hud.setActions([{ action: 'galaxyEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'SPACE' || this.mode === 'RESULT') && this.spaceGot && this.space) {
       const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));
-      const all = this.spaceGot.clusters + this.space.remaining;
+      const all = this.spaceGot.clusters + this.space.remaining + this.space.inFlight;
       this.hud.setCleaningStatus(`宇宙のおそうじ ⏱ のこり${left}秒`, this.spaceGot.clusters, all, all);
       this.hud.setActions([{ action: 'spaceEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'WORLD' || this.mode === 'RESULT') && this.worldGot && this.earth) {
       const left = Math.max(0, Math.ceil((this.worldGot.endsAt - this.now) / 1000));
-      const all = this.worldGot.patches + this.earth.remaining;
+      const all = this.worldGot.patches + this.earth.remaining + this.earth.inFlight;
       this.hud.setCleaningStatus(`世界のおそうじ ⏱ のこり${left}秒`, this.worldGot.patches, all, all);
       this.hud.setActions([{ action: 'worldEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'SKY' || this.mode === 'RESULT') && this.skyGot && this.sky) {
       const left = Math.max(0, Math.ceil((this.skyGot.endsAt - this.now) / 1000));
-      const all = this.skyGot.clouds + this.sky.remaining;
+      const all = this.skyGot.clouds + this.sky.remaining + this.sky.inFlight;
       this.hud.setCleaningStatus(`空のおそうじ ⏱ のこり${left}秒`, this.skyGot.clouds, all, all);
       this.hud.setActions([{ action: 'skyEnd', label: 'おりる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'CLEANING' || this.mode === 'RESULT') && this.session && this.contest) {
@@ -765,17 +784,17 @@ export class Game {
       const n = worldPatches(s, this.now, this.params.speed);
       buttons.push({ action: 'goWorld', label: '世界へ', sub: n > 0 ? `地域 ${n}か所` : 'ホコリを待っている', variant: 'accent', disabled: n === 0 });
     }
-    if (canBubbles(s)) {
-      const n = bubbleCount(s, this.now, this.params.speed);
-      buttons.push({ action: 'goBubbles', label: 'しゃぼん玉へ', sub: n > 0 ? `よその宇宙 ${n}こ` : '宇宙を待っている', variant: 'primary', disabled: n === 0 });
+    if (canSpace(s)) {
+      const n = spaceClusters(s, this.now, this.params.speed);
+      buttons.push({ action: 'goSpace', label: '宇宙へ', sub: n > 0 ? `星くず ${n}群れ` : '星くずを待っている', variant: 'primary', disabled: n === 0 });
     }
     if (canGalaxy(s)) {
       const n = galaxyNebulae(s, this.now, this.params.speed);
       buttons.push({ action: 'goGalaxy', label: '銀河へ', sub: n > 0 ? `星雲 ${n}こ` : '星雲を待っている', variant: 'primary', disabled: n === 0 });
     }
-    if (canSpace(s)) {
-      const n = spaceClusters(s, this.now, this.params.speed);
-      buttons.push({ action: 'goSpace', label: '宇宙へ', sub: n > 0 ? `星くず ${n}群れ` : '星くずを待っている', variant: 'primary', disabled: n === 0 });
+    if (canBubbles(s)) {
+      const n = bubbleCount(s, this.now, this.params.speed);
+      buttons.push({ action: 'goBubbles', label: 'しゃぼん玉へ', sub: n > 0 ? `よその宇宙 ${n}こ` : '宇宙を待っている', variant: 'primary', disabled: n === 0 });
     }
     buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
@@ -1270,9 +1289,9 @@ export class Game {
     this.commit(wakeUp(this.save));
     this.sound.play('happy');
     this.goHome();
+    this.hud.toast('お話は「とばす」で飛ばせるよ', 2800);
     this.runStory(DREAM_WAKE, `${this.save.loop + 1}周目`, () => {
       this.commit({ ...this.save, tutorialDone: true });
-      this.hud.toast('お話は「とばす」で飛ばせるよ', 2800);
     });
   }
 
@@ -1947,7 +1966,7 @@ export class Game {
     this.openOverlay('transfer', {
       title: '引き継ぎ',
       className: 'modal--map',
-      body: transferBody(this.transferCode, error),
+      body: transferBody(this.transferCode, error, !!this.save.hero),
       buttons: [{ action: back, label: 'もどる', variant: 'secondary' }],
     });
     // まちがっていたときも、貼りつけた文字は残す
@@ -2156,7 +2175,7 @@ export class Game {
         this.openOverlay('help', {
           title: 'あそびかた',
           className: 'modal--story',
-          body: storyBody('narration', this.hero, HOW_TO),
+          body: storyBody('narration', this.hero, howToNow(this.save)),
           buttons: [{ action: 'closeModal', label: 'とじる', variant: 'primary' }],
         });
         return;
