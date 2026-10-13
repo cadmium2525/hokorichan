@@ -86,7 +86,8 @@ export type EventId =
   | 'rainyDone'
   | 'worldLetter'
   | 'world'
-  | 'earthWrap';
+  | 'earthWrap'
+  | 'shrink';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -107,6 +108,7 @@ export const EVENT_IDS: readonly EventId[] = [
   'worldLetter',
   'world',
   'earthWrap',
+  'shrink',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */

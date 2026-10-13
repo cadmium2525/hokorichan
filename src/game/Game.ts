@@ -335,6 +335,12 @@ const EARTH_WRAP: StoryStep[] = [
   { speaker: 'narration', text: '（4章 地球編 おしまい。5章「宇宙編」は準備中）', button: 'やったー！' },
 ];
 
+/** 丘に引っこしたあと、はじめてまちで一緒に掃除するとき（大きさを変えられる） */
+const SHRINK_STORY: StoryStep[] = [
+  { speaker: 'hero', text: 'あれ？ ほこりちゃん、丘にいるはずなのに……。', button: '？' },
+  { speaker: 'narration', text: 'ほこりちゃんは、<b>するするっと小さくなって</b>ついてきた。<br>お店の人も、いつもどおり「いらっしゃい」と言った。', button: 'いっしょに掃除しよう！' },
+];
+
 const TOOL_HINT: Record<ToolId, string> = {
   hand: '指でなぞってホコリをつまもう',
   rag: 'なぞってぞうきんで拭き取ろう',
@@ -822,6 +828,9 @@ export class Game {
     else if (layout.scale >= 1) lines.push('端に寄せると画面が動くよ');
     this.hud.hint(lines.join('\n'));
     if (together && !hasEvent(this.save, 'together')) this.save = addEvent(this.save, 'together');
+    if (together && this.save.habitat >= 6 && !hasEvent(this.save, 'shrink')) {
+      this.runStory(SHRINK_STORY, 'ちいさくなれる', () => this.commit(addEvent(this.save, 'shrink')));
+    }
     this.refreshHud();
   }
 
