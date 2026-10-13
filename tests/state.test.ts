@@ -594,3 +594,29 @@ test('軌道は内側ほど速く回る', async () => {
   const { orbitOmega, ORBIT_MIN, ORBIT_MAX } = await import('../src/game/orbit.ts');
   assert.ok(orbitOmega(ORBIT_MIN) > orbitOmega(ORBIT_MAX) * 2);
 });
+
+test('宝物：よく積もった場所でだけ、まだ見つけていないものが出る', async () => {
+  const { rollTreasure, spotTreasures, dexAdd, dexProgress, createInitialSave } = await import('../src/game/state.ts');
+  const { TREASURES, SPOTS, TREASURE_MIN_FULLNESS } = await import('../src/game/catalog.ts');
+  // どの掃除場所にも3つずつ、番号は重ならない
+  for (const def of SPOTS) assert.equal(TREASURES.filter((t) => t.spot === def.id).length, 3, def.id);
+  assert.equal(new Set(TREASURES.map((t) => t.id)).size, TREASURES.length);
+  let s = createInitialSave();
+  assert.equal(rollTreasure(s, 'window', TREASURE_MIN_FULLNESS - 0.01, () => 0), null);
+  const t = rollTreasure(s, 'window', 1, () => 0);
+  assert.ok(t && t.spot === 'window');
+  assert.equal(rollTreasure(s, 'window', 1, () => 0.99), null);
+  for (const x of TREASURES.filter((x) => x.spot === 'window')) s = dexAdd(s, 'items', x.id).save;
+  assert.equal(spotTreasures(s, 'window').left.length, 0);
+  assert.equal(rollTreasure(s, 'window', 1, () => 0), null);
+  const p = dexProgress(s);
+  assert.deepEqual(p.treasures, [3, TREASURES.length]);
+  assert.equal(p.items[0], 0);
+});
+
+test('宝物は保存して読み直しても残る', async () => {
+  const { sanitize } = await import('../src/game/save.ts');
+  const { createInitialSave } = await import('../src/game/state.ts');
+  const s = { ...createInitialSave(), dex: { dust: [], items: ['t_window1', 'ring', 'bogus'], people: [], fur: [] } };
+  assert.deepEqual(sanitize(JSON.parse(JSON.stringify(s))).dex.items, ['t_window1', 'ring']);
+});

@@ -284,11 +284,12 @@ export class Hud {
   }
 
   /** 開いているモーダルの本文だけを書き換える（スクロール位置を保つ） */
-  updateModalBody(body: string): void {
+  updateModalBody(body: string, scrollTop = false): void {
     const el = this.el.modal.querySelector<HTMLElement>('.modal__body');
     if (!el || body === this.modalBody) return;
     this.modalBody = body;
     el.innerHTML = body;
+    if (scrollTop) el.scrollTop = 0;
   }
 
   /** 下のパネルが3D画面（stage）の高さのどれだけを覆っているか */

@@ -16,6 +16,7 @@ import {
   FRIEND_UNLOCK_XP,
   LAND_PRICE,
   LOST_ITEMS,
+  TREASURES,
   CONTEST,
   CONTEST_MAX,
   FUR_IDS,
@@ -44,6 +45,7 @@ import {
   rainyActive,
   REQUEST_MAX,
   spotStatus,
+  spotTreasures,
   type Request,
   type SaveData,
 } from '../game/state.ts';
@@ -122,11 +124,14 @@ export function mapBody(save: SaveData, area: Area, now: number, speed: number):
       note = `ホコリ ${st.dust}個・満タンまで${minutesText(st.minutesToFull)}`;
     }
     const disabled = st.locked || !st.ready;
+    const tr = spotTreasures(save, def.id);
+    const total = tr.found.length + tr.left.length;
+    const badge = st.locked ? '' : `<span class="spot__treasure ${tr.left.length === 0 ? 'spot__treasure--done' : ''}">宝物 ${tr.found.length}/${total}</span>`;
     return `
       <button type="button" class="spot ${cls}" data-action="goSpot" data-arg="${def.id}" ${disabled ? 'disabled' : ''}>
         ${spotIcon(def.id)}
         <span class="spot__text">
-          <span class="spot__name">${escapeHtml(def.name)}</span>
+          <span class="spot__name">${escapeHtml(def.name)}${badge}</span>
           <span class="spot__desc">${escapeHtml(note)}</span>
           <span class="meter"><span style="width:${Math.round(st.fullness * 100)}%"></span></span>
         </span>
@@ -367,50 +372,86 @@ export function landBody(save: SaveData): string {
 
 // ---- 図鑑 ----
 
-export function dexBody(save: SaveData): string {
+export type DexTab = 'fur' | 'dust' | 'treasure' | 'people';
+
+export const DEX_TABS: readonly DexTab[] = ['fur', 'dust', 'treasure', 'people'];
+
+export function dexBody(save: SaveData, tab: DexTab = 'fur'): string {
   const p = dexProgress(save);
   const unknown = '<span class="dex__q">？</span>';
-  const dust = DUST_TYPES.map((t) => {
-    const known = save.dex.dust.includes(t);
-    const d = DUSTS[t];
-    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+  const grid = (body: string) => `<div class="dex">${body}</div>`;
+  const title = (text: string, [n, max]: [number, number]) => `<h3 class="dex__title">${text}<span>${n} / ${max}</span></h3>`;
+
+  const tabs: Array<[DexTab, string, [number, number]]> = [
+    ['fur', '毛並み', p.fur],
+    ['dust', 'ホコリ', p.dust],
+    ['treasure', '宝物', [p.treasures[0] + p.items[0], p.treasures[1] + p.items[1]]],
+    ['people', '町の人', p.people],
+  ];
+  const tabHtml = tabs
+    .map(
+      ([id, label, [n, max]]) =>
+        `<button type="button" class="tab ${id === tab ? 'tab--on' : ''}" data-action="dexTab" data-arg="${id}">${label}<small>${n}/${max}</small></button>`,
+    )
+    .join('');
+
+  let body = '';
+  if (tab === 'fur') {
+    // 見つけた毛並みを先に並べる
+    const furs = [...FUR_IDS].sort((x, y) => Number(save.dex.fur.includes(y)) - Number(save.dex.fur.includes(x))).map((id) => {
+      const known = save.dex.fur.includes(id);
+      const parts = furParts(id);
+      const pure = parts.length === 1;
+      if (!known) {
+        return `<div class="dex__item dex__item--unknown">${unknown}<b>？？？</b><small>${pure ? `${escapeHtml(DUSTS[parts[0]].name)}ばかり食べると…？` : 'まだ見ていない'}</small></div>`;
+      }
+      const [a, b] = [DUSTS[parts[0]].tint, DUSTS[parts[1] ?? parts[0]].tint];
+      return `<div class="dex__item"><i class="dex__fur" style="background:radial-gradient(circle at 35% 35%, #fffaf2 0 25%, ${a} 26% 60%, ${b} 61%)"></i><b>${escapeHtml(furName(id))}</b><small>${parts.map((t) => escapeHtml(DUSTS[t].name)).join('＋')}</small></div>`;
+    }).join('');
+    body = '<p class="note">ランクが上がるとき、そのランクのあいだに食べたホコリで毛並みが決まるよ</p>' + grid(furs);
+  } else if (tab === 'dust') {
+    const dust = DUST_TYPES.map((t) => {
+      const known = save.dex.dust.includes(t);
+      const d = DUSTS[t];
+      return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
       ${known ? `<i class="dex__swatch" style="background:${d.colors[0]};box-shadow:inset -3px -3px 0 ${d.colors[1]}"></i>` : unknown}
-      <b>${known ? escapeHtml(d.name) : '？？？'}</b><small>${known ? `毛並み「${escapeHtml(d.trait)}」` : 'まだ見ていない'}</small></div>`;
-  }).join('');
-  const items = LOST_ITEMS.map((it) => {
-    const known = save.dex.items.includes(it.id);
-    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+      <b>${known ? escapeHtml(d.name) : '？？？'}</b><small>${known ? `毛並み「${escapeHtml(d.trait)}」：${escapeHtml(d.traitDesc)}` : 'まだ見ていない'}</small></div>`;
+    }).join('');
+    body = grid(dust);
+  } else if (tab === 'treasure') {
+    // 宝物は掃除場所ごとに。よく積もった場所を掃除すると、ときどき見つかる
+    const spots = SPOTS.map((def) => {
+      const { found, left } = spotTreasures(save, def.id);
+      const items = TREASURES.filter((t) => t.spot === def.id).map((t) => {
+        const known = found.includes(t);
+        return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+        ${known ? `<i class="dex__gem" style="background:${t.color}"></i>` : unknown}
+        <b>${known ? escapeHtml(t.name) : '？？？'}</b><small>${known ? '見つけた' : 'ホコリの中に…？'}</small></div>`;
+      }).join('');
+      return title(escapeHtml(def.name), [found.length, found.length + left.length]) + grid(items);
+    }).join('');
+    const lost = LOST_ITEMS.map((it) => {
+      const known = save.dex.items.includes(it.id);
+      return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
       ${known ? `<i class="dex__gem" style="background:${it.color}"></i>` : unknown}
       <b>${known ? escapeHtml(it.name) : '？？？'}</b><small>${known ? '持ち主に届けた' : '依頼で見つかる'}</small></div>`;
-  }).join('');
-  const people = PEOPLE.map((person) => {
-    const known = save.dex.people.includes(person.id);
-    return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
+    }).join('');
+    body =
+      '<p class="note">よく積もった場所を掃除すると、ホコリの中から宝物が見つかることがあるよ。場所ごとにぜんぶ集めると評判★+1</p>' +
+      spots +
+      title('落とし物（掲示板の依頼）', p.items) +
+      grid(lost);
+  } else {
+    const people = PEOPLE.map((person) => {
+      const known = save.dex.people.includes(person.id);
+      return `<div class="dex__item ${known ? '' : 'dex__item--unknown'}">
       ${known ? characterSprite(person.id, 'sprite sprite--sm') : unknown}
       <b>${known ? escapeHtml(person.name) : '？？？'}</b><small>${known ? escapeHtml(person.note) : 'まだ会っていない'}</small></div>`;
-  }).join('');
-  // 見つけた毛並みを先に並べる
-  const furs = [...FUR_IDS].sort((x, y) => Number(save.dex.fur.includes(y)) - Number(save.dex.fur.includes(x))).map((id) => {
-    const known = save.dex.fur.includes(id);
-    const parts = furParts(id);
-    const pure = parts.length === 1;
-    if (!known) {
-      return `<div class="dex__item dex__item--unknown">${unknown}<b>？？？</b><small>${pure ? `${escapeHtml(DUSTS[parts[0]].name)}ばかり食べると…？` : 'まだ見ていない'}</small></div>`;
-    }
-    const [a, b] = [DUSTS[parts[0]].tint, DUSTS[parts[1] ?? parts[0]].tint];
-    return `<div class="dex__item"><i class="dex__fur" style="background:radial-gradient(circle at 35% 35%, #fffaf2 0 25%, ${a} 26% 60%, ${b} 61%)"></i><b>${escapeHtml(furName(id))}</b><small>${parts.map((t) => escapeHtml(DUSTS[t].name)).join('＋')}</small></div>`;
-  }).join('');
-  const section = (title: string, [n, max]: [number, number], body: string) =>
-    `<h3 class="dex__title">${title}<span>${n} / ${max}</span></h3><div class="dex">${body}</div>`;
-  const best = save.contestBest > 0 ? `<p class="note">大掃除大会の自己ベスト：${save.contestBest}個${save.events.includes('contestWon') ? '（町の清掃係）' : ''}</p>` : '';
-  return (
-    section('毛並み', p.fur, furs) +
-    '<p class="note">ランクが上がるとき、そのランクのあいだに食べたホコリで毛並みが決まるよ</p>' +
-    section('ホコリ', p.dust, dust) +
-    section('落とし物', p.items, items) +
-    section('町の人', p.people, people) +
-    best
-  );
+    }).join('');
+    const best = save.contestBest > 0 ? `<p class="note">大掃除大会の自己ベスト：${save.contestBest}個${save.events.includes('contestWon') ? '（町の清掃係）' : ''}</p>` : '';
+    body = grid(people) + best;
+  }
+  return `<div class="tabs tabs--dex">${tabHtml}</div><div class="dex-page">${body}</div>`;
 }
 
 // ---- 大掃除大会 ----

@@ -15,6 +15,10 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  TREASURES,
+  TREASURE_CHANCE,
+  TREASURE_MIN_FULLNESS,
+  type Treasure,
   FUR_IDS,
   FUR_PURE_RATIO,
   furId,
@@ -242,11 +246,19 @@ export function dexAdd<K extends DexKind>(save: SaveData, kind: K, id: Dex[K][nu
   return { save: { ...save, dex: { ...save.dex, [kind]: [...list, id] } }, added: true };
 }
 
-export function dexProgress(save: SaveData): { dust: [number, number]; items: [number, number]; people: [number, number]; fur: [number, number] } {
+export function dexProgress(save: SaveData): {
+  dust: [number, number];
+  items: [number, number];
+  treasures: [number, number];
+  people: [number, number];
+  fur: [number, number];
+} {
+  const lost = LOST_ITEMS.map((i) => i.id);
   return {
     fur: [save.dex.fur.length, FUR_IDS.length],
     dust: [save.dex.dust.length, DUST_TYPES.length],
-    items: [save.dex.items.length, LOST_ITEMS.length],
+    items: [save.dex.items.filter((id) => lost.includes(id)).length, LOST_ITEMS.length],
+    treasures: [save.dex.items.filter((id) => !lost.includes(id)).length, TREASURES.length],
     people: [save.dex.people.length, PERSON_IDS.length],
   };
 }
@@ -299,6 +311,25 @@ export function contestResult(
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
 export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 {
   return save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
+}
+
+// ---- 宝物 ----
+
+/** その掃除場所の宝物（見つけたものと、まだのもの） */
+export function spotTreasures(save: SaveData, spot: SpotId): { found: Treasure[]; left: Treasure[] } {
+  const all = TREASURES.filter((t) => t.spot === spot);
+  return { found: all.filter((t) => save.dex.items.includes(t.id)), left: all.filter((t) => !save.dex.items.includes(t.id)) };
+}
+
+/**
+ * 掃除を始めるときに、宝物をまぜるか決める。よく積もっている（fullness 以上）ときだけ、
+ * まだ見つけていない宝物から1つ。
+ */
+export function rollTreasure(save: SaveData, spot: SpotId, fullness: number, random: () => number): Treasure | null {
+  if (fullness < TREASURE_MIN_FULLNESS) return null;
+  const { left } = spotTreasures(save, spot);
+  if (left.length === 0 || random() >= TREASURE_CHANCE) return null;
+  return left[Math.floor(random() * left.length)];
 }
 
 // ---- まちと場所の解禁 ----

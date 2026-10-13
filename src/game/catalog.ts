@@ -178,6 +178,59 @@ export const LOST_ITEMS: readonly LostItem[] = [
   { id: 'figure', name: '小さなフィギュア', color: '#7fb77e' },
 ];
 
+// ---- 宝物（掃除場所ごとに眠っている思い出の品） ----
+
+export type Treasure = { id: string; name: string; spot: SpotId; color: string };
+
+/** 掃除場所ごとに3つ。積もった場所を掃除すると、ときどきホコリの中から見つかる */
+export const TREASURES: readonly Treasure[] = [
+  { id: 't_window1', spot: 'window', name: 'セミのぬけがら', color: '#c8944a' },
+  { id: 't_window2', spot: 'window', name: 'ガラスのおはじき', color: '#8ec1ea' },
+  { id: 't_window3', spot: 'window', name: '色あせた切手', color: '#e98aa6' },
+  { id: 't_washer1', spot: 'washer', name: '片方だけのくつした', color: '#f4a7b9' },
+  { id: 't_washer2', spot: 'washer', name: 'ポケットの百円玉', color: '#c9ccd4' },
+  { id: 't_washer3', spot: 'washer', name: '洗われたレシート', color: '#f6f0ea' },
+  { id: 't_myroom1', spot: 'myroom', name: 'どんぐり', color: '#a0644a' },
+  { id: 't_myroom2', spot: 'myroom', name: 'いい匂いの消しゴム', color: '#b3d67a' },
+  { id: 't_myroom3', spot: 'myroom', name: 'ひみつの日記の鍵', color: '#f2c94c' },
+  { id: 't_shelf1', spot: 'shelf', name: '押し花のしおり', color: '#c7b4e6' },
+  { id: 't_shelf2', spot: 'shelf', name: 'へそくりの封筒', color: '#f2d699' },
+  { id: 't_shelf3', spot: 'shelf', name: '小さいころの通知表', color: '#7fb3e0' },
+  { id: 't_living1', spot: 'living', name: 'テレビのリモコン', color: '#5a5664' },
+  { id: 't_living2', spot: 'living', name: 'パズルの最後のピース', color: '#7fb77e' },
+  { id: 't_living3', spot: 'living', name: '家族旅行のキーホルダー', color: '#f08a9a' },
+  { id: 't_friendEntrance1', spot: 'friendEntrance', name: 'ねずみのおもちゃ', color: '#b8b0c8' },
+  { id: 't_friendEntrance2', spot: 'friendEntrance', name: '片方の手ぶくろ', color: '#e8a868' },
+  { id: 't_friendEntrance3', spot: 'friendEntrance', name: '傘のキーホルダー', color: '#6fb7a0' },
+  { id: 't_friendRoom1', spot: 'friendRoom', name: '猫のひげ', color: '#ffffff' },
+  { id: 't_friendRoom2', spot: 'friendRoom', name: 'キラキラのレアカード', color: '#f6d55c' },
+  { id: 't_friendRoom3', spot: 'friendRoom', name: '鈴つきの首輪', color: '#f2635a' },
+  { id: 't_flowerShop1', spot: 'flowerShop', name: '四つ葉のクローバー', color: '#74a35a' },
+  { id: 't_flowerShop2', spot: 'flowerShop', name: '花の種のふくろ', color: '#f3cf4c' },
+  { id: 't_flowerShop3', spot: 'flowerShop', name: 'ラッピングのリボン', color: '#e98aa6' },
+  { id: 't_bakery1', spot: 'bakery', name: 'パンの形のマグネット', color: '#e8c070' },
+  { id: 't_bakery2', spot: 'bakery', name: '先代のレシピメモ', color: '#f6f0ea' },
+  { id: 't_bakery3', spot: 'bakery', name: '金色のパンの袋どめ', color: '#f2c94c' },
+  { id: 't_grandmaRoom1', spot: 'grandmaRoom', name: 'おじいちゃんの万年筆', color: '#43386a' },
+  { id: 't_grandmaRoom2', spot: 'grandmaRoom', name: 'ちりめんのお手玉', color: '#f08a9a' },
+  { id: 't_grandmaRoom3', spot: 'grandmaRoom', name: '若いころの写真', color: '#d9c6aa' },
+  { id: 't_station1', spot: 'station', name: '昔のかたい切符', color: '#f2d699' },
+  { id: 't_station2', spot: 'station', name: '駅長さんの予備の笛', color: '#c9ccd4' },
+  { id: 't_station3', spot: 'station', name: '汽車の模型のねじ', color: '#8a8696' },
+  { id: 't_classroom1', spot: 'classroom', name: '名前入りの鉛筆', color: '#7fb77e' },
+  { id: 't_classroom2', spot: 'classroom', name: '虹色のちびたチョーク', color: '#f4a7b9' },
+  { id: 't_classroom3', spot: 'classroom', name: '30年前の落書きノート', color: '#cfe6ff' },
+  { id: 't_oldWarehouse1', spot: 'oldWarehouse', name: 'ケース（小）の値札', color: '#f6d55c' },
+  { id: 't_oldWarehouse2', spot: 'oldWarehouse', name: 'はじめてのぞうきん', color: '#f3d27a' },
+  { id: 't_oldWarehouse3', spot: 'oldWarehouse', name: '最初の綿ぼこりのかけら', color: '#d4cddf' },
+];
+
+/** 宝物が出てくる確率（積もり具合がこれ以上のとき） */
+export const TREASURE_CHANCE = 0.5;
+export const TREASURE_MIN_FULLNESS = 0.6;
+/** 宝物を見つけたときのお礼 */
+export const TREASURE_COINS = 30;
+
 /** 種類指定の依頼のセリフ（町の人は真顔でホコリを欲しがる） */
 export const COLLECT_LINES: Record<DustType, { client: string; line: string }> = {
   cotton: { client: '近所のおねえさん', line: '綿ぼこりでクッションを作りたいの' },

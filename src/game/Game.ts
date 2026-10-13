@@ -20,6 +20,8 @@ import {
   boardBody,
   contestResultBody,
   dexBody,
+  DEX_TABS,
+  type DexTab,
   feedBody,
   skyResultBody,
   worldResultBody,
@@ -52,6 +54,8 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  TREASURE_COINS,
+  type Treasure,
   PEOPLE,
   PERSON_IDS,
   SHAPE_PRESETS,
@@ -142,6 +146,8 @@ import {
   rewardFor,
   rollDamp,
   rollDustTypes,
+  rollTreasure,
+  spotTreasures,
   startSpot,
   toggleAccessory,
   type CleaningSession,
@@ -451,6 +457,8 @@ export class Game {
   /** この掃除で達成を狙える依頼 */
   private speedRequestId: number | null = null;
   private lostRequestId: number | null = null;
+  /** この掃除にまぜた宝物（落とし物の依頼がないとき） */
+  private spotTreasure: Treasure | null = null;
   private sneezeLeft = false;
   private sessionCount = 0;
   private pendingDamp = false;
@@ -461,6 +469,7 @@ export class Game {
   private storyDone: (() => void) | null = null;
   private mapArea: Area = 'home';
   private shopTab: ShopTab = 'tools';
+  private dexTab: DexTab = 'fur';
   private lastPetSound = 0;
   private refreshTimer = 0;
   private lastTime = 0;
@@ -857,6 +866,8 @@ export class Game {
     const speed = findRequest(this.save, 'speed', def.id);
     this.lostRequestId = lost?.id ?? null;
     this.speedRequestId = speed?.id ?? null;
+    // 落とし物の依頼がなければ、その場所の宝物がまぎれていることがある
+    this.spotTreasure = lost ? null : rollTreasure(this.save, def.id, dust / def.maxDust, createRandom(seed ^ 0x7ea5));
     const together = canCleanTogether(this.save);
     const stats = helperStats(this.save);
     this.sneezeLeft = together && stats.sneeze;
@@ -872,7 +883,11 @@ export class Game {
       hero: this.hero,
       element: this.hud.canvas,
       helper: together ? { accessory: view.accessory, shape: view.shape, tint: view.tint, speedMul: stats.speedMul, radiusMul: stats.radiusMul } : undefined,
-      treasure: lost ? { color: LOST_ITEMS.find((i) => i.id === lost.item)?.color ?? '#f2c94c' } : undefined,
+      treasure: lost
+        ? { color: LOST_ITEMS.find((i) => i.id === lost.item)?.color ?? '#f2c94c' }
+        : this.spotTreasure
+          ? { color: this.spotTreasure.color }
+          : undefined,
       onTreasure: () => this.onTreasure(),
       onCollect: (id) => this.onCollect(id),
       onSuctionChange: (active) => (active && tool.id === 'vacuum' ? this.sound.startHum() : this.sound.stopHum()),
@@ -887,6 +902,7 @@ export class Game {
     const lines = [TOOL_HINT[tool.id]];
     if (together) lines.push('ほこりちゃんも一緒！');
     if (lost) lines.push('落とし物がまぎれているかも');
+    else if (this.spotTreasure) lines.push('なにかキラッと光っている……？');
     if (speed) lines.push(`⏱ ${speed.seconds}秒以内に完了で依頼達成`);
     else if (layout.scale >= 1) lines.push('端に寄せると画面が動くよ');
     this.hud.hint(lines.join('\n'));
@@ -1128,6 +1144,7 @@ export class Game {
     const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
     this.pendingDamp = false;
     this.lostRequestId = null;
+    this.spotTreasure = null;
     this.speedRequestId = null;
     this.sneezeLeft = false;
     const tool = bestTool(this.save);
@@ -1250,6 +1267,11 @@ export class Game {
 
   /** 落とし物を見つけた → その場で依頼達成 */
   private onTreasure(): void {
+    if (this.spotTreasure) {
+      this.foundSpotTreasure(this.spotTreasure);
+      this.spotTreasure = null;
+      return;
+    }
     if (this.lostRequestId === null) return;
     const done = completeRequest(this.save, this.lostRequestId);
     this.lostRequestId = null;
@@ -1259,6 +1281,24 @@ export class Game {
     this.hud.bump('coins');
     const item = LOST_ITEMS.find((i) => i.id === done.request.item);
     this.hud.toast(`${item?.name ?? '落とし物'}を見つけた！ ${done.request.client}に届けた（+${done.request.reward}・★${done.request.rep}）`, 3200);
+  }
+
+  /** 掃除場所の宝物を見つけた → 図鑑に記録してお礼。その場所の3つがそろったら評判も */
+  private foundSpotTreasure(t: Treasure): void {
+    const r = dexAdd(this.save, 'items', t.id);
+    if (!r.added) return;
+    const { found, left } = spotTreasures(r.save, t.spot);
+    const complete = left.length === 0;
+    this.commit({ ...r.save, coins: r.save.coins + TREASURE_COINS, rep: r.save.rep + (complete ? 1 : 0) });
+    this.sound.play('reward');
+    this.hud.bump('coins');
+    const where = spotDef(t.spot).name;
+    this.hud.toast(
+      complete
+        ? `宝物「${t.name}」を見つけた！ ${where}の宝物がぜんぶそろった（+${TREASURE_COINS}・★1）`
+        : `宝物「${t.name}」を見つけた！ 図鑑に記録（${where} ${found.length}/${found.length + left.length}・+${TREASURE_COINS}）`,
+      3200,
+    );
   }
 
   /** 掃除を終えて、取り残しを場所に記録してから戻る */
@@ -1576,9 +1616,15 @@ export class Game {
         this.openOverlay('help', {
           title: '図鑑',
           className: 'modal--map',
-          body: dexBody(this.save),
+          body: dexBody(this.save, this.dexTab),
           buttons: [{ action: 'closeModal', label: 'とじる', variant: 'primary' }],
         });
+        return;
+      case 'dexTab':
+        if (this.overlay !== 'help' || !DEX_TABS.includes(arg as DexTab)) return;
+        this.dexTab = arg as DexTab;
+        this.sound.play('tap');
+        this.hud.updateModalBody(dexBody(this.save, this.dexTab), true);
         return;
       case 'help':
         if (this.hud.blockingModalOpen) return;

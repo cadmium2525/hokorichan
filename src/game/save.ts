@@ -6,6 +6,7 @@ import {
   FUR_IDS,
   DUST_TYPES,
   LOST_ITEMS,
+  TREASURES,
   PERSON_IDS,
   SPOT_IDS,
   TOOLS,
@@ -76,7 +77,7 @@ function toDex(value: unknown): Dex {
     Array.isArray(v) ? [...new Set(v.filter((x): x is T => valid.includes(x as T)))] : [];
   return {
     dust: list<DustType>(raw.dust, DUST_TYPES),
-    items: list<string>(raw.items, LOST_ITEMS.map((i) => i.id)),
+    items: list<string>(raw.items, [...LOST_ITEMS.map((i) => i.id), ...TREASURES.map((t) => t.id)]),
     people: list<PersonId>(raw.people, PERSON_IDS),
     fur: list<string>(raw.fur, FUR_IDS),
   };
