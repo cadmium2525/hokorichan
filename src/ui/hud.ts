@@ -242,6 +242,54 @@ export class Hud {
     this.el.status.innerHTML = `<div class="status__line"><span class="status__title">まち</span></div><div class="town-note">${escapeHtml(text)}</div>`;
   }
 
+  /**
+   * 次元超越級（一度だけ）：大きなほこりちゃんの顔が、画面の下からボタンの上にはみ出してのぞく。
+   * 指のじゃまにならないよう、さわれない（pointer-events: none）。
+   */
+  peek(tint: string): void {
+    const el = document.createElement('div');
+    el.className = 'peek';
+    el.innerHTML = petFaceArt(tint);
+    document.body.appendChild(el);
+    void el.offsetWidth;
+    el.classList.add('peek--in');
+    window.setTimeout(() => el.classList.remove('peek--in'), 3600);
+    window.setTimeout(() => el.remove(), 5000);
+  }
+
+  /**
+   * 最後の場面：画面がゆっくり真っ白になり、ことばが出る。しばらくすると隅に小さな綿ぼこり。
+   * それをタップすると、ほこりちゃんの声。「つづく」で閉じる。
+   */
+  finale(first: string, second: string, speaker: string, onDone: () => void): void {
+    const el = document.createElement('div');
+    el.className = 'finale';
+    el.innerHTML = `
+      <p class="finale__text" data-step="1">${escapeHtml(first)}</p>
+      <p class="finale__text finale__text--voice" data-step="2"><small>${escapeHtml(speaker)}</small>${escapeHtml(second)}</p>
+      <button type="button" class="finale__dust" aria-label="小さな綿ぼこり">${pixelArt(TINY_DUST, { a: '#c3bbd3', b: '#d4cddf', c: '#b3abc6', k: '#3a2e3a' }, 'px-icon finale__dust-art')}</button>
+      <button type="button" class="finale__next">つづく</button>`;
+    document.body.appendChild(el);
+    const step = (sel: string) => el.querySelector<HTMLElement>(sel)!;
+    void el.offsetWidth;
+    el.classList.add('finale--white');
+    window.setTimeout(() => step('[data-step="1"]').classList.add('finale__text--show'), 3200);
+    window.setTimeout(() => step('.finale__dust').classList.add('finale__dust--show'), 7600);
+    const dust = step('.finale__dust');
+    dust.addEventListener('click', () => {
+      if (dust.classList.contains('finale__dust--tapped')) return;
+      dust.classList.add('finale__dust--tapped');
+      step('[data-step="1"]').classList.remove('finale__text--show');
+      window.setTimeout(() => step('[data-step="2"]').classList.add('finale__text--show'), 1400);
+      window.setTimeout(() => step('.finale__next').classList.add('finale__next--show'), 4400);
+    });
+    step('.finale__next').addEventListener('click', () => {
+      el.classList.add('finale--out');
+      window.setTimeout(() => el.remove(), 1600);
+      onDone();
+    });
+  }
+
   hint(text: string | null): void {
     const el = this.el.hint;
     if (text === null) {
@@ -310,4 +358,28 @@ export class Hud {
   get blockingModalOpen(): boolean {
     return this.modalOpen && !this.el.modal.classList.contains('modal-layer--sheet');
   }
+}
+
+/** 最後の場面の、小さな綿ぼこり（目だけある） */
+const TINY_DUST = ['..aab...', '.abbbaa.', 'abbbbbba', 'abkbbkba', 'abbbbbba', '.caaaac.', '..cccc..'];
+
+/** はみ出すときの、ほこりちゃんの顔（上半分） */
+function petFaceArt(tint: string): string {
+  const rows = [
+    '........oooooooo........',
+    '......oowwwwswwwoo......',
+    '.....owwswwwwwwswwo.....',
+    '....owwwwwwwwwwwwwwo....',
+    '...owwswwwwwwwwwwswwo...',
+    '..owwwwwwwwwwwwwwwwwwo..',
+    '..owwwwwwwwwwwwwwwwwwo..',
+    '.owwwwkkwwwwwwwwkkwwwwo.',
+    '.owwwwkkwwwwwwwwkkwwwwo.',
+    '.owwwwkkwwwwwwwwkkwwwwo.',
+    'owwwppwwwwwmwmwwwwppwwwo',
+    'owwwwwwwwwwwmwwwwwwwwwwo',
+    'owwswwwwwwwwwwwwwwwwswwo',
+    'owwwwwwwwwwwwwwwwwwwwwwo',
+  ];
+  return pixelArt(rows, { o: '#9a86c6', w: '#fffaf2', s: tint, k: '#3a2e3a', p: '#f4a7b9', m: '#c0606e' }, 'peek__art');
 }

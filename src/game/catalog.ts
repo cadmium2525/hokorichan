@@ -32,7 +32,7 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- ホコリの種類 ----
 
-export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk' | 'ash' | 'star' | 'cosmic' | 'nebula';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk' | 'ash' | 'star' | 'cosmic' | 'nebula' | 'other';
 
 export type DustDef = {
   id: DustType;
@@ -58,11 +58,12 @@ export const DUSTS: Record<DustType, DustDef> = {
   ash: { id: 'ash', name: '火山灰', colors: ['#8a8292', '#a39aa8', '#6e6676', '#c4b8b0'], tint: '#cfc6e6', trait: 'ほかほか', traitDesc: '世界のおそうじで、長押しが短くてすむ' },
   kosa: { id: 'kosa', name: '黄砂', colors: ['#e8c27a', '#d9ad5c', '#f2d699', '#c99a4a'], tint: '#f0cf8a', trait: 'ずっしり', traitDesc: '空のおそうじで吸い込む範囲が広がる' },
   star: { id: 'star', name: '星くず', colors: ['#fff6b8', '#ffe27a', '#ffffff', '#cfe6ff'], tint: '#fff2a8', trait: 'きらきら', traitDesc: '宇宙のおそうじで、軌道を変えるのが速くなる' },
+  other: { id: 'other', name: 'よその宇宙のちり', colors: ['#bfe8ff', '#ffd6f0', '#fff2b8', '#d4ffe0'], tint: '#e4f2ff', trait: 'ふしぎ', traitDesc: 'しゃぼん玉の宇宙が、ゆっくり浮かぶ' },
   nebula: { id: 'nebula', name: '星雲のもや', colors: ['#f4a7d0', '#9fd8e8', '#c7b4f0', '#ffd0e4'], tint: '#e8c4f4', trait: 'ゆらゆら', traitDesc: '銀河のおそうじで、かき集める指の幅が広がる' },
   cosmic: { id: 'cosmic', name: '宇宙のちり', colors: ['#8e7cc8', '#6f6aa8', '#b49ce0', '#5a6a9e'], tint: '#b8a8ec', trait: 'ふわり', traitDesc: '宇宙のおそうじで、小惑星にぶつかってもへっちゃら' },
 };
 
-export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk', 'ash', 'star', 'cosmic', 'nebula'];
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk', 'ash', 'star', 'cosmic', 'nebula', 'other'];
 
 // ---- 掃除場所 ----
 
@@ -147,7 +148,7 @@ export const SPOT_READY_RATIO = 0.3;
 
 // ---- ほこりちゃんの住まい ----
 
-export type Habitat = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type Habitat = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export type HabitatDef = { name: string; capacity: number; price: number; inner: number };
 
@@ -162,6 +163,7 @@ export const HABITATS: Record<Habitat, HabitatDef> = {
   6: { name: '町はずれの丘', capacity: 30000, price: 0, inner: 18.0 },
   7: { name: '月のとなり', capacity: 80000, price: 0, inner: 30.0 },
   8: { name: '天の川のほとり', capacity: 250000, price: 0, inner: 46.0 },
+  9: { name: '宇宙のまんなか', capacity: 600000, price: 0, inner: 70.0 },
 };
 
 /** 1章の山場で買う空き地（コンテナ付き）の値段 */
@@ -248,6 +250,7 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
   star: { client: '宇宙ほこり管制センター', line: '星くずで、夜空の地図を描きなおしたいのです' },
   cosmic: { client: '宇宙ほこり管制センター', line: '宇宙のちりを、望遠鏡のレンズみがきに使います' },
   nebula: { client: '銀河ほこり連合', line: '星雲のもやの見本を、受付にかざりたいのです' },
+  other: { client: '銀河ほこり連合', line: 'よその宇宙のちりは、とてもめずらしいのです' },
 };
 
 // ---- アクセサリー ----
@@ -272,10 +275,11 @@ export type AccessoryId =
   | 'saturn'
   | 'helmet'
   | 'nebulascarf'
-  | 'galaxypin';
+  | 'galaxypin'
+  | 'bubblecrown';
 
 /** chapter：その章になるとショップに入荷する。reward はお店では買えない（出来事のごほうび） */
-export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 | 4 | 5 | 6; reward?: boolean };
+export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 | 4 | 5 | 6 | 7; reward?: boolean };
 
 export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'ribbon', name: 'リボン', price: 0, chapter: 1 },
@@ -302,6 +306,8 @@ export const ACCESSORIES: readonly AccessoryDef[] = [
   // 6章（銀河編）
   { id: 'nebulascarf', name: '星雲のはちまき', price: 2500, chapter: 6 },
   { id: 'galaxypin', name: '銀河のうずまきピン', price: 3200, chapter: 6 },
+  // 終章
+  { id: 'bubblecrown', name: 'しゃぼん玉のかんむり', price: 4000, chapter: 7 },
 ];
 
 export const ACCESSORY_IDS: readonly AccessoryId[] = ACCESSORIES.map((a) => a.id);
@@ -428,6 +434,7 @@ export const DUST_WORDS: Record<DustType, { adj: string; noun: string }> = {
   star: { adj: 'きらきら', noun: 'ほしくず' },
   cosmic: { adj: 'ふしぎな', noun: 'うちゅう' },
   nebula: { adj: 'ゆめいろ', noun: 'せいうん' },
+  other: { adj: 'ふしぎな', noun: 'しゃぼん' },
 };
 
 /** 1種類がこの割合以上なら「純」毛並み */
@@ -510,7 +517,7 @@ export const SOLAR_XP = 80000;
 export const NOSTALGIC_DUSTS: readonly DustType[] = ['cotton', 'lint', 'fur', 'pollen', 'flour', 'soot', 'chalk'];
 
 /** 章ごとの、なつかしの味の成長の倍率 */
-export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20, 6: 50 };
+export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20, 6: 50, 7: 100 };
 
 /** きょうの好物（なつかしの味から1日1つ）はさらにこの倍 */
 export const FAVORITE_MUL = 2;
@@ -536,3 +543,26 @@ export const GALAXY = {
 
 /** 6章の山場：銀河団をひと包み（天の川のほとりがいっぱいになったら） */
 export const CLUSTER_XP = 250000;
+
+// ---- 終章：しゃぼん玉の宇宙（多元宇宙） ----
+
+export const BUBBLES = {
+  /** 満タンのときに浮かんでくる、しゃぼん玉の宇宙の数 */
+  maxBubbles: 12,
+  /** 空から満タンまで（実時間・分） */
+  regenMinutes: 60,
+  /** しゃぼん玉1つで集まるホコリの数 */
+  perBubble: 5000,
+  /** しゃぼん玉1つあたりのお礼 */
+  coinPerBubble: 100,
+  /** しゃぼん玉の中身の種類と割合 */
+  mix: { other: 6, nebula: 2, star: 2 } as Partial<Record<DustType, number>>,
+  /** 遊べる時間（秒） */
+  seconds: 30,
+};
+
+/** 次元超越級になったとき、一度だけ、ほこりちゃんが画面からはみ出す */
+export const PEEK_XP = 500000;
+
+/** 最後：すべてのほこり級。宇宙のまんなかがいっぱいになったら */
+export const FINAL_XP = 600000;

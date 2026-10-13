@@ -382,6 +382,19 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       g.quaternion.copy(FACE_ROTATION);
       return { object: g, offset: new THREE.Vector3(0.2, 0.03, 0.18) };
     }
+    case 'bubblecrown': {
+      // しゃぼん玉のかんむり：金の輪に、すきとおったしゃぼん玉が3つ
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.08, 14, 1, true), lambert('#f6d55c'));
+      ring.material.side = THREE.DoubleSide;
+      g.add(ring);
+      const film = new THREE.MeshLambertMaterial({ color: '#d8f0ff', transparent: true, opacity: 0.55 });
+      for (const [x, y, z, r] of [[0, 0.17, 0, 0.1], [-0.13, 0.12, 0.05, 0.07], [0.13, 0.12, -0.05, 0.075]] as const) {
+        const b = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 2), film);
+        b.position.set(x, y, z);
+        g.add(b);
+      }
+      return { object: g, offset: new THREE.Vector3(0, 0, 0) };
+    }
     case 'glasses':
       return null; // 顔のテクスチャに描く
   }

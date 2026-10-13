@@ -31,6 +31,9 @@ import {
   EARTH_WRAP_XP,
   SOLAR_XP,
   CLUSTER_XP,
+  BUBBLES,
+  PEEK_XP,
+  FINAL_XP,
   GALAXY,
   SPACE,
   SHAPE_LIMITS,
@@ -104,7 +107,11 @@ export type EventId =
   | 'solar'
   | 'galaxyLetter'
   | 'galaxy'
-  | 'cluster';
+  | 'cluster'
+  | 'universeLetter'
+  | 'universe'
+  | 'peek'
+  | 'finale';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -132,6 +139,10 @@ export const EVENT_IDS: readonly EventId[] = [
   'galaxyLetter',
   'galaxy',
   'cluster',
+  'universeLetter',
+  'universe',
+  'peek',
+  'finale',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
@@ -179,6 +190,8 @@ export type SaveData = {
   space: SpotState;
   /** 銀河の星雲の積もり具合（6章） */
   galaxy: SpotState;
+  /** しゃぼん玉の宇宙の積もり具合（終章） */
+  bubbles: SpotState;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -190,7 +203,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0, star: 0, cosmic: 0, nebula: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0, star: 0, cosmic: 0, nebula: 0, other: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -236,6 +249,7 @@ export function createInitialSave(): SaveData {
     world: { fullness: 1, at: 0 },
     space: { fullness: 1, at: 0 },
     galaxy: { fullness: 1, at: 0 },
+    bubbles: { fullness: 1, at: 0 },
   };
 }
 
@@ -323,8 +337,9 @@ export function contestResult(
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
-export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 | 6 {
-  return save.habitat >= 8 ? 6 : save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
+/** 7は終章 */
+export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 | 6 | 7 {
+  return save.habitat >= 9 ? 7 : save.habitat >= 8 ? 6 : save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
 }
 
 // ---- 宝物 ----
@@ -722,6 +737,55 @@ export function clusterDue(save: SaveData): boolean {
   return save.habitat >= 8 && save.growthXp >= CLUSTER_XP && !hasEvent(save, 'cluster');
 }
 
+// ---- 終章 ----
+
+/** 6章の山場のあと、3つの機関がそろって迎えに来る */
+export function universeLetterDue(save: SaveData): boolean {
+  return save.habitat === 8 && hasEvent(save, 'cluster') && !hasEvent(save, 'universeLetter');
+}
+
+/** 宇宙のまんなかへ */
+export function moveToUniverse(save: SaveData): SaveData {
+  if (save.habitat !== 8) return save;
+  return addEvent({ ...addEvent(save, 'universeLetter'), habitat: 9 }, 'universe');
+}
+
+/** しゃぼん玉の宇宙をつつける（宇宙のまんなかに住んでから） */
+export function canBubbles(save: SaveData): boolean {
+  return save.habitat >= 9;
+}
+
+/** いま浮かんでくる、しゃぼん玉の宇宙の数 */
+export function bubbleCount(save: SaveData, now: number, speed = 1): number {
+  const elapsed = Math.max(0, now - save.bubbles.at) * speed;
+  const fullness = Math.min(1, save.bubbles.fullness + elapsed / (BUBBLES.regenMinutes * MINUTE));
+  return Math.floor(BUBBLES.maxBubbles * fullness + 1e-9);
+}
+
+export function finishBubbles(save: SaveData, remaining: number, now: number): SaveData {
+  return { ...save, bubbles: { fullness: Math.max(0, Math.min(1, remaining / BUBBLES.maxBubbles)), at: now } };
+}
+
+export function bubbleReward(popped: number): number {
+  return Math.max(0, Math.floor(popped)) * BUBBLES.coinPerBubble;
+}
+
+/** しゃぼん玉の浮かぶ速さの倍率（よその宇宙のちりの毛並み「ふしぎ」でゆっくりになる） */
+export function bubbleRiseMul(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('other') ? 1 / (1 + r.other * 1.5) : 1;
+}
+
+/** 次元超越級になった：一度だけ、ほこりちゃんが画面からはみ出す */
+export function peekDue(save: SaveData): boolean {
+  return save.habitat >= 9 && save.growthXp >= PEEK_XP && !hasEvent(save, 'peek');
+}
+
+/** すべてのほこり級：最後のお話 */
+export function finaleDue(save: SaveData): boolean {
+  return save.habitat >= 9 && save.growthXp >= FINAL_XP && !hasEvent(save, 'finale');
+}
+
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
 export function canFly(save: SaveData): boolean {
   return save.habitat >= 5;
@@ -1049,6 +1113,10 @@ export const RANKS: readonly Rank[] = [
   { name: '太陽系級', min: 130000 },
   { name: '銀河級', min: 170000 },
   { name: '銀河団級', min: 210000 },
+  { name: '宇宙級', min: 300000 },
+  { name: '多元宇宙級', min: 400000 },
+  { name: '次元超越級', min: PEEK_XP },
+  { name: 'すべてのほこり級', min: FINAL_XP },
 ];
 
 export function rankFor(xp: number): Rank {

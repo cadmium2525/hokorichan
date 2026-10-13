@@ -673,3 +673,28 @@ test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ'
   assert.equal(galaxyReward(GALAXY.motesPerNebula * 2), GALAXY.coinPerNebula * 2);
   assert.equal(clusterDue({ ...moved, growthXp: CLUSTER_XP }), true);
 });
+
+test('終章：宇宙のまんなか・しゃぼん玉の宇宙・はみ出し・最後の場面', async () => {
+  const { universeLetterDue, moveToUniverse, chapter, canBubbles, bubbleCount, finishBubbles, bubbleReward, peekDue, finaleDue, addEvent, createInitialSave, rankFor } = await import('../src/game/state.ts');
+  const { BUBBLES, FINAL_XP, PEEK_XP, HABITATS } = await import('../src/game/catalog.ts');
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 8, growthXp: 250000 };
+  assert.equal(universeLetterDue(s), false);
+  s = addEvent(s, 'cluster');
+  assert.equal(universeLetterDue(s), true);
+  const moved = moveToUniverse(s);
+  assert.equal(moved.habitat, 9);
+  assert.equal(chapter(moved), 7);
+  assert.equal(canBubbles(moved), true);
+  assert.equal(HABITATS[9].capacity, FINAL_XP);
+  const now = 3_000_000_000;
+  const after = finishBubbles(moved, 4, now);
+  assert.equal(bubbleCount(after, now), 4);
+  assert.equal(bubbleCount(after, now + BUBBLES.regenMinutes * 60_000), BUBBLES.maxBubbles);
+  assert.equal(bubbleReward(3), 3 * BUBBLES.coinPerBubble);
+  assert.equal(peekDue({ ...moved, growthXp: PEEK_XP - 1 }), false);
+  assert.equal(peekDue({ ...moved, growthXp: PEEK_XP }), true);
+  assert.equal(rankFor(PEEK_XP).name, '次元超越級');
+  assert.equal(rankFor(FINAL_XP).name, 'すべてのほこり級');
+  assert.equal(finaleDue({ ...moved, growthXp: FINAL_XP }), true);
+  assert.equal(finaleDue(addEvent({ ...moved, growthXp: FINAL_XP }, 'finale')), false);
+});

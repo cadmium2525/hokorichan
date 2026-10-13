@@ -11,6 +11,7 @@ import { PetScene, type PetView } from '../scenes/PetScene.ts';
 import { EarthScene } from '../scenes/EarthScene.ts';
 import { SpaceScene } from '../scenes/SpaceScene.ts';
 import { GalaxyScene } from '../scenes/GalaxyScene.ts';
+import { BubbleScene } from '../scenes/BubbleScene.ts';
 import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import { pickTalk, type TownPerson } from './talk.ts';
@@ -29,6 +30,7 @@ import {
   worldResultBody,
   spaceResultBody,
   galaxyResultBody,
+  bubbleResultBody,
   heroSelectBody,
   landBody,
   mapBody,
@@ -52,6 +54,7 @@ import {
   WORLD,
   SPACE,
   GALAXY,
+  BUBBLES,
   SKY,
   DUSTS,
   FRIEND_UNLOCK_XP,
@@ -109,6 +112,15 @@ import {
   earthWrapDue,
   canSpace,
   canGalaxy,
+  bubbleCount,
+  bubbleReward,
+  bubbleRiseMul,
+  canBubbles,
+  finaleDue,
+  finishBubbles,
+  moveToUniverse,
+  peekDue,
+  universeLetterDue,
   clusterDue,
   finishGalaxy,
   galaxyLetterDue,
@@ -169,7 +181,7 @@ import {
   type SaveData,
 } from './state.ts';
 
-export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'GALAXY' | 'RESULT';
+export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'GALAXY' | 'BUBBLES' | 'RESULT';
 
 type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
@@ -423,7 +435,36 @@ const CLUSTER_STORY: StoryStep[] = [
   { speaker: 'narration', text: 'ほこりちゃんは、いくつもの銀河をそっと抱きよせた。<br>星雲のもやが、ぜんぶ毛並みにすいこまれて……天の川が、すみずみまで光った。', button: 'わあ……' },
   { speaker: 'clerk', text: '銀河団ひとつ分の清掃、受理しました。<br>連合はじまって以来の早さです。……お見事です。', button: 'えへへ' },
   { speaker: 'mother', text: '銀河ですって。すごいわね。<br>でも、ちゃんと宿題もするのよ。', button: 'はーい' },
-  { speaker: 'narration', text: '（6章 銀河編 おしまい。終章は準備中）', button: 'やったー！' },
+  { speaker: 'narration', text: '（6章 銀河編 おしまい。つぎは、終章）', button: 'やったー！' },
+];
+
+/** 終章のはじまり：3つの機関がそろって */
+const UNIVERSE_LETTER: StoryStep[] = [
+  { speaker: 'narration', text: '天の川のほとりに、3人がそろってやってきた。<br>世界ほこり機構の人、管制官さん、窓口係さん。', button: '？' },
+  { speaker: 'agent', text: '本日は、3つの機関の合同のお願いです。', button: 'ごうどう？' },
+  { speaker: 'controller', text: '<b>宇宙ぜんぶのホコリ</b>を、お願いしたいのです、どうぞ。', button: 'ぜんぶ……' },
+  { speaker: 'clerk', text: '相棒さんのおうちは、<b>宇宙のまんなか</b>にご用意しました。<br>……もう、ほかに置ける場所がないのです。', button: 'なるほど' },
+  { speaker: 'mother', text: 'あら、宇宙のまんなか。ちゃんと帰ってこられる？<br>今日の夕ごはんは、ハンバーグよ。', button: 'はーい' },
+  {
+    speaker: 'narration',
+    text: 'ほこりちゃんは<b>宇宙のまんなか</b>へ！<br>「<b>しゃぼん玉へ</b>」で、下から浮かんでくる<b>よその宇宙</b>をタップして、はじこう。',
+    button: 'やってみる！',
+  },
+];
+
+/** 次元超越級（一度だけ） */
+const PEEK_STORY: StoryStep[] = [
+  { speaker: 'narration', text: 'ほこりちゃんは、とうとう<b>画面からはみ出す</b>ほど大きくなった。<br>……でも、ボタンはちゃんと押せるみたい。', button: 'よかった' },
+];
+
+/** 最後：すべてのほこり級 */
+const FINALE_STORY: StoryStep[] = [
+  { speaker: 'narration', text: 'ほこりちゃんは、宇宙をぜんぶ、ふかふかに包みこんだ。', button: '……' },
+  { speaker: 'narration', text: 'すべての宇宙の、すべてのホコリが、<br>毛並みの中で、きらきら光っている。', button: '……' },
+];
+
+const FINALE_END: StoryStep[] = [
+  { speaker: 'narration', text: '（終章 おしまい。<br>このあと――夢からさめるお話と、2周目――は準備中）', button: 'おやすみなさい' },
 ];
 
 /** 丘に引っこしたあと、はじめてまちで一緒に掃除するとき（大きさを変えられる） */
@@ -483,6 +524,9 @@ export class Game {
   private galaxy: GalaxyScene | null = null;
   /** 銀河のおそうじでかき集めたつぶ（バッグへはまとめて入れる） */
   private galaxyGot: { motes: number; got: Partial<Record<DustType, number>>; pending: Partial<Record<DustType, number>>; savedAt: number; endsAt: number; lastLeft: number } | null = null;
+  private bubbles: BubbleScene | null = null;
+  /** しゃぼん玉の宇宙ではじいた数と種類 */
+  private bubbleGot: { popped: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
   /** 撮った写真（シェア画面を閉じたら捨てる） */
   private photo: Photo | null = null;
   /** 空で吸い込んだ雲の数と種類 */
@@ -605,6 +649,11 @@ export class Game {
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
         { action: 'walkHome', label: s.habitat >= 7 ? '駅から宇宙へ帰る' : s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
+    } else if ((this.mode === 'BUBBLES' || this.mode === 'RESULT') && this.bubbleGot && this.bubbles) {
+      const left = Math.max(0, Math.ceil((this.bubbleGot.endsAt - this.now) / 1000));
+      const all = this.bubbleGot.popped + this.bubbles.remaining;
+      this.hud.setCleaningStatus(`しゃぼん玉の宇宙 ⏱ のこり${left}秒`, this.bubbleGot.popped, all, all);
+      this.hud.setActions([{ action: 'bubblesEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'GALAXY' || this.mode === 'RESULT') && this.galaxyGot && this.galaxy) {
       const left = Math.max(0, Math.ceil((this.galaxyGot.endsAt - this.now) / 1000));
       this.hud.setCleaningStatus(`銀河のおそうじ ⏱ のこり${left}秒`, this.galaxy.eatenMotes, this.galaxy.totalMotes, this.galaxy.totalMotes);
@@ -676,6 +725,10 @@ export class Game {
       const n = worldPatches(s, this.now, this.params.speed);
       buttons.push({ action: 'goWorld', label: '世界へ', sub: n > 0 ? `地域 ${n}か所` : 'ホコリを待っている', variant: 'accent', disabled: n === 0 });
     }
+    if (canBubbles(s)) {
+      const n = bubbleCount(s, this.now, this.params.speed);
+      buttons.push({ action: 'goBubbles', label: 'しゃぼん玉へ', sub: n > 0 ? `よその宇宙 ${n}こ` : '宇宙を待っている', variant: 'primary', disabled: n === 0 });
+    }
     if (canGalaxy(s)) {
       const n = galaxyNebulae(s, this.now, this.params.speed);
       buttons.push({ action: 'goGalaxy', label: '銀河へ', sub: n > 0 ? `星雲 ${n}こ` : '星雲を待っている', variant: 'primary', disabled: n === 0 });
@@ -707,6 +760,8 @@ export class Game {
     this.spaceGot = null;
     this.galaxy = null;
     this.galaxyGot = null;
+    this.bubbles = null;
+    this.bubbleGot = null;
     this.town = null;
     this.pet = null;
     this.session = null;
@@ -775,6 +830,21 @@ export class Game {
         this.pet?.playHappy();
       });
     else if (clusterDue(s)) this.runStory(CLUSTER_STORY, '銀河団をひと包み', () => this.commit(addEvent(this.save, 'cluster')));
+    else if (universeLetterDue(s))
+      this.runStory(UNIVERSE_LETTER, '3つの機関から', () => {
+        this.commit(moveToUniverse(this.save));
+        this.pet?.setView(this.petView());
+        this.pet?.playHappy();
+      });
+    else if (finaleDue(s)) this.startFinale();
+    else if (peekDue(s)) {
+      this.commit(addEvent(this.save, 'peek'));
+      this.hud.peek(this.petView().tint);
+      this.sound.play('happy');
+      window.setTimeout(() => {
+        if (this.mode === 'HOME') this.runStory(PEEK_STORY, '次元超越級', () => this.refreshHud());
+      }, 4200);
+    }
     else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
@@ -1087,8 +1157,77 @@ export class Game {
 
   /** 駅から、ほこりちゃんの所へ帰るときのひとこと */
   private rideHomeText(): string {
+    if (this.save.habitat >= 9) return '電車で丘の発射場へ。ロケットとワープを乗りついで、宇宙のまんなかへ……';
     if (this.save.habitat >= 8) return '電車で丘の発射場へ。ロケットを乗りついで、天の川のほとりへ……';
     return this.save.habitat >= 7 ? '電車で丘の発射場へ。ロケットで、月のとなりへ……' : '電車にゆられて、町はずれの丘へ……';
+  }
+
+  /** 最後の場面：お話 → 画面が真っ白に → 小さな綿ぼこり → 「……まだ、たべられるよ？」 */
+  private startFinale(): void {
+    this.runStory(FINALE_STORY, 'すべてのほこり級', () => {
+      this.hud.finale('もう、\nこれ以上おおきくなれないみたい。', '……まだ、たべられるよ？', 'ほこりちゃん', () => {
+        this.commit(addEvent(this.save, 'finale'));
+        window.setTimeout(() => this.runStory(FINALE_END, '終章', () => this.refreshHud()), 1200);
+      });
+    });
+  }
+
+  /** しゃぼん玉の宇宙：下から浮かんでくる、よその宇宙をタップしてはじく */
+  private startBubbles(): void {
+    const n = bubbleCount(this.save, this.now, this.params.speed);
+    if (n <= 0) return;
+    this.sound.play('happy');
+    this.clearScenes();
+    this.sessionCount++;
+    const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
+    const types = rollDustTypes({ dust: BUBBLES.mix }, n, createRandom(seed ^ 0xb0b));
+    const view = this.petView();
+    const scene = new BubbleScene({
+      element: this.hud.canvas,
+      seed,
+      bubbles: types,
+      spawnSeconds: BUBBLES.seconds - 9,
+      pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
+      riseMul: bubbleRiseMul(this.save),
+      onPop: (type) => this.onPop(type),
+    });
+    this.bubbles = scene;
+    this.bubbleGot = { popped: 0, got: {}, endsAt: this.now + BUBBLES.seconds * 1000, lastLeft: BUBBLES.seconds };
+    this.mode = 'BUBBLES';
+    this.setScene(scene);
+    this.syncInput();
+    this.hud.hint('浮かんでくるしゃぼん玉（よその宇宙）を\nタップしてはじこう');
+    this.refreshHud();
+  }
+
+  private onPop(type: DustType): void {
+    const g = this.bubbleGot;
+    if (!g || this.mode !== 'BUBBLES') return;
+    g.popped++;
+    g.got[type] = (g.got[type] ?? 0) + BUBBLES.perBubble;
+    this.hud.hint(null);
+    this.sound.play('collect');
+    const dex = dexAdd({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + BUBBLES.perBubble } }, 'dust', type);
+    this.commit(dex.save);
+    this.hud.bump('bag');
+    if (dex.added) this.hud.toast(`図鑑に「${DUSTS[type].name}」を記録した！`, 2000);
+  }
+
+  private endBubbles(): void {
+    const g = this.bubbleGot;
+    if (!g || !this.bubbles || this.mode !== 'BUBBLES') return;
+    this.mode = 'RESULT';
+    this.bubbles.setInputEnabled(false);
+    const reward = bubbleReward(g.popped);
+    this.commit({ ...finishBubbles(this.save, this.bubbles.remaining, this.now), coins: this.save.coins + reward });
+    this.hud.bump('coins');
+    this.sound.play('reward');
+    this.openOverlay('result', {
+      title: 'しゃぼん玉の宇宙、おしまい！',
+      className: 'modal--result',
+      body: bubbleResultBody({ hero: this.hero, popped: g.popped, reward, got: g.got, bag: bagTotal(this.save.bag) }),
+      buttons: [{ action: 'resultHome', label: 'ただいま！', variant: 'primary' }],
+    });
   }
 
   /** 銀河のおそうじ：指でなでるように、星雲のもやをほこりちゃんの口へかき集める */
@@ -1823,8 +1962,9 @@ export class Game {
     else if (this.mode === 'WORLD' && action === 'worldEnd') this.endWorld();
     else if (this.mode === 'SPACE' && action === 'spaceEnd') this.endSpace();
     else if (this.mode === 'GALAXY' && action === 'galaxyEnd') this.endGalaxy();
+    else if (this.mode === 'BUBBLES' && action === 'bubblesEnd') this.endBubbles();
     else if (this.mode === 'RESULT' && action === 'resultHome') {
-      if (this.skyGot || this.worldGot || this.spaceGot || this.galaxyGot) {
+      if (this.skyGot || this.worldGot || this.spaceGot || this.galaxyGot || this.bubbleGot) {
         this.closeModal();
         this.goHome();
       } else this.leaveCleaning();
@@ -1855,6 +1995,10 @@ export class Game {
         this.closeModal();
         this.hud.toast(this.rideHomeText(), 2200);
         this.goHome();
+        return;
+      case 'goBubbles':
+        if (this.mode !== 'HOME' || !canBubbles(this.save)) return;
+        this.startBubbles();
         return;
       case 'goGalaxy':
         if (this.mode !== 'HOME' || !canGalaxy(this.save)) return;
@@ -2150,6 +2294,7 @@ export class Game {
     this.earth?.setInputEnabled(this.mode === 'WORLD' && !this.hud.modalOpen);
     this.space?.setInputEnabled(this.mode === 'SPACE' && !this.hud.modalOpen);
     this.galaxy?.setInputEnabled(this.mode === 'GALAXY' && !this.hud.modalOpen);
+    this.bubbles?.setInputEnabled(this.mode === 'BUBBLES' && !this.hud.modalOpen);
   }
 
   private bindLifecycle(): void {
@@ -2253,6 +2398,14 @@ export class Game {
     if (this.autoFinishTimer > 0) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
+    }
+    if (this.bubbleGot && this.bubbles && this.mode === 'BUBBLES' && !this.hud.modalOpen) {
+      const left = Math.max(0, Math.ceil((this.bubbleGot.endsAt - this.now) / 1000));
+      if (left !== this.bubbleGot.lastLeft) {
+        this.bubbleGot.lastLeft = left;
+        this.refreshHud();
+      }
+      if (left <= 0 || this.bubbles.finished) this.endBubbles();
     }
     if (this.galaxyGot && this.galaxy && this.mode === 'GALAXY' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.galaxyGot.endsAt - this.now) / 1000));

@@ -11,6 +11,7 @@ import { dropTexture, heartTexture, PALETTE, sleepTexture, sparkleTexture, woodT
 import type { DayPhase } from '../game/clock.ts';
 import { buildPetRoom, studyDesk } from '../render/roomBuilder.ts';
 import { buildGalaxyDisc, buildMoon, buildSun, starfieldTexture } from '../render/spaceArt.ts';
+import { bubbleTexture } from './BubbleScene.ts';
 import { clamp01, createIsoCamera, disposeHierarchy, easeOutBack, fitOrthoToBox, ISO_VIEW_DIR } from '../render/threeUtils.ts';
 import { setupStage } from './sceneKit.ts';
 import type { GameScene } from './types.ts';
@@ -72,6 +73,7 @@ const WAREHOUSE_HEIGHT = 5.4;
 
 /** 空き地のすみか（4=コンテナ、5=倉庫）の壁の高さ */
 function yardHeight(habitat: Habitat): number {
+  if (habitat >= 9) return UNIVERSE_TOP;
   if (habitat >= 8) return GALAXY_TOP;
   if (habitat >= 7) return SPACE_TOP;
   if (habitat >= 6) return HILL_TOP;
@@ -84,6 +86,7 @@ const HILL_TOP = 15;
 /** 5章（月のとなり）では、いっぱいのときの頭のてっぺんまで映す */
 const SPACE_TOP = 25;
 const GALAXY_TOP = 38;
+const UNIVERSE_TOP = 58;
 
 /** 5章：月のとなり。宇宙にうかぶほこりちゃんのそばに、月と、小さく見える地球を置く */
 function buildSpaceYard(): THREE.Group {
@@ -112,6 +115,22 @@ function buildSpaceYard(): THREE.Group {
     const d = 16 + rng() * 6;
     m.position.set(CASE_CENTER.x + Math.cos(a) * d, rng() * 22, CASE_CENTER.z + Math.sin(a) * d);
     g.add(m);
+  }
+  return g;
+}
+
+/** 終章：宇宙のまんなか。まわりに、しゃぼん玉になったよその宇宙がいくつも浮かぶ */
+function buildUniverseYard(): THREE.Group {
+  const g = new THREE.Group();
+  const rng = createRandom(37);
+  const tints = ['#bfe8ff', '#ffd6f0', '#fff2b8', '#d4ffe0', '#c7b4f0', '#f4a7d0'];
+  for (let i = 0; i < 14; i++) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTexture(100 + i, tints[i % tints.length]), transparent: true, depthWrite: false }));
+    const a = (i / 14) * Math.PI * 2 + rng() * 0.3;
+    const d = 30 + rng() * 10;
+    s.position.set(CASE_CENTER.x + Math.cos(a) * d, 4 + rng() * 48, CASE_CENTER.z + Math.sin(a) * d);
+    s.scale.setScalar(4 + rng() * 6);
+    g.add(s);
   }
   return g;
 }
@@ -414,7 +433,10 @@ export class PetScene implements GameScene {
     // コンテナは空き地（屋外）。部屋は隠す
     this.room.visible = habitat < 4;
     this.scene.background = habitat >= 7 ? this.spaceSky() : this.background;
-    if (habitat >= 8) {
+    if (habitat >= 9) {
+      this.habitatGroup = buildUniverseYard();
+      this.seat.set(CASE_CENTER.x, 0.2, CASE_CENTER.z);
+    } else if (habitat >= 8) {
       this.habitatGroup = buildGalaxyYard();
       this.seat.set(CASE_CENTER.x, 0.2, CASE_CENTER.z);
     } else if (habitat >= 7) {

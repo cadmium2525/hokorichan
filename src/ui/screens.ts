@@ -182,7 +182,9 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
           buy('buyHome', String(next.level), next.price),
         )
       : `<p class="note">${
-          save.habitat >= 8
+          save.habitat >= 9
+            ? 'ほこりちゃんは宇宙のまんなかで暮らしています'
+            : save.habitat >= 8
             ? 'ほこりちゃんは天の川のほとりで暮らしています（銀河ほこり連合の手配）'
             : save.habitat >= 7
             ? 'ほこりちゃんは月のとなりで暮らしています（宇宙ほこり管制センターの手配）'
@@ -196,11 +198,12 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
         }</p>`;
   } else {
     const ch = chapter(save);
-    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編', 4: '地球編', 5: '宇宙編', 6: '銀河編' } as const;
+    const CHAPTER_NAMES = { 1: '1章（おうち編）', 2: '2章（ご近所編）', 3: '3章（まち編）', 4: '4章（地球編）', 5: '5章（宇宙編）', 6: '6章（銀河編）', 7: '終章' } as const;
     items = ACCESSORIES.map((a) => {
       const has = save.accessories.includes(a.id);
-      if (!has && a.chapter > ch) return row('<span class="px-icon px-icon--lg acc-locked">？</span>', '？？？', `${a.chapter}章（${CHAPTER_NAMES[a.chapter]}）で入荷`, owned('入荷待ち'));
-      return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : a.chapter > 1 ? `${a.chapter}章の新作！ 買うとすぐ付けるよ` : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
+      if (!has && a.chapter > ch) return row('<span class="px-icon px-icon--lg acc-locked">？</span>', '？？？', `${CHAPTER_NAMES[a.chapter]}で入荷`, owned('入荷待ち'));
+      const fresh = a.chapter === 7 ? '終章の新作！ 買うとすぐ付けるよ' : `${a.chapter}章の新作！ 買うとすぐ付けるよ`;
+      return row(accessoryIcon(a.id), a.name, has ? '「あそぶ」で付けかえ' : a.chapter > 1 ? fresh : '買うとすぐ付けるよ', has ? owned('持っている') : buy('buyAccessory', a.id, a.price));
     }).join('');
   }
   const greet = `<div class="story story--shop"><div class="story__who">${characterSprite('shopkeeper', 'sprite', { pose: 'talk' })}</div><div class="bubble">いらっしゃいませ！</div></div>`;
@@ -581,6 +584,22 @@ export function galaxyResultBody(opts: { hero: Hero; motes: number; total: numbe
     <div class="bubble bubble--mother">窓口係さん「星雲のもや${opts.motes}つぶ、受理しました。次の方どうぞ……あ、相棒さんでしたね」</div>
     <dl class="result">
       <dt>かき集めたつぶ</dt><dd>${opts.motes} / ${opts.total}</dd>
+      <dt>バッグ</dt><dd>${opts.bag}個</dd>
+    </dl>
+    <div class="chips chips--dust">${got}</div>`;
+}
+
+export function bubbleResultBody(opts: { hero: Hero; popped: number; reward: number; got: Partial<Record<DustType, number>>; bag: number }): string {
+  const got = DUST_TYPES.filter((t) => (opts.got[t] ?? 0) > 0).map((t) => dustChip(t, opts.got[t])).join('');
+  return `
+    <div class="allowance">
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: 'joy' })}
+      <div class="allowance__coin">+${opts.reward}</div>
+      ${characterSprite('clerk', 'sprite sprite--lg', { pose: 'give', flip: true })}
+    </div>
+    <div class="bubble bubble--mother">窓口係さん「よその宇宙${opts.popped}つぶん、受理しました。……宇宙の数え方、これで合っていますか？」</div>
+    <dl class="result">
+      <dt>はじいた宇宙</dt><dd>${opts.popped}こ</dd>
       <dt>バッグ</dt><dd>${opts.bag}個</dd>
     </dl>
     <div class="chips chips--dust">${got}</div>`;

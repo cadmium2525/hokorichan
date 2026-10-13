@@ -131,6 +131,10 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  bubblecrown: [
+    ['.........', '.bb...bb.', 'bwcb.bwcb', 'bccb.bccb', '.bbyyybb.', '..yyyyy..', '..yrypy..', '..yyyyy..', '.........'],
+    { b: '#9fd0f0', w: '#ffffff', c: '#d8f0ff', y: '#f6d55c', r: '#f4a7d0', p: '#9fd8e8' },
+  ],
   nebulascarf: [
     ['.........', '.........', 'ppbbppbb.', 'pbbppbbpp', '.......bp', '.......pb', '.......bp', '.......pp', '.........'],
     { p: '#f4a7d0', b: '#9fd8e8' },

@@ -57,7 +57,7 @@ function toBool(value: unknown, fallback: boolean): boolean {
 }
 
 function toHabitat(value: unknown): Habitat {
-  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 || value === 5 || value === 6 || value === 7 || value === 8 ? value : 0;
+  return value === 0 || value === 1 || value === 2 || value === 3 || value === 4 || value === 5 || value === 6 || value === 7 || value === 8 || value === 9 ? value : 0;
 }
 
 function toBag(value: unknown): Bag {
@@ -235,6 +235,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     world: toSpotState(data.world, now),
     space: toSpotState(data.space, now),
     galaxy: toSpotState(data.galaxy, now),
+    bubbles: toSpotState(data.bubbles, now),
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }
