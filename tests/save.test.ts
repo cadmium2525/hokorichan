@@ -92,7 +92,7 @@ test('不正な値は項目ごとに初期値へ、範囲外は丸める', () =>
       requests: [{ id: 1, kind: 'collect', client: 'a', line: 'b', dust: 'gold', count: 3 }, { id: 2, kind: 'lost', client: 'a', line: 'b', spot: 'window', item: 'ring', reward: 1e9 }, 'x'],
       events: ['town', 'nope', 'town'],
       growthXp: 12.7,
-      habitat: 8,
+      habitat: 9,
       damp: 'yes',
       cleanedSessions: Number.POSITIVE_INFINITY,
       hero: 'cat',

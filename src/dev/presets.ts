@@ -1,7 +1,7 @@
 // 開発用：章や山場の直前など、確かめたい場面の保存データをすぐ作る。
 // ゲームの仕組み（state.ts）だけを使う純粋な関数なので、テストでも検証できる。
 
-import { ACCESSORIES, DUST_TYPES, EARTH_WRAP_XP, SOLAR_XP, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
+import { ACCESSORIES, DUST_TYPES, EARTH_WRAP_XP, SOLAR_XP, CLUSTER_XP, FUR_IDS, LOST_ITEMS, PERSON_IDS, RAINY, type DustType, type Hero } from '../game/catalog.ts';
 import { capacityOf, createInitialSave, emptyBag, type Bag, type EventId, type SaveData } from '../game/state.ts';
 
 export type Preset = { id: string; group: string; name: string; note: string; make: (hero: Hero) => SaveData };
@@ -10,6 +10,7 @@ const CH1_EVENTS: EventId[] = ['town', 'friend', 'board'];
 const CH2_EVENTS: EventId[] = [...CH1_EVENTS, 'landMeeting', 'container', 'street', 'together'];
 const CH3_EVENTS: EventId[] = [...CH2_EVENTS, 'contestNotice', 'contestWon', 'warehouseLetter', 'warehouse', 'sky'];
 const CH4_EVENTS: EventId[] = [...CH3_EVENTS, 'cityTown', 'rainy', 'rainyDone', 'worldLetter', 'world'];
+const CH5_EVENTS: EventId[] = [...CH4_EVENTS, 'earthWrap', 'spaceLetter', 'space'];
 
 function bagOf(n: number, types: readonly DustType[] = DUST_TYPES): Bag {
   const bag = emptyBag();
@@ -234,6 +235,54 @@ export const PRESETS: readonly Preset[] = [
         events: [...CH4_EVENTS, 'earthWrap', 'spaceLetter', 'space'],
       }),
   },
+  {
+    id: 'galaxyDue',
+    group: '6章 銀河編',
+    name: '銀河ほこり連合が来る直前',
+    note: '5章クリア。帰ると呼び出し→天の川のほとりへ',
+    make: (h) =>
+      base(h, {
+        growthXp: SOLAR_XP,
+        habitat: 7,
+        coins: 9000,
+        rep: 35,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH5_EVENTS, 'solar'],
+      }),
+  },
+  {
+    id: 'ch6',
+    group: '6章 銀河編',
+    name: '天の川のほとりで銀河のおそうじ',
+    note: '成長90000・星雲満タン',
+    make: (h) =>
+      base(h, {
+        growthXp: 90000,
+        habitat: 8,
+        coins: 10000,
+        rep: 36,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH5_EVENTS, 'solar', 'galaxyLetter', 'galaxy'],
+      }),
+  },
+  {
+    id: 'clusterDue',
+    group: '6章 銀河編',
+    name: '銀河団をひと包みする直前',
+    note: '天の川のほとりいっぱい（成長250000）。帰ると6章の山場',
+    make: (h) =>
+      base(h, {
+        growthXp: CLUSTER_XP,
+        habitat: 8,
+        coins: 12000,
+        rep: 38,
+        tools: ['hand', 'rag', 'mop', 'vacuum'],
+        accessories: ['ribbon', 'rainhat'],
+        events: [...CH5_EVENTS, 'solar', 'galaxyLetter', 'galaxy'],
+      }),
+  },
 ];
 
 // ---- 部分的な書きかえ（いまの保存データに足す） ----
@@ -247,7 +296,7 @@ export const TWEAKS: readonly Tweak[] = [
   { id: 'tools', name: '道具ぜんぶ', apply: (s) => ({ ...s, tools: ['hand', 'rag', 'mop', 'vacuum'] }) },
   { id: 'acc', name: 'アクセサリーぜんぶ', apply: (s) => ({ ...s, accessories: ACCESSORIES.map((a) => a.id) }) },
   { id: 'spots', name: '掃除場所を満タン', apply: (s) => ({ ...s, spots: Object.fromEntries(Object.keys(s.spots).map((k) => [k, { fullness: 1, at: 0 }])) as SaveData['spots'] }) },
-  { id: 'sky', name: '空の雲・地球の地域・星くずを満タン', apply: (s) => ({ ...s, sky: { fullness: 1, at: 0 }, world: { fullness: 1, at: 0 }, space: { fullness: 1, at: 0 } }) },
+  { id: 'sky', name: '空の雲・地球の地域・星くず・星雲を満タン', apply: (s) => ({ ...s, sky: { fullness: 1, at: 0 }, world: { fullness: 1, at: 0 }, space: { fullness: 1, at: 0 }, galaxy: { fullness: 1, at: 0 } }) },
   { id: 'contest', name: '大会の待ち時間を消す', apply: (s) => ({ ...s, contestAt: 0 }) },
   { id: 'requests', name: '依頼をすぐ届く状態に', apply: (s) => ({ ...s, requests: [], requestClock: 0 }) },
   { id: 'dry', name: 'しっとりを乾かす', apply: (s) => ({ ...s, damp: false }) },

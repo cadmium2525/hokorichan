@@ -5,7 +5,7 @@
 export const CHAR_W = 32;
 export const CHAR_H = 32;
 
-export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller';
+export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller' | 'clerk';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Pose = 'idle' | 'walk' | 'run' | 'clean' | 'wipe' | 'surprise' | 'joy' | 'talk' | 'give';
 /** 掃除ポーズで手に持つ道具。hand（素手）と rag（ぞうきん）はしゃがんで拭く */
@@ -34,6 +34,9 @@ const RAMPS = {
   coin: ['#fff3a8', '#f6d55c', '#d9a83a', '#8a6420'],
 } as const satisfies Record<string, Ramp>;
 
+/** いま描いている人のはだの色（宇宙人の窓口係だけ水色） */
+let SKIN: Ramp = RAMPS.skin;
+
 const EYE = '#3b2622';
 const EYE_SHINE = '#ffffff';
 const BLUSH = '#f4a7b9';
@@ -55,6 +58,10 @@ type Look = {
   pocket?: string;
   clip?: string;
   glasses?: boolean;
+  /** はだの色（ふつうは省略） */
+  skin?: Ramp;
+  /** 頭のアンテナの先の色 */
+  antenna?: string;
 };
 
 const HAIR = {
@@ -84,6 +91,7 @@ const CLOTH = {
   coral: ['#f8e2a8', '#e8c070', '#c0944a', '#6a4a20'],
   capNavy: ['#6f84b0', '#3e5076', '#2c3a58', '#161e30'],
   suit: ['#8a8696', '#5a5664', '#43404c', '#22202a'],
+  clerk: ['#d8c8f4', '#a58fd0', '#7d6aa8', '#3a2e5a'],
   flight: ['#fbe0c8', '#f0a870', '#c8784a', '#6a3a1e'],
 } as const satisfies Record<string, Ramp>;
 
@@ -101,6 +109,8 @@ const LOOKS: Record<CharacterId, Look> = {
   teacher: { hair: HAIR.mom, top: CLOTH.coral, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'bob', glasses: true },
   agent: { hair: HAIR.dark, top: CLOTH.suit, bottom: CLOTH.suit, shoes: CLOTH.shoeBrown, style: 'short', glasses: true },
   // 宇宙ほこり管制センターの管制官（オレンジの飛行服、ヘッドセットの水色ランプ）
+  // 銀河ほこり連合の窓口係（水色のはだ、アンテナ、すみれ色の制服）。いつも真顔
+  clerk: { hair: HAIR.plum, top: CLOTH.clerk, bottom: CLOTH.clerk, shoes: CLOTH.shoeBrown, style: 'bob', skin: ['#d8f4f0', '#aee4dc', '#7cc4ba', '#3a6e66'], antenna: '#f6d55c' },
   controller: { hair: HAIR.plum, top: CLOTH.flight, bottom: CLOTH.flight, shoes: CLOTH.shoeBrown, style: 'bob', clip: '#7fd0d0' },
 };
 
@@ -396,7 +406,7 @@ function drawLegs(c: Canvas, look: Look, rig: Rig, facing: Facing, top: number):
     const x0 = x + l.dx + rig.lean;
     const yEnd = bottom + l.dy;
     // 足（肌）と靴
-    c.rect(x0, top, x0 + 2, yEnd - 2, RAMPS.skin);
+    c.rect(x0, top, x0 + 2, yEnd - 2, SKIN);
     if (side) c.rect(x0 - 1, yEnd - 1, x0 + 2, yEnd, look.shoes, { bottomShade: true });
     else c.rect(x0, yEnd - 1, x0 + 2, yEnd, look.shoes, { bottomShade: true });
   }
@@ -447,7 +457,7 @@ function drawArms(c: Canvas, look: Look, rig: Rig, facing: Facing, y0: number, t
     const a = rig.armL;
     const x = 15 + rig.lean + Math.round(a.dx / 2);
     c.rect(x, y0 + 1, x + 1, y0 + 3, look.top);
-    c.rect(x + Math.sign(a.dx), y0 + 4, x + 1 + Math.sign(a.dx), y0 + 5, RAMPS.skin);
+    c.rect(x + Math.sign(a.dx), y0 + 4, x + 1 + Math.sign(a.dx), y0 + 5, SKIN);
     return null;
   }
   for (const [x, a] of [
@@ -459,16 +469,16 @@ function drawArms(c: Canvas, look: Look, rig: Rig, facing: Facing, y0: number, t
       // ばんざい
       const dir = x < 16 ? -1 : 1;
       c.rect(x, y0 - 1 + a.dy, x + 1, y0 + 1 + a.dy, look.top);
-      c.rect(x + dir, y0 - 4 + a.dy, x + 1 + dir, y0 - 2 + a.dy, RAMPS.skin);
+      c.rect(x + dir, y0 - 4 + a.dy, x + 1 + dir, y0 - 2 + a.dy, SKIN);
     } else if (out) {
       // 手を前にさしだす（お小遣いを渡す）
       c.rect(x, y0 + 1, x + 2, y0 + 2, look.top);
-      c.rect(x + 3, y0 + 1, x + 4, y0 + 2, RAMPS.skin);
+      c.rect(x + 3, y0 + 1, x + 4, y0 + 2, SKIN);
       c.ellipse(x + 6.5, y0 + 1.5 + (frame % 2 === 0 ? 0 : -1), 2, 2, RAMPS.coin);
       c.dot(x + 6, y0 + 1 + (frame % 2 === 0 ? 0 : -1), '#fffbe0');
     } else {
       c.rect(x, y0 + 1 + a.dy, x + 1, y0 + 3 + a.dy, look.top);
-      c.rect(x, y0 + 4 + a.dy, x + 1, y0 + 5 + a.dy, RAMPS.skin);
+      c.rect(x, y0 + 4 + a.dy, x + 1, y0 + 5 + a.dy, SKIN);
     }
   }
   return null;
@@ -494,7 +504,7 @@ function drawHead(c: Canvas, look: Look, rig: Rig, facing: Facing, dy: number): 
   c.ellipse(cx, cy, 8.5, 8, hair);
   if (back) {
     // 後ろ姿：うなじと髪のすじ
-    c.rect(cx - 2, cy + 7, cx + 1, cy + 7, RAMPS.skin, { flatTone: 2 });
+    c.rect(cx - 2, cy + 7, cx + 1, cy + 7, SKIN, { flatTone: 2 });
     for (const x of [cx - 4, cx + 1, cx + 5]) c.set(x, cy + 3, hair, 2);
     hairShine(c, cx, cy, hair, facing);
     hat(c, look, cx, cy, side);
@@ -502,21 +512,21 @@ function drawHead(c: Canvas, look: Look, rig: Rig, facing: Facing, dy: number): 
   }
   // 顔
   if (side) {
-    c.ellipse(cx - 2, cy + 2, 6, 5.6, RAMPS.skin, (x) => x <= cx + 2, true);
+    c.ellipse(cx - 2, cy + 2, 6, 5.6, SKIN, (x) => x <= cx + 2, true);
     // 前髪
     c.ellipse(cx - 1, cy - 3.5, 7.5, 4.5, hair, (x) => x <= cx + 6);
     for (const x of [cx - 6, cx - 3]) c.set(x, cy + 1, hair, 1);
     // 耳
-    c.rect(cx + 2, cy + 2, cx + 3, cy + 3, RAMPS.skin, { flatTone: 1 });
-    c.set(cx + 3, cy + 3, RAMPS.skin, 2);
+    c.rect(cx + 2, cy + 2, cx + 3, cy + 3, SKIN, { flatTone: 1 });
+    c.set(cx + 3, cy + 3, SKIN, 2);
   } else {
-    c.ellipse(cx, cy + 2, 6.5, 5.6, RAMPS.skin, undefined, true);
+    c.ellipse(cx, cy + 2, 6.5, 5.6, SKIN, undefined, true);
     // 前髪（ぎざぎざの毛先）
     c.ellipse(cx, cy - 3.5, 8, 4.5, hair);
     for (const x of [cx - 5, cx - 1, cx + 3]) c.set(x, cy + 1, hair, 1);
     if (look.style === 'short' || look.style === 'cap') {
-      c.rect(cx - 8, cy + 2, cx - 8, cy + 3, RAMPS.skin, { flatTone: 1 });
-      c.rect(cx + 7, cy + 2, cx + 7, cy + 3, RAMPS.skin, { flatTone: 2 });
+      c.rect(cx - 8, cy + 2, cx - 8, cy + 3, SKIN, { flatTone: 1 });
+      c.rect(cx + 7, cy + 2, cx + 7, cy + 3, SKIN, { flatTone: 2 });
     }
   }
   hairShine(c, cx, cy, hair, facing);
@@ -557,6 +567,15 @@ function hat(c: Canvas, look: Look, cx: number, cy: number, side: boolean): void
     else c.rect(cx - 7, cy - 2, cx + 6, cy - 2, CLOTH.capNavy, { flatTone: 3 });
     c.dot(side ? cx - 4 : cx - 1, cy - 5, '#f6d55c');
     c.dot(side ? cx - 3 : cx, cy - 5, '#f6d55c');
+  }
+  if (look.antenna) {
+    // 頭の上のアンテナ（細い棒と丸い先）
+    const ax = side ? cx - 1 : cx;
+    for (let y = cy - 11; y <= cy - 7; y++) c.dot(ax, y, '#5a5664');
+    c.dot(ax, cy - 12, look.antenna);
+    c.dot(ax + 1, cy - 12, look.antenna);
+    c.dot(ax, cy - 13, look.antenna);
+    c.dot(ax + 1, cy - 13, look.antenna);
   }
   if (look.clip && !side) {
     c.dot(cx + 4, cy - 5, look.clip);
@@ -658,7 +677,7 @@ function drawCleaning(c: Canvas, look: Look, rig: Rig, tool: HeldTool, frame: nu
     const hy = 27;
     c.line(14, 23, hx + 2, hy - 1, look.top, 2);
     if (tool === 'rag') c.rect(hx - 2, hy + 1, hx + 2, hy + 2, TOOL_RAMPS.broom.head, { bottomShade: true });
-    c.rect(hx, hy - 1, hx + 1, hy, RAMPS.skin);
+    c.rect(hx, hy - 1, hx + 1, hy, SKIN);
     return { x: hx, y: 30 };
   }
   const push = [0, -1, -2, -1][f];
@@ -679,7 +698,7 @@ function drawCleaning(c: Canvas, look: Look, rig: Rig, tool: HeldTool, frame: nu
   }
   // 腕（肩から柄をにぎる手まで）
   c.line(14, 19 + rig.bob, hx + 3, hy - 1, look.top, 2);
-  c.rect(hx + 1, hy - 2, hx + 2, hy - 1, RAMPS.skin);
+  c.rect(hx + 1, hy - 2, hx + 2, hy - 1, SKIN);
   return tip;
 }
 
@@ -729,6 +748,7 @@ export type CharacterSpec = {
 /** 1コマを生成する */
 export function drawCharacter(spec: CharacterSpec): CharacterFrame {
   const look = LOOKS[spec.id];
+  SKIN = look.skin ?? RAMPS.skin;
   // 掃除は横向き（左）で描く。正面などを指定されても横向きにする
   let facing = spec.facing;
   const cleaning = spec.pose === 'clean' || spec.pose === 'wipe';

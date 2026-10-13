@@ -32,7 +32,7 @@ export const TOOL_ORDER: readonly ToolId[] = ['hand', 'rag', 'mop', 'vacuum'];
 
 // ---- ホコリの種類 ----
 
-export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk' | 'ash' | 'star' | 'cosmic';
+export type DustType = 'cotton' | 'lint' | 'sand' | 'fur' | 'pollen' | 'flour' | 'kosa' | 'soot' | 'chalk' | 'ash' | 'star' | 'cosmic' | 'nebula';
 
 export type DustDef = {
   id: DustType;
@@ -58,10 +58,11 @@ export const DUSTS: Record<DustType, DustDef> = {
   ash: { id: 'ash', name: '火山灰', colors: ['#8a8292', '#a39aa8', '#6e6676', '#c4b8b0'], tint: '#cfc6e6', trait: 'ほかほか', traitDesc: '世界のおそうじで、長押しが短くてすむ' },
   kosa: { id: 'kosa', name: '黄砂', colors: ['#e8c27a', '#d9ad5c', '#f2d699', '#c99a4a'], tint: '#f0cf8a', trait: 'ずっしり', traitDesc: '空のおそうじで吸い込む範囲が広がる' },
   star: { id: 'star', name: '星くず', colors: ['#fff6b8', '#ffe27a', '#ffffff', '#cfe6ff'], tint: '#fff2a8', trait: 'きらきら', traitDesc: '宇宙のおそうじで、軌道を変えるのが速くなる' },
+  nebula: { id: 'nebula', name: '星雲のもや', colors: ['#f4a7d0', '#9fd8e8', '#c7b4f0', '#ffd0e4'], tint: '#e8c4f4', trait: 'ゆらゆら', traitDesc: '銀河のおそうじで、かき集める指の幅が広がる' },
   cosmic: { id: 'cosmic', name: '宇宙のちり', colors: ['#8e7cc8', '#6f6aa8', '#b49ce0', '#5a6a9e'], tint: '#b8a8ec', trait: 'ふわり', traitDesc: '宇宙のおそうじで、小惑星にぶつかってもへっちゃら' },
 };
 
-export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk', 'ash', 'star', 'cosmic'];
+export const DUST_TYPES: readonly DustType[] = ['cotton', 'lint', 'sand', 'fur', 'pollen', 'flour', 'kosa', 'soot', 'chalk', 'ash', 'star', 'cosmic', 'nebula'];
 
 // ---- 掃除場所 ----
 
@@ -146,7 +147,7 @@ export const SPOT_READY_RATIO = 0.3;
 
 // ---- ほこりちゃんの住まい ----
 
-export type Habitat = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+export type Habitat = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 export type HabitatDef = { name: string; capacity: number; price: number; inner: number };
 
@@ -160,6 +161,7 @@ export const HABITATS: Record<Habitat, HabitatDef> = {
   5: { name: '空き地の倉庫', capacity: 5000, price: 1500, inner: 9.0 },
   6: { name: '町はずれの丘', capacity: 30000, price: 0, inner: 18.0 },
   7: { name: '月のとなり', capacity: 80000, price: 0, inner: 30.0 },
+  8: { name: '天の川のほとり', capacity: 250000, price: 0, inner: 46.0 },
 };
 
 /** 1章の山場で買う空き地（コンテナ付き）の値段 */
@@ -245,6 +247,7 @@ export const COLLECT_LINES: Record<DustType, { client: string; line: string }> =
   ash: { client: '世界ほこり機構', line: '火山灰の標本を、各国の博物館に配りたいのです' },
   star: { client: '宇宙ほこり管制センター', line: '星くずで、夜空の地図を描きなおしたいのです' },
   cosmic: { client: '宇宙ほこり管制センター', line: '宇宙のちりを、望遠鏡のレンズみがきに使います' },
+  nebula: { client: '銀河ほこり連合', line: '星雲のもやの見本を、受付にかざりたいのです' },
 };
 
 // ---- アクセサリー ----
@@ -267,10 +270,12 @@ export type AccessoryId =
   | 'aurora'
   | 'globecap'
   | 'saturn'
-  | 'helmet';
+  | 'helmet'
+  | 'nebulascarf'
+  | 'galaxypin';
 
 /** chapter：その章になるとショップに入荷する。reward はお店では買えない（出来事のごほうび） */
-export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 | 4 | 5; reward?: boolean };
+export type AccessoryDef = { id: AccessoryId; name: string; price: number; chapter: 1 | 2 | 3 | 4 | 5 | 6; reward?: boolean };
 
 export const ACCESSORIES: readonly AccessoryDef[] = [
   { id: 'ribbon', name: 'リボン', price: 0, chapter: 1 },
@@ -294,6 +299,9 @@ export const ACCESSORIES: readonly AccessoryDef[] = [
   // 5章（宇宙編）
   { id: 'saturn', name: '土星のわっか', price: 1500, chapter: 5 },
   { id: 'helmet', name: '宇宙ヘルメット', price: 2000, chapter: 5 },
+  // 6章（銀河編）
+  { id: 'nebulascarf', name: '星雲のはちまき', price: 2500, chapter: 6 },
+  { id: 'galaxypin', name: '銀河のうずまきピン', price: 3200, chapter: 6 },
 ];
 
 export const ACCESSORY_IDS: readonly AccessoryId[] = ACCESSORIES.map((a) => a.id);
@@ -356,7 +364,7 @@ export const CONTEST_MAX = CONTEST.waves.reduce((s, w) => s + w.count, 0);
 // ---- 図鑑 ----
 
 /** 図鑑に載る町の人 */
-export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller';
+export type PersonId = 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller' | 'clerk';
 
 export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }> = [
   { id: 'mother', name: 'お母さん', note: 'お小遣いをくれる。空き地の購入をすすめた' },
@@ -370,6 +378,7 @@ export const PEOPLE: ReadonlyArray<{ id: PersonId; name: string; note: string }>
   { id: 'teacher', name: '先生', note: 'チョークの粉で図工をしたい。生徒思い' },
   { id: 'agent', name: '世界ほこり機構の人', note: '地球規模のホコリ担当。いつも真顔' },
   { id: 'controller', name: '管制官さん', note: '宇宙ほこり管制センターの人。ヘッドセットごしでも真顔' },
+  { id: 'clerk', name: '窓口係さん', note: '銀河ほこり連合の受付。宇宙人だけど、いちばん真顔' },
 ];
 
 export const PERSON_IDS: readonly PersonId[] = PEOPLE.map((p) => p.id);
@@ -417,7 +426,8 @@ export const DUST_WORDS: Record<DustType, { adj: string; noun: string }> = {
   chalk: { adj: 'パステル', noun: 'こくばん' },
   ash: { adj: 'ほかほか', noun: 'かざん' },
   star: { adj: 'きらきら', noun: 'ほしくず' },
-  cosmic: { adj: 'ふしぎな', noun: 'ぎんが' },
+  cosmic: { adj: 'ふしぎな', noun: 'うちゅう' },
+  nebula: { adj: 'ゆめいろ', noun: 'せいうん' },
 };
 
 /** 1種類がこの割合以上なら「純」毛並み */
@@ -500,7 +510,29 @@ export const SOLAR_XP = 80000;
 export const NOSTALGIC_DUSTS: readonly DustType[] = ['cotton', 'lint', 'fur', 'pollen', 'flour', 'soot', 'chalk'];
 
 /** 章ごとの、なつかしの味の成長の倍率 */
-export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20 };
+export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20, 6: 50 };
 
 /** きょうの好物（なつかしの味から1日1つ）はさらにこの倍 */
 export const FAVORITE_MUL = 2;
+
+// ---- 6章 銀河編：銀河のおそうじ（星雲をかき集める） ----
+
+export const GALAXY = {
+  /** 満タンのときに浮かんでいる星雲の数 */
+  maxNebulae: 10,
+  /** 空から満タンまで（実時間・分） */
+  regenMinutes: 60,
+  /** 星雲1つのつぶの数 */
+  motesPerNebula: 40,
+  /** つぶ1つで集まるホコリの数 */
+  perMote: 30,
+  /** 星雲1つぶん（つぶ全部）のお礼（銀河ほこり連合から） */
+  coinPerNebula: 60,
+  /** 星雲の種類と割合 */
+  mix: { nebula: 6, cosmic: 2, star: 2 } as Partial<Record<DustType, number>>,
+  /** 遊べる時間（秒） */
+  seconds: 45,
+};
+
+/** 6章の山場：銀河団をひと包み（天の川のほとりがいっぱいになったら） */
+export const CLUSTER_XP = 250000;

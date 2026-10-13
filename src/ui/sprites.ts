@@ -131,6 +131,14 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  nebulascarf: [
+    ['.........', '.........', 'ppbbppbb.', 'pbbppbbpp', '.......bp', '.......pb', '.......bp', '.......pp', '.........'],
+    { p: '#f4a7d0', b: '#9fd8e8' },
+  ],
+  galaxypin: [
+    ['.........', '...ppp...', '..p...p..', '.p..y..p.', '.p.yyy.p.', '..p.y..p.', '...p..p..', '....pp...', '.........'],
+    { p: '#c7b4f0', y: '#fff2a8' },
+  ],
   saturn: [
     ['.........', '....pp...', '...pppp..', 'rr.pppp.r', '.rrrrrrr.', '...pppp..', '....pp...', '.........', '.........'],
     { p: '#f0cf8a', r: '#e8a868' },

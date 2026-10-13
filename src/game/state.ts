@@ -30,6 +30,8 @@ import {
   WORLD,
   EARTH_WRAP_XP,
   SOLAR_XP,
+  CLUSTER_XP,
+  GALAXY,
   SPACE,
   SHAPE_LIMITS,
   SKY,
@@ -99,7 +101,10 @@ export type EventId =
   | 'shrink'
   | 'spaceLetter'
   | 'space'
-  | 'solar';
+  | 'solar'
+  | 'galaxyLetter'
+  | 'galaxy'
+  | 'cluster';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -124,6 +129,9 @@ export const EVENT_IDS: readonly EventId[] = [
   'spaceLetter',
   'space',
   'solar',
+  'galaxyLetter',
+  'galaxy',
+  'cluster',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
@@ -169,6 +177,8 @@ export type SaveData = {
   world: SpotState;
   /** 宇宙の星くずの群れの積もり具合（5章） */
   space: SpotState;
+  /** 銀河の星雲の積もり具合（6章） */
+  galaxy: SpotState;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -180,7 +190,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0, star: 0, cosmic: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0, star: 0, cosmic: 0, nebula: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -225,6 +235,7 @@ export function createInitialSave(): SaveData {
     rankDiet: emptyBag(),
     world: { fullness: 1, at: 0 },
     space: { fullness: 1, at: 0 },
+    galaxy: { fullness: 1, at: 0 },
   };
 }
 
@@ -312,8 +323,8 @@ export function contestResult(
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
-export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 {
-  return save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
+export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 | 6 {
+  return save.habitat >= 8 ? 6 : save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
 }
 
 // ---- 宝物 ----
@@ -665,6 +676,52 @@ export function solarDue(save: SaveData): boolean {
   return save.habitat >= 7 && save.growthXp >= SOLAR_XP && !hasEvent(save, 'solar');
 }
 
+// ---- 6章 銀河編 ----
+
+/** 5章の山場のあと、銀河ほこり連合から呼び出しが来る */
+export function galaxyLetterDue(save: SaveData): boolean {
+  return save.habitat === 7 && hasEvent(save, 'solar') && !hasEvent(save, 'galaxyLetter');
+}
+
+/** 天の川のほとりへお引っこし（連合の手配なので無料） */
+export function moveToGalaxy(save: SaveData): SaveData {
+  if (save.habitat !== 7) return save;
+  return addEvent({ ...addEvent(save, 'galaxyLetter'), habitat: 8 }, 'galaxy');
+}
+
+/** 銀河のおそうじができる（天の川のほとりに住んでから） */
+export function canGalaxy(save: SaveData): boolean {
+  return save.habitat >= 8;
+}
+
+/** いま銀河に浮かんでいる星雲の数 */
+export function galaxyNebulae(save: SaveData, now: number, speed = 1): number {
+  const elapsed = Math.max(0, now - save.galaxy.at) * speed;
+  const fullness = Math.min(1, save.galaxy.fullness + elapsed / (GALAXY.regenMinutes * MINUTE));
+  return Math.floor(GALAXY.maxNebulae * fullness + 1e-9);
+}
+
+/** 終わったら、残ったつぶの数から星雲の残りを記録する（半分以上残った星雲は残っている扱い） */
+export function finishGalaxy(save: SaveData, remainingNebulae: number, now: number): SaveData {
+  return { ...save, galaxy: { fullness: Math.max(0, Math.min(1, remainingNebulae / GALAXY.maxNebulae)), at: now } };
+}
+
+/** お礼：集めたつぶの数に応じて（星雲1つぶんで coinPerNebula） */
+export function galaxyReward(motes: number): number {
+  return Math.floor((Math.max(0, motes) / GALAXY.motesPerNebula) * GALAXY.coinPerNebula);
+}
+
+/** かき集める指の幅の倍率（星雲のもやの毛並み「ゆらゆら」で広がる） */
+export function galaxySweepMul(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('nebula') ? 1 + r.nebula * 1.5 : 1;
+}
+
+/** 6章の山場：天の川のほとりがいっぱい（銀河団をひと包みできる大きさ）になった */
+export function clusterDue(save: SaveData): boolean {
+  return save.habitat >= 8 && save.growthXp >= CLUSTER_XP && !hasEvent(save, 'cluster');
+}
+
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
 export function canFly(save: SaveData): boolean {
   return save.habitat >= 5;
@@ -988,6 +1045,10 @@ export const RANKS: readonly Rank[] = [
   { name: '地球級', min: 22000 },
   { name: '木星級', min: 40000 },
   { name: '太陽級', min: 60000 },
+  { name: '超巨星級', min: 100000 },
+  { name: '太陽系級', min: 130000 },
+  { name: '銀河級', min: 170000 },
+  { name: '銀河団級', min: 210000 },
 ];
 
 export function rankFor(xp: number): Rank {

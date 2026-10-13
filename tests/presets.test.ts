@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PRESETS, TWEAKS } from '../src/dev/presets.ts';
 import { sanitize } from '../src/game/save.ts';
-import { solarDue, spaceCenter, spaceLetterDue, worldLetterDue, earthWrapDue, cityTownDue, contestDue, landMeetingDue, rainyActive, rainyDue, warehouseDue, canDeliverRainy, chapter } from '../src/game/state.ts';
+import { clusterDue, galaxyLetterDue, solarDue, spaceCenter, spaceLetterDue, worldLetterDue, earthWrapDue, cityTownDue, contestDue, landMeetingDue, rainyActive, rainyDue, warehouseDue, canDeliverRainy, chapter } from '../src/game/state.ts';
 
 const get = (id: string) => {
   const p = PRESETS.find((x) => x.id === id);
@@ -35,6 +35,9 @@ test('山場の直前の場面は、その出来事が起きる状態になっ�
   assert.equal(spaceCenter(get('ch5')), 'jupiter');
   assert.equal(spaceCenter(get('sunCenter')), 'sun');
   assert.equal(solarDue(get('solarDue')), true);
+  assert.equal(galaxyLetterDue(get('galaxyDue')), true);
+  assert.equal(chapter(get('ch6')), 6);
+  assert.equal(clusterDue(get('clusterDue')), true);
 });
 
 test('すぐ足す操作は保存データを壊さない', () => {

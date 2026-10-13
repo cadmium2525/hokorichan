@@ -146,3 +146,43 @@ export function orbitLine(color: string, opacity: number, dashed = false): THREE
   if (dashed) line.computeLineDistances();
   return line;
 }
+
+/** うずまき銀河（上から見た円盤）。中心が明るく、腕にそって星がならぶ */
+export function galaxyTexture(seed: number): THREE.CanvasTexture {
+  const S = 128;
+  const [canvas, ctx] = makeCanvas(S, S);
+  const rng = createRandom(seed);
+  const c = S / 2;
+  const core = ctx.createRadialGradient(c, c, 0, c, c, S / 2);
+  core.addColorStop(0, 'rgba(255,240,200,0.95)');
+  core.addColorStop(0.15, 'rgba(240,190,230,0.55)');
+  core.addColorStop(0.6, 'rgba(150,130,220,0.18)');
+  core.addColorStop(1, 'rgba(60,60,140,0)');
+  ctx.fillStyle = core;
+  ctx.fillRect(0, 0, S, S);
+  const colors = ['#ffffff', '#fff2a8', '#cfe6ff', '#f4a7d0', '#c7b4f0'];
+  for (let arm = 0; arm < 2; arm++) {
+    for (let i = 0; i < 420; i++) {
+      const t = rng();
+      const a = arm * Math.PI + t * Math.PI * 2.6 + (rng() - 0.5) * 0.5;
+      const r = 4 + t * (S / 2 - 8) + (rng() - 0.5) * 6;
+      const x = Math.round(c + Math.cos(a) * r);
+      const y = Math.round(c + Math.sin(a) * r);
+      ctx.globalAlpha = 0.35 + (1 - t) * 0.6;
+      ctx.fillStyle = colors[Math.floor(rng() * colors.length)];
+      ctx.fillRect(x, y, 1, 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+  return toTexture(canvas);
+}
+
+/** 上から見たうずまき銀河の円盤（地面と平行な板） */
+export function buildGalaxyDisc(radius: number, seed: number): THREE.Mesh {
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(radius, 48),
+    new THREE.MeshBasicMaterial({ map: galaxyTexture(seed), transparent: true, depthWrite: false }),
+  );
+  m.rotation.x = -Math.PI / 2;
+  return m;
+}

@@ -10,6 +10,7 @@ import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene, type PetView } from '../scenes/PetScene.ts';
 import { EarthScene } from '../scenes/EarthScene.ts';
 import { SpaceScene } from '../scenes/SpaceScene.ts';
+import { GalaxyScene } from '../scenes/GalaxyScene.ts';
 import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import { pickTalk, type TownPerson } from './talk.ts';
@@ -27,6 +28,7 @@ import {
   skyResultBody,
   worldResultBody,
   spaceResultBody,
+  galaxyResultBody,
   heroSelectBody,
   landBody,
   mapBody,
@@ -49,6 +51,7 @@ import {
   RAINY,
   WORLD,
   SPACE,
+  GALAXY,
   SKY,
   DUSTS,
   FRIEND_UNLOCK_XP,
@@ -105,6 +108,14 @@ import {
   dexAdd,
   earthWrapDue,
   canSpace,
+  canGalaxy,
+  clusterDue,
+  finishGalaxy,
+  galaxyLetterDue,
+  galaxyNebulae,
+  galaxyReward,
+  galaxySweepMul,
+  moveToGalaxy,
   finishSpace,
   moveToSpace,
   solarDue,
@@ -158,7 +169,7 @@ import {
   type SaveData,
 } from './state.ts';
 
-export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'RESULT';
+export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'GALAXY' | 'RESULT';
 
 type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
@@ -386,7 +397,33 @@ const SOLAR_STORY: StoryStep[] = [
   { speaker: 'narration', text: 'ほこりちゃんは太陽系をぐるっとひと回り。<br>惑星のまわりの星くずが、ぜんぶ毛並みにすいこまれていく……。', button: 'わあ……' },
   { speaker: 'controller', text: '観測史上もっとも見通しのいい夜空です、どうぞ。<br>町の天文台の電話が、鳴りやみません。', button: 'えへへ' },
   { speaker: 'mother', text: 'ゆうべ、星がすごくきれいだったわね。あなたたちのおかげなんですって？<br>でも、夜ふかしはほどほどにね。', button: 'はーい' },
-  { speaker: 'narration', text: '（5章 宇宙編 おしまい。6章「銀河編」は準備中）', button: 'やったー！' },
+  { speaker: 'narration', text: '（5章 宇宙編 おしまい。つぎは6章「銀河編」！）', button: 'やったー！' },
+];
+
+/** 6章のはじまり：銀河ほこり連合から */
+const GALAXY_LETTER: StoryStep[] = [
+  { speaker: 'narration', text: '月のとなりに、ふしぎな形の乗り物がとまった。<br>中から、アンテナのある人がおりてきた。', button: '？' },
+  {
+    speaker: 'clerk',
+    text: '<b>銀河ほこり連合</b>、受付窓口です。<br>太陽系の清掃実績を確認しました。<b>銀河のホコリ</b>の担当をお願いします。',
+    button: 'ぎんが？',
+  },
+  { speaker: 'clerk', text: '天の川は、星雲のもやでかすんでいます。<br>相棒さんの新しいおうちとして、<b>天の川のほとり</b>をご用意しました。こちらに記入を。', button: 'はーい' },
+  { speaker: 'mother', text: 'あら、宇宙人さん。いつもうちの子がお世話になっています。<br>夕ごはんまでには帰ってくるのよ。', button: 'はーい' },
+  {
+    speaker: 'narration',
+    text: 'ほこりちゃんは<b>天の川のほとり</b>にお引っこし！<br>「<b>銀河へ</b>」で、<b>指でなでるように</b>動かして、星雲のもやをほこりちゃんの口へかき集めよう。<br>銀河はゆっくり、うずをまいているよ。',
+    button: 'やってみる！',
+  },
+];
+
+/** 6章の山場：銀河団をひと包み */
+const CLUSTER_STORY: StoryStep[] = [
+  { speaker: 'narration', text: 'ほこりちゃんは、とうとう銀河団をまるごと包めるほど大きくなった。', button: '次へ' },
+  { speaker: 'narration', text: 'ほこりちゃんは、いくつもの銀河をそっと抱きよせた。<br>星雲のもやが、ぜんぶ毛並みにすいこまれて……天の川が、すみずみまで光った。', button: 'わあ……' },
+  { speaker: 'clerk', text: '銀河団ひとつ分の清掃、受理しました。<br>連合はじまって以来の早さです。……お見事です。', button: 'えへへ' },
+  { speaker: 'mother', text: '銀河ですって。すごいわね。<br>でも、ちゃんと宿題もするのよ。', button: 'はーい' },
+  { speaker: 'narration', text: '（6章 銀河編 おしまい。終章は準備中）', button: 'やったー！' },
 ];
 
 /** 丘に引っこしたあと、はじめてまちで一緒に掃除するとき（大きさを変えられる） */
@@ -443,6 +480,9 @@ export class Game {
   private space: SpaceScene | null = null;
   /** 宇宙のおそうじで吸い込んだ群れの数と種類 */
   private spaceGot: { clusters: number; bumps: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
+  private galaxy: GalaxyScene | null = null;
+  /** 銀河のおそうじでかき集めたつぶ（バッグへはまとめて入れる） */
+  private galaxyGot: { motes: number; got: Partial<Record<DustType, number>>; pending: Partial<Record<DustType, number>>; savedAt: number; endsAt: number; lastLeft: number } | null = null;
   /** 撮った写真（シェア画面を閉じたら捨てる） */
   private photo: Photo | null = null;
   /** 空で吸い込んだ雲の数と種類 */
@@ -565,6 +605,10 @@ export class Game {
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
         { action: 'walkHome', label: s.habitat >= 7 ? '駅から宇宙へ帰る' : s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
+    } else if ((this.mode === 'GALAXY' || this.mode === 'RESULT') && this.galaxyGot && this.galaxy) {
+      const left = Math.max(0, Math.ceil((this.galaxyGot.endsAt - this.now) / 1000));
+      this.hud.setCleaningStatus(`銀河のおそうじ ⏱ のこり${left}秒`, this.galaxy.eatenMotes, this.galaxy.totalMotes, this.galaxy.totalMotes);
+      this.hud.setActions([{ action: 'galaxyEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'SPACE' || this.mode === 'RESULT') && this.spaceGot && this.space) {
       const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));
       const all = this.spaceGot.clusters + this.space.remaining;
@@ -632,6 +676,10 @@ export class Game {
       const n = worldPatches(s, this.now, this.params.speed);
       buttons.push({ action: 'goWorld', label: '世界へ', sub: n > 0 ? `地域 ${n}か所` : 'ホコリを待っている', variant: 'accent', disabled: n === 0 });
     }
+    if (canGalaxy(s)) {
+      const n = galaxyNebulae(s, this.now, this.params.speed);
+      buttons.push({ action: 'goGalaxy', label: '銀河へ', sub: n > 0 ? `星雲 ${n}こ` : '星雲を待っている', variant: 'primary', disabled: n === 0 });
+    }
     if (canSpace(s)) {
       const n = spaceClusters(s, this.now, this.params.speed);
       buttons.push({ action: 'goSpace', label: '宇宙へ', sub: n > 0 ? `星くず ${n}群れ` : '星くずを待っている', variant: 'primary', disabled: n === 0 });
@@ -657,6 +705,8 @@ export class Game {
     this.worldGot = null;
     this.space = null;
     this.spaceGot = null;
+    this.galaxy = null;
+    this.galaxyGot = null;
     this.town = null;
     this.pet = null;
     this.session = null;
@@ -718,6 +768,13 @@ export class Game {
         this.pet?.playHappy();
       });
     else if (solarDue(s)) this.runStory(SOLAR_STORY, '太陽系をひと回り', () => this.commit(addEvent(this.save, 'solar')));
+    else if (galaxyLetterDue(s))
+      this.runStory(GALAXY_LETTER, '銀河ほこり連合', () => {
+        this.commit(moveToGalaxy(this.save));
+        this.pet?.setView(this.petView());
+        this.pet?.playHappy();
+      });
+    else if (clusterDue(s)) this.runStory(CLUSTER_STORY, '銀河団をひと包み', () => this.commit(addEvent(this.save, 'cluster')));
     else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
@@ -1030,7 +1087,84 @@ export class Game {
 
   /** 駅から、ほこりちゃんの所へ帰るときのひとこと */
   private rideHomeText(): string {
+    if (this.save.habitat >= 8) return '電車で丘の発射場へ。ロケットを乗りついで、天の川のほとりへ……';
     return this.save.habitat >= 7 ? '電車で丘の発射場へ。ロケットで、月のとなりへ……' : '電車にゆられて、町はずれの丘へ……';
+  }
+
+  /** 銀河のおそうじ：指でなでるように、星雲のもやをほこりちゃんの口へかき集める */
+  private startGalaxy(): void {
+    const n = galaxyNebulae(this.save, this.now, this.params.speed);
+    if (n <= 0) return;
+    this.sound.play('happy');
+    this.clearScenes();
+    this.sessionCount++;
+    const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
+    const types = rollDustTypes({ dust: GALAXY.mix }, n, createRandom(seed ^ 0x6a1a));
+    const view = this.petView();
+    const scene = new GalaxyScene({
+      element: this.hud.canvas,
+      seed,
+      nebulae: types,
+      motesPerNebula: GALAXY.motesPerNebula,
+      pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
+      sweepMul: galaxySweepMul(this.save),
+      onMote: (type) => this.onMote(type),
+    });
+    this.galaxy = scene;
+    this.galaxyGot = { motes: 0, got: {}, pending: {}, savedAt: this.now, endsAt: this.now + GALAXY.seconds * 1000, lastLeft: GALAXY.seconds };
+    this.mode = 'GALAXY';
+    this.setScene(scene);
+    this.syncInput();
+    this.hud.hint('指でなでるように動かして\n星雲のもやを口へかき集めよう');
+    this.refreshHud();
+  }
+
+  private onMote(type: DustType): void {
+    const g = this.galaxyGot;
+    if (!g || this.mode !== 'GALAXY') return;
+    g.motes++;
+    g.got[type] = (g.got[type] ?? 0) + GALAXY.perMote;
+    g.pending[type] = (g.pending[type] ?? 0) + GALAXY.perMote;
+    this.hud.hint(null);
+    if (g.motes % 4 === 1) this.sound.play('collect');
+  }
+
+  /** たまったつぶをバッグへ入れて保存する（つぶごとに保存すると重いので、まとめて） */
+  private flushGalaxy(): void {
+    const g = this.galaxyGot;
+    if (!g) return;
+    g.savedAt = this.now;
+    const types = Object.keys(g.pending) as DustType[];
+    if (types.length === 0) return;
+    let save: SaveData = { ...this.save, bag: { ...this.save.bag } };
+    for (const t of types) save.bag[t] += g.pending[t] ?? 0;
+    for (const t of types) {
+      const dex = dexAdd(save, 'dust', t);
+      save = dex.save;
+      if (dex.added) this.hud.toast(`図鑑に「${DUSTS[t].name}」を記録した！`, 2000);
+    }
+    g.pending = {};
+    this.commit(save);
+    this.hud.bump('bag');
+  }
+
+  private endGalaxy(): void {
+    const g = this.galaxyGot;
+    if (!g || !this.galaxy || this.mode !== 'GALAXY') return;
+    this.flushGalaxy();
+    this.mode = 'RESULT';
+    this.galaxy.setInputEnabled(false);
+    const reward = galaxyReward(g.motes);
+    const left = Math.round(this.galaxy.remainingMotes / GALAXY.motesPerNebula);
+    this.commit({ ...finishGalaxy(this.save, left, this.now), coins: this.save.coins + reward });
+    this.hud.bump('coins');
+    this.sound.play('reward');
+    this.openOverlay('result', {
+      title: '銀河のおそうじ完了！',
+      className: 'modal--result',
+      body: galaxyResultBody({ hero: this.hero, motes: g.motes, total: this.galaxy.totalMotes, reward, got: g.got, bag: bagTotal(this.save.bag) }),
+      buttons: [{ action: 'resultHome', label: 'ただいま！', variant: 'primary' }],
+    });
   }
 
   /** 宇宙のおそうじ：ほこりちゃんは木星（太陽）のまわりを回る。指をおいた軌道へ移って星くずを吸い込む */
@@ -1467,7 +1601,7 @@ export class Game {
 
   /** まちの人に話しかける（前回と同じセリフは続けない） */
   private talkWith(id: CharacterId): void {
-    if (!PERSON_IDS.includes(id as PersonId) || id === 'mother' || id === 'agent' || id === 'controller') return;
+    if (!PERSON_IDS.includes(id as PersonId) || id === 'mother' || id === 'agent' || id === 'controller' || id === 'clerk') return;
     const person = id as TownPerson;
     const text = pickTalk(person, this.save, this.random, this.lastTalk.get(person));
     this.lastTalk.set(person, text);
@@ -1688,8 +1822,9 @@ export class Game {
     else if (this.mode === 'SKY' && action === 'skyEnd') this.endSky();
     else if (this.mode === 'WORLD' && action === 'worldEnd') this.endWorld();
     else if (this.mode === 'SPACE' && action === 'spaceEnd') this.endSpace();
+    else if (this.mode === 'GALAXY' && action === 'galaxyEnd') this.endGalaxy();
     else if (this.mode === 'RESULT' && action === 'resultHome') {
-      if (this.skyGot || this.worldGot || this.spaceGot) {
+      if (this.skyGot || this.worldGot || this.spaceGot || this.galaxyGot) {
         this.closeModal();
         this.goHome();
       } else this.leaveCleaning();
@@ -1720,6 +1855,10 @@ export class Game {
         this.closeModal();
         this.hud.toast(this.rideHomeText(), 2200);
         this.goHome();
+        return;
+      case 'goGalaxy':
+        if (this.mode !== 'HOME' || !canGalaxy(this.save)) return;
+        this.startGalaxy();
         return;
       case 'goSpace':
         if (this.mode !== 'HOME' || !canSpace(this.save)) return;
@@ -2010,6 +2149,7 @@ export class Game {
     this.sky?.setInputEnabled(this.mode === 'SKY' && !this.hud.modalOpen);
     this.earth?.setInputEnabled(this.mode === 'WORLD' && !this.hud.modalOpen);
     this.space?.setInputEnabled(this.mode === 'SPACE' && !this.hud.modalOpen);
+    this.galaxy?.setInputEnabled(this.mode === 'GALAXY' && !this.hud.modalOpen);
   }
 
   private bindLifecycle(): void {
@@ -2113,6 +2253,16 @@ export class Game {
     if (this.autoFinishTimer > 0) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
+    }
+    if (this.galaxyGot && this.galaxy && this.mode === 'GALAXY' && !this.hud.modalOpen) {
+      const left = Math.max(0, Math.ceil((this.galaxyGot.endsAt - this.now) / 1000));
+      if (left !== this.galaxyGot.lastLeft) {
+        this.galaxyGot.lastLeft = left;
+        this.refreshHud();
+      }
+      // かき集めたつぶは、少しずつまとめてバッグへ
+      if (this.now - this.galaxyGot.savedAt > 600) this.flushGalaxy();
+      if (left <= 0 || this.galaxy.remainingMotes === 0) this.endGalaxy();
     }
     if (this.spaceGot && this.space && this.mode === 'SPACE' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));

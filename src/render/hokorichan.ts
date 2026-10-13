@@ -342,6 +342,46 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       g.add(glass, rim, stem, tip);
       return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
     }
+    case 'nebulascarf': {
+      // 星雲のはちまき：頭のてっぺんに近いところに、ピンクと水色のしまの帯。横に結び目とたれ
+      const band = new THREE.Group();
+      for (let i = 0; i < 12; i++) {
+        const seg = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.05, 5, 4, (Math.PI * 2) / 12 + 0.02), lambert(i % 2 ? '#9fd8e8' : '#f4a7d0'));
+        seg.rotation.set(Math.PI / 2, 0, (i / 12) * Math.PI * 2);
+        band.add(seg);
+      }
+      g.add(band);
+      const front = ISO_VIEW_DIR.clone().setY(0).normalize();
+      const side = new THREE.Vector3(front.z, 0, -front.x);
+      const knot = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), lambert('#f4a7d0'));
+      knot.position.copy(side).multiplyScalar(-0.34);
+      g.add(knot);
+      for (let i = 0; i < 2; i++) {
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.05), lambert(i ? '#9fd8e8' : '#f4a7d0'));
+        tail.position.copy(side).multiplyScalar(-0.38 - i * 0.07).add(new THREE.Vector3(0, -0.1, 0));
+        tail.rotation.z = (i ? -0.4 : 0.3) * Math.sign(side.x || 1);
+        g.add(tail);
+      }
+      return { object: g, offset: new THREE.Vector3(0, -0.07, 0) };
+    }
+    case 'galaxypin': {
+      // 銀河のうずまきピン：すみれ色のうずまきと、まんなかの光
+      const pts: THREE.Vector3[] = [];
+      for (let i = 0; i < 40; i++) {
+        const t = i / 39;
+        const a = t * Math.PI * 3.2;
+        pts.push(new THREE.Vector3(Math.cos(a) * 0.04 + Math.cos(a) * t * 0.12, Math.sin(a) * t * 0.12 + Math.sin(a) * 0.04, 0));
+      }
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const arm = new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.018, 5, false), lambert('#c7b4f0'));
+      const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045, 1), new THREE.MeshBasicMaterial({ color: '#fff2a8' }));
+      const spin = new THREE.Group();
+      spin.name = 'spinz';
+      spin.add(arm);
+      g.add(spin, core);
+      g.quaternion.copy(FACE_ROTATION);
+      return { object: g, offset: new THREE.Vector3(0.2, 0.03, 0.18) };
+    }
     case 'glasses':
       return null; // 顔のテクスチャに描く
   }
@@ -529,6 +569,9 @@ export class HokorichanModel {
   tick(dt: number, speed = 1): void {
     const blades = this.accessory?.object.getObjectByName('spin');
     if (blades) blades.rotation.y += dt * 6 * speed;
+    // うずまきは顔の向きのまま、ゆっくり回る
+    const swirl = this.accessory?.object.getObjectByName('spinz');
+    if (swirl) swirl.rotation.z -= dt * 1.2 * speed;
   }
 
   get diameter(): number {

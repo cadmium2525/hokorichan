@@ -5,7 +5,7 @@ import { PERSON_IDS } from '../src/game/catalog.ts';
 import { pickTalk, talkLines, type TownPerson } from '../src/game/talk.ts';
 import { createRandom } from '../src/game/rng.ts';
 
-const TOWN_PEOPLE = PERSON_IDS.filter((p): p is TownPerson => p !== 'mother' && p !== 'agent' && p !== 'controller');
+const TOWN_PEOPLE = PERSON_IDS.filter((p): p is TownPerson => p !== 'mother' && p !== 'agent' && p !== 'controller' && p !== 'clerk');
 
 test('まちの人は、どの場面でも話すことがある', () => {
   for (const p of PRESETS) {

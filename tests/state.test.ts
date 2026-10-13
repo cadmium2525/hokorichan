@@ -652,3 +652,24 @@ test('なつかしの味：4章から町のホコリは1個で何倍も育ち、
   // 毛並みは育った量で数える
   assert.equal(furOf({ ...emptyBag(), cotton: 100, star: 10 }), 'pure:cotton');
 });
+
+test('6章：銀河ほこり連合の呼び出しから天の川のほとりへ', async () => {
+  const { galaxyLetterDue, moveToGalaxy, chapter, canGalaxy, galaxyNebulae, finishGalaxy, galaxyReward, clusterDue, addEvent, createInitialSave, dustValue } = await import('../src/game/state.ts');
+  const { GALAXY, CLUSTER_XP, HABITATS, NOSTALGIA_MUL } = await import('../src/game/catalog.ts');
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 7, growthXp: 80000 };
+  assert.equal(galaxyLetterDue(s), false);
+  s = addEvent(s, 'solar');
+  assert.equal(galaxyLetterDue(s), true);
+  const moved = moveToGalaxy(s);
+  assert.equal(moved.habitat, 8);
+  assert.equal(chapter(moved), 6);
+  assert.equal(canGalaxy(moved), true);
+  assert.equal(HABITATS[8].capacity, CLUSTER_XP);
+  assert.equal(dustValue(moved, 'cotton'), NOSTALGIA_MUL[6]);
+  const now = 2_000_000_000;
+  const after = finishGalaxy(moved, 3, now);
+  assert.equal(galaxyNebulae(after, now), 3);
+  assert.equal(galaxyNebulae(after, now + GALAXY.regenMinutes * 60_000), GALAXY.maxNebulae);
+  assert.equal(galaxyReward(GALAXY.motesPerNebula * 2), GALAXY.coinPerNebula * 2);
+  assert.equal(clusterDue({ ...moved, growthXp: CLUSTER_XP }), true);
+});
