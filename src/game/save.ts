@@ -236,6 +236,7 @@ export function sanitize(raw: unknown, now = Date.now()): SaveData {
     space: toSpotState(data.space, now),
     galaxy: toSpotState(data.galaxy, now),
     bubbles: toSpotState(data.bubbles, now),
+    loop: toCount(data.loop, 0),
     contestAt: typeof data.contestAt === 'number' && Number.isFinite(data.contestAt) ? Math.min(Math.max(0, data.contestAt), now) : 0,
   };
 }

@@ -315,6 +315,17 @@ export const PRESETS: readonly Preset[] = [
     make: (h) =>
       base(h, { growthXp: FINAL_XP, habitat: 9, coins: 18000, rep: 40, tools: ['hand', 'rag', 'mop', 'vacuum'], accessories: ['ribbon', 'rainhat'], events: [...FINAL_EVENTS, 'peek'] }),
   },
+  {
+    id: 'afterFinale',
+    group: '終章',
+    name: '最後の場面のあと（夢からさめる前）',
+    note: '「夢からさめる」ボタンで2周目へ',
+    make: (h) => ({
+      ...base(h, { growthXp: FINAL_XP, habitat: 9, coins: 20000, rep: 40, tools: ['hand', 'rag', 'mop', 'vacuum'], accessories: ['ribbon', 'rainhat', 'crown'], events: [...FINAL_EVENTS, 'peek', 'finale'] }),
+      bag: { ...emptyBag(), cotton: 300, fur: 120, star: 2000 },
+      dex: { dust: ['cotton', 'fur', 'star'], items: ['t_window1'], people: ['mother', 'shopkeeper'], fur: ['pure:cotton'] },
+    }),
+  },
 ];
 
 // ---- 部分的な書きかえ（いまの保存データに足す） ----

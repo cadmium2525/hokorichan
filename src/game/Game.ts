@@ -112,6 +112,8 @@ import {
   earthWrapDue,
   canSpace,
   canGalaxy,
+  canWakeUp,
+  wakeUp,
   bubbleCount,
   bubbleReward,
   bubbleRiseMul,
@@ -463,8 +465,15 @@ const FINALE_STORY: StoryStep[] = [
   { speaker: 'narration', text: 'すべての宇宙の、すべてのホコリが、<br>毛並みの中で、きらきら光っている。', button: '……' },
 ];
 
-const FINALE_END: StoryStep[] = [
-  { speaker: 'narration', text: '（終章 おしまい。<br>このあと――夢からさめるお話と、2周目――は準備中）', button: 'おやすみなさい' },
+/** 夢からさめる（2周目のはじまり） */
+const DREAM_WAKE: StoryStep[] = [
+  { speaker: 'narration', text: '…………', button: '……', enter: (p) => p?.setSleeping(true) },
+  { speaker: 'mother', text: 'いつまで寝てるの！ 朝ごはんよー！', button: 'はっ' },
+  { speaker: 'hero', text: '……ゆめ？', button: '……' },
+  { speaker: 'narration', text: '勉強机の上に、<b>小さな綿ぼこり</b>がひとつ。', button: 'そっと見る' },
+  { speaker: 'narration', text: '……綿ぼこりが目をあけて、<br>こっちを見て、ちょっとわらった気がした。', button: '……！', enter: (p) => p?.playWake() },
+  { speaker: 'narration', text: 'ポケットの中には、ゆめの中で集めた<b>ホコリ</b>が、なぜか残っていた。<br>図鑑も、そのまま。', button: '次へ' },
+  { speaker: 'hero', text: 'また、いっしょに大きくなろうね。<br>……今度は、どこまで？', button: 'はじめる' },
 ];
 
 /** 丘に引っこしたあと、はじめてまちで一緒に掃除するとき（大きさを変えられる） */
@@ -641,7 +650,7 @@ export class Game {
     this.syncRain();
     this.hud.setWallet(s.coins, bagTotal(s.bag), s.soundEnabled);
     if (this.mode === 'HOME') {
-      this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), HABITATS[s.habitat].name, s.damp);
+      this.hud.setPetStatus(rankFor(s.growthXp).name, s.growthXp, capacityOf(s.habitat), `${HABITATS[s.habitat].name}${s.loop > 0 ? `・${s.loop + 1}周目` : ''}`, s.damp);
       this.hud.setActions(this.homeButtons());
     } else if (this.mode === 'TOWN') {
       this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
@@ -739,6 +748,7 @@ export class Game {
     }
     buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
+    if (canWakeUp(s)) buttons.push({ action: 'askWakeUp', label: '夢からさめる', sub: `${s.loop + 2}周目へ`, variant: 'secondary' });
     return buttons;
   }
 
@@ -1167,8 +1177,40 @@ export class Game {
     this.runStory(FINALE_STORY, 'すべてのほこり級', () => {
       this.hud.finale('もう、\nこれ以上おおきくなれないみたい。', '……まだ、たべられるよ？', 'ほこりちゃん', () => {
         this.commit(addEvent(this.save, 'finale'));
-        window.setTimeout(() => this.runStory(FINALE_END, '終章', () => this.refreshHud()), 1200);
+        window.setTimeout(() => this.askWakeUp(true), 1200);
       });
+    });
+  }
+
+  /** 夢からさめる（2周目）か、もう少しゆめの中で遊ぶか */
+  private askWakeUp(ending: boolean): void {
+    const s = this.save;
+    const head = ending ? '（終章 おしまい。遊んでくれて、ありがとう！）<br>' : '';
+    this.openOverlay('confirm', {
+      title: ending ? 'おしまい' : '夢からさめる？',
+      className: 'modal--story',
+      body: storyBody(
+        'narration',
+        this.hero,
+        `${head}夢からさめて、もう一度はじめから遊ぶ？（${s.loop + 2}周目）<br>` +
+          '<small>引き継ぐもの：バッグのホコリ・図鑑（毛並み・宝物も）・アクセサリー・形<br>はじめから：コイン・道具・すみか・成長・お話・評判</small>',
+      ),
+      buttons: [
+        { action: 'stayDream', label: 'もう少し', sub: 'ゆめの中で遊ぶ', variant: 'secondary' },
+        { action: 'wakeUp', label: '夢からさめる', sub: `${s.loop + 2}周目へ`, variant: 'primary' },
+      ],
+    });
+  }
+
+  private doWakeUp(): void {
+    if (!canWakeUp(this.save)) return;
+    this.closeModal();
+    this.commit(wakeUp(this.save));
+    this.sound.play('happy');
+    this.goHome();
+    this.runStory(DREAM_WAKE, `${this.save.loop + 1}周目`, () => {
+      this.commit({ ...this.save, tutorialDone: true });
+      this.hud.toast('2周目からは、お話を「とばす」で飛ばせるよ', 2800);
     });
   }
 
@@ -1709,6 +1751,11 @@ export class Game {
   }
 
   private startStory(): void {
+    // 2周目は、夢からさめるお話から
+    if (this.save.loop > 0) {
+      this.runStory(DREAM_WAKE, `${this.save.loop + 1}周目`, () => this.commit({ ...this.save, tutorialDone: true }));
+      return;
+    }
     const intro: StoryStep[] = [
       { speaker: 'narration', text: 'ある日、勉強机の上に<b>小さなホコリ</b>を見つけた。', button: 'そっと見る', enter: (p) => p?.setSleeping(true) },
       { speaker: 'narration', text: '……！ ホコリが目をあけた！', button: 'わあ！', enter: (p) => p?.playWake() },
@@ -1772,7 +1819,14 @@ export class Game {
       // 下のパネルに出して、上の3D（目を覚ますほこりちゃんなど）を見せる
       sheet: true,
       body: storyBody(step.speaker, this.hero, step.text),
-      buttons: [{ action: 'storyNext', label: step.button, variant: 'primary' }],
+      // 2周目からは、お話を飛ばせる
+      buttons:
+        this.save.loop > 0 && this.storyStep < this.story.length - 1
+          ? [
+              { action: 'storySkip', label: 'とばす', variant: 'secondary' },
+              { action: 'storyNext', label: step.button, variant: 'primary' },
+            ]
+          : [{ action: 'storyNext', label: step.button, variant: 'primary' }],
     });
   }
 
@@ -1954,6 +2008,21 @@ export class Game {
         this.storyStep++;
         this.showStoryStep();
         return;
+      case 'storySkip':
+        // 飛ばした場面の演出（目を覚ますなど）は、結果だけ反映する
+        this.sound.play('tap');
+        for (let i = this.storyStep + 1; i < this.story.length; i++) this.story[i].enter?.(this.pet);
+        this.storyStep = this.story.length;
+        this.showStoryStep();
+        return;
+      case 'wakeUp':
+        this.doWakeUp();
+        return;
+      case 'stayDream':
+        this.sound.play('tap');
+        this.closeModal();
+        this.refreshHud();
+        return;
     }
 
     if (this.mode === 'HOME' || this.mode === 'TOWN') this.onHomeAction(action, arg);
@@ -1995,6 +2064,11 @@ export class Game {
         this.closeModal();
         this.hud.toast(this.rideHomeText(), 2200);
         this.goHome();
+        return;
+      case 'askWakeUp':
+        if (this.mode !== 'HOME' || !canWakeUp(this.save)) return;
+        this.sound.play('tap');
+        this.askWakeUp(false);
         return;
       case 'goBubbles':
         if (this.mode !== 'HOME' || !canBubbles(this.save)) return;

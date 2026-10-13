@@ -698,3 +698,50 @@ test('終章：宇宙のまんなか・しゃぼん玉の宇宙・はみ出し�
   assert.equal(finaleDue({ ...moved, growthXp: FINAL_XP }), true);
   assert.equal(finaleDue(addEvent({ ...moved, growthXp: FINAL_XP }, 'finale')), false);
 });
+
+test('夢からさめる：ホコリと図鑑とアクセサリーを引き継いで、はじめから', async () => {
+  const { wakeUp, canWakeUp, createInitialSave, addEvent, chapter } = await import('../src/game/state.ts');
+  const { sanitize } = await import('../src/game/save.ts');
+  const end = addEvent(
+    {
+      ...createInitialSave(),
+      hero: 'girl' as const,
+      tutorialDone: true,
+      habitat: 9 as const,
+      growthXp: 600000,
+      coins: 9999,
+      rep: 40,
+      tools: ['hand', 'rag', 'mop', 'vacuum'] as Array<'hand' | 'rag' | 'mop' | 'vacuum'>,
+      accessories: ['ribbon', 'crown'] as Array<'ribbon' | 'crown'>,
+      equippedAccessory: 'crown' as const,
+      bag: { ...createInitialSave().bag, cotton: 50, star: 3000 },
+      dex: { dust: ['cotton'], items: ['t_window1'], people: ['mother'], fur: ['pure:cotton'] },
+      contestBest: 33,
+    },
+    'finale',
+  );
+  assert.equal(canWakeUp(createInitialSave()), false);
+  assert.equal(canWakeUp(end), true);
+  const next = wakeUp(end);
+  // 引き継ぐ
+  assert.equal(next.hero, 'girl');
+  assert.deepEqual(next.bag, end.bag);
+  assert.deepEqual(next.dex, end.dex);
+  assert.deepEqual(next.accessories, ['ribbon', 'crown']);
+  assert.equal(next.equippedAccessory, 'crown');
+  assert.equal(next.contestBest, 33);
+  assert.equal(next.loop, 1);
+  // はじめから
+  assert.equal(next.coins, 0);
+  assert.equal(next.habitat, 0);
+  assert.equal(next.growthXp, 0);
+  assert.equal(next.rep, 0);
+  assert.deepEqual(next.tools, ['hand']);
+  assert.deepEqual(next.events, []);
+  assert.equal(next.tutorialDone, false);
+  assert.equal(chapter(next), 1);
+  assert.equal(canWakeUp(next), false);
+  // 保存して読み直しても周回数は残る
+  assert.equal(sanitize(JSON.parse(JSON.stringify(next))).loop, 1);
+  assert.equal(wakeUp(addEvent(next, 'finale')).loop, 2);
+});

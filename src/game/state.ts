@@ -192,6 +192,8 @@ export type SaveData = {
   galaxy: SpotState;
   /** しゃぼん玉の宇宙の積もり具合（終章） */
   bubbles: SpotState;
+  /** 夢からさめた回数（0 なら1周目） */
+  loop: number;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -250,6 +252,7 @@ export function createInitialSave(): SaveData {
     space: { fullness: 1, at: 0 },
     galaxy: { fullness: 1, at: 0 },
     bubbles: { fullness: 1, at: 0 },
+    loop: 0,
   };
 }
 
@@ -784,6 +787,35 @@ export function peekDue(save: SaveData): boolean {
 /** すべてのほこり級：最後のお話 */
 export function finaleDue(save: SaveData): boolean {
   return save.habitat >= 9 && save.growthXp >= FINAL_XP && !hasEvent(save, 'finale');
+}
+
+// ---- 夢オチと2周目 ----
+
+/** 夢からさめられる（最後の場面を見たあと） */
+export function canWakeUp(save: SaveData): boolean {
+  return hasEvent(save, 'finale');
+}
+
+/**
+ * 夢からさめて、はじめから（2周目）。
+ * 引き継ぐ：バッグのホコリ・図鑑（ホコリ・宝物と落とし物・町の人・毛並み）・アクセサリー・形・主人公・大会の自己ベスト・音の設定。
+ * 最初から：コイン・道具・すみか・成長・お話・評判・依頼・場所の積もり具合・食べたもの。
+ */
+export function wakeUp(save: SaveData): SaveData {
+  const fresh = createInitialSave();
+  return {
+    ...fresh,
+    hero: save.hero,
+    tutorialDone: false,
+    soundEnabled: save.soundEnabled,
+    bag: { ...save.bag },
+    dex: { dust: [...save.dex.dust], items: [...save.dex.items], people: [...save.dex.people], fur: [...save.dex.fur] },
+    accessories: [...save.accessories],
+    equippedAccessory: save.equippedAccessory,
+    shape: { ...save.shape },
+    contestBest: save.contestBest,
+    loop: save.loop + 1,
+  };
 }
 
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
