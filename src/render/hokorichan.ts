@@ -313,6 +313,35 @@ function createAccessory(id: AccessoryId): { object: THREE.Object3D; offset: THR
       g.add(stand, ball, land);
       return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
     }
+    case 'saturn': {
+      // 土星のわっか：頭の上にうかぶ、ななめのクリーム色の輪と小さな土星
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.035, 6, 24), lambert('#f2d699'));
+      ring.rotation.x = Math.PI / 2 - 0.35;
+      const inner = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.02, 6, 24), lambert('#e8a868'));
+      inner.rotation.x = ring.rotation.x;
+      const planet = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), new THREE.MeshLambertMaterial({ color: '#f0cf8a', flatShading: true }));
+      planet.position.set(0.18, 0.12, 0);
+      const spin = new THREE.Group();
+      spin.name = 'spin';
+      spin.add(planet);
+      g.add(ring, inner, spin);
+      return { object: g, offset: new THREE.Vector3(0, 0.08, 0) };
+    }
+    case 'helmet': {
+      // 宇宙ヘルメット：頭にのせた小さな金魚ばち（ガラスの半球と白いふち、アンテナ）
+      const glass = new THREE.Mesh(
+        new THREE.SphereGeometry(0.2, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshLambertMaterial({ color: '#cfe6ff', transparent: true, opacity: 0.55 }),
+      );
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 6, 20), lambert('#ffffff'));
+      rim.rotation.x = Math.PI / 2;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 6), lambert('#b8b0c8'));
+      stem.position.set(0.08, 0.24, 0);
+      const tip = new THREE.Mesh(new THREE.IcosahedronGeometry(0.035, 0), lambert('#f2635a'));
+      tip.position.set(0.08, 0.31, 0);
+      g.add(glass, rim, stem, tip);
+      return { object: g, offset: new THREE.Vector3(0, -0.02, 0) };
+    }
     case 'glasses':
       return null; // 顔のテクスチャに描く
   }

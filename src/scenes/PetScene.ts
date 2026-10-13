@@ -9,7 +9,8 @@ import { HokorichanModel, type Expression } from '../render/hokorichan.ts';
 import { Particles } from '../render/particles.ts';
 import { dropTexture, heartTexture, PALETTE, sparkleTexture, woodTexture } from '../render/proceduralArt.ts';
 import { buildPetRoom, studyDesk } from '../render/roomBuilder.ts';
-import { clamp01, createIsoCamera, disposeHierarchy, easeOutBack, fitOrthoToBox } from '../render/threeUtils.ts';
+import { buildMoon, starfieldTexture } from '../render/spaceArt.ts';
+import { clamp01, createIsoCamera, disposeHierarchy, easeOutBack, fitOrthoToBox, ISO_VIEW_DIR } from '../render/threeUtils.ts';
 import { setupStage } from './sceneKit.ts';
 import type { GameScene } from './types.ts';
 
@@ -62,12 +63,47 @@ const WAREHOUSE_HEIGHT = 5.4;
 
 /** 空き地のすみか（4=コンテナ、5=倉庫）の壁の高さ */
 function yardHeight(habitat: Habitat): number {
+  if (habitat >= 7) return SPACE_TOP;
   if (habitat >= 6) return HILL_TOP;
   return habitat === 5 ? WAREHOUSE_HEIGHT : CONTAINER_HEIGHT;
 }
 
 /** 丘（4章）では、ほこりちゃんの頭のてっぺんまで映す */
 const HILL_TOP = 15;
+
+/** 5章（月のとなり）では、いっぱいのときの頭のてっぺんまで映す */
+const SPACE_TOP = 25;
+
+/** 5章：月のとなり。宇宙にうかぶほこりちゃんのそばに、月と、小さく見える地球を置く */
+function buildSpaceYard(): THREE.Group {
+  const g = new THREE.Group();
+  const right = new THREE.Vector3(1, 0, -1).normalize();
+  const down = new THREE.Vector3(1, 0, 1).normalize();
+  const moon = buildMoon(2.2);
+  moon.position.copy(CASE_CENTER).addScaledVector(right, 15).addScaledVector(down, -7).setY(15);
+  // 地球（雲のかかった青い球）。ほこりちゃんは地球よりずっと大きい
+  const earth = new THREE.Group();
+  const sea = new THREE.Mesh(new THREE.IcosahedronGeometry(4, 2), new THREE.MeshLambertMaterial({ color: '#7fb3e0', flatShading: true }));
+  const land = new THREE.Mesh(new THREE.IcosahedronGeometry(4.05, 1), new THREE.MeshLambertMaterial({ color: '#9cc97e', flatShading: true, transparent: true, opacity: 0.8 }));
+  land.scale.set(0.9, 1, 0.55);
+  const cloud = new THREE.Mesh(new THREE.IcosahedronGeometry(4.15, 1), new THREE.MeshLambertMaterial({ color: '#ffffff', transparent: true, opacity: 0.35 }));
+  cloud.scale.set(1, 0.4, 1);
+  earth.add(sea, land, cloud);
+  earth.position.copy(CASE_CENTER).addScaledVector(right, -15).addScaledVector(down, 9).setY(2);
+  g.add(moon, earth);
+  // 小さな星くずのきらめき
+  const rng = createRandom(23);
+  const star = new THREE.MeshBasicMaterial({ color: '#fff6c8' });
+  const geo = new THREE.OctahedronGeometry(0.25, 0);
+  for (let i = 0; i < 18; i++) {
+    const m = new THREE.Mesh(geo, star);
+    const a = rng() * Math.PI * 2;
+    const d = 16 + rng() * 6;
+    m.position.set(CASE_CENTER.x + Math.cos(a) * d, rng() * 22, CASE_CENTER.z + Math.sin(a) * d);
+    g.add(m);
+  }
+  return g;
+}
 
 /** 4章：町はずれの丘。まわりに小さな家や木を置いて、山のような大きさを見せる */
 function buildHillYard(): THREE.Group {
@@ -318,6 +354,11 @@ export class PetScene implements GameScene {
   constructor(view: PetView, opts: PetOptions) {
     this.view = { ...view, shape: { ...view.shape } };
     this.opts = opts;
+    // 丘や宇宙ではほこりちゃんがとても大きいので、カメラを遠ざけて手前が切れないようにする（正投影なので見え方は同じ）
+    this.camera.position.copy(ISO_VIEW_DIR).multiplyScalar(80);
+    this.camera.far = 200;
+    this.camera.lookAt(0, 0, 0);
+    this.camera.updateMatrixWorld();
     this.background = setupStage(this.scene);
     this.room = buildPetRoom(3).group;
     this.scene.add(this.room);
@@ -340,7 +381,11 @@ export class PetScene implements GameScene {
     }
     // コンテナは空き地（屋外）。部屋は隠す
     this.room.visible = habitat < 4;
-    if (habitat >= 6) {
+    this.scene.background = habitat >= 7 ? this.spaceSky() : this.background;
+    if (habitat >= 7) {
+      this.habitatGroup = buildSpaceYard();
+      this.seat.set(CASE_CENTER.x, 0.2, CASE_CENTER.z);
+    } else if (habitat >= 6) {
       this.habitatGroup = buildHillYard();
       this.seat.set(CASE_CENTER.x, 0.6, CASE_CENTER.z);
     } else if (habitat >= 4) {
@@ -358,6 +403,13 @@ export class PetScene implements GameScene {
     this.scene.add(this.habitatGroup);
     this.pet.group.position.copy(this.seat);
     this.computeCameraTarget();
+  }
+
+  private spaceBg: THREE.Texture | null = null;
+
+  private spaceSky(): THREE.Texture {
+    this.spaceBg ??= starfieldTexture(31);
+    return this.spaceBg;
   }
 
   private computeCameraTarget(): void {
@@ -669,6 +721,7 @@ export class PetScene implements GameScene {
     this.particles.dispose();
     Object.values(this.textures).forEach((t) => t.dispose());
     this.background.dispose();
+    this.spaceBg?.dispose();
     disposeHierarchy(this.scene);
     this.scene.clear();
   }

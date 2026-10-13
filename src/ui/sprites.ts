@@ -131,6 +131,14 @@ const TOOL_ICONS: Record<ToolId, [string[], Record<string, string>]> = {
 };
 
 const ACCESSORY_ICONS: Record<AccessoryId, [string[], Record<string, string>]> = {
+  saturn: [
+    ['.........', '....pp...', '...pppp..', 'rr.pppp.r', '.rrrrrrr.', '...pppp..', '....pp...', '.........', '.........'],
+    { p: '#f0cf8a', r: '#e8a868' },
+  ],
+  helmet: [
+    ['....r....', '....k....', '..ccccc..', '.cwccccc.', '.cwccccc.', '.ccccccc.', 'www...www', '.wwwwwww.', '.........'],
+    { r: '#f2635a', k: '#b8b0c8', c: '#cfe6ff', w: '#ffffff' },
+  ],
   aurora: [
     ['.........', '.........', 'ab.....ga', 'abc.c.cga', 'abcccccga', 'abc.c.cga', 'ab.....ga', '.........', '.........'],
     { a: '#7fd0d0', b: '#b3d67a', c: '#c7b4e6', g: '#f4a7b9' },

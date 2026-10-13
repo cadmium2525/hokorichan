@@ -564,3 +564,33 @@ test('家具の中の点は、いちばん近いふちの外へ押し出され�
   // 外の点はそのまま
   assert.deepEqual(pushOutOfBlockers(3, 3, 0.2, b), { x: 3, z: 3 });
 });
+
+test('5章：宇宙ほこり管制センターの連絡から月のとなりへ', async () => {
+  const { spaceLetterDue, moveToSpace, chapter, canSpace, spaceClusters, finishSpace, spaceReward, solarDue, spaceCenter, addEvent, createInitialSave } = await import('../src/game/state.ts');
+  const { SPACE, SOLAR_XP, HABITATS } = await import('../src/game/catalog.ts');
+  let s: ReturnType<typeof createInitialSave> = { ...createInitialSave(), habitat: 6, growthXp: 30000 };
+  assert.equal(spaceLetterDue(s), false);
+  s = addEvent(s, 'earthWrap');
+  assert.equal(spaceLetterDue(s), true);
+  const moved = moveToSpace(s);
+  assert.equal(moved.habitat, 7);
+  assert.equal(chapter(moved), 5);
+  assert.equal(canSpace(moved), true);
+  assert.equal(spaceLetterDue(moved), false);
+  assert.equal(HABITATS[7].capacity, SOLAR_XP);
+  // 群れは時間で戻る
+  const now = 1_000_000_000;
+  const after = finishSpace(moved, 0, now);
+  assert.equal(spaceClusters(after, now), 0);
+  assert.equal(spaceClusters(after, now + SPACE.regenMinutes * 60_000), SPACE.maxClusters);
+  assert.equal(spaceReward(3), 3 * SPACE.coinPerCluster);
+  assert.equal(spaceCenter(moved), 'jupiter');
+  assert.equal(spaceCenter({ ...moved, growthXp: 60000 }), 'sun');
+  assert.equal(solarDue({ ...moved, growthXp: SOLAR_XP }), true);
+  assert.equal(solarDue(addEvent({ ...moved, growthXp: SOLAR_XP }, 'solar')), false);
+});
+
+test('軌道は内側ほど速く回る', async () => {
+  const { orbitOmega, ORBIT_MIN, ORBIT_MAX } = await import('../src/game/orbit.ts');
+  assert.ok(orbitOmega(ORBIT_MIN) > orbitOmega(ORBIT_MAX) * 2);
+});

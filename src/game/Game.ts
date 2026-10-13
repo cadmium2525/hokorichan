@@ -9,6 +9,7 @@ import type { BuildingId } from '../render/townBuilder.ts';
 import { CleaningScene } from '../scenes/CleaningScene.ts';
 import { PetScene, type PetView } from '../scenes/PetScene.ts';
 import { EarthScene } from '../scenes/EarthScene.ts';
+import { SpaceScene } from '../scenes/SpaceScene.ts';
 import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import { pickTalk, type TownPerson } from './talk.ts';
@@ -22,6 +23,7 @@ import {
   feedBody,
   skyResultBody,
   worldResultBody,
+  spaceResultBody,
   heroSelectBody,
   landBody,
   mapBody,
@@ -43,6 +45,7 @@ import {
   furName,
   RAINY,
   WORLD,
+  SPACE,
   SKY,
   DUSTS,
   FRIEND_UNLOCK_XP,
@@ -96,6 +99,16 @@ import {
   deliverRainy,
   dexAdd,
   earthWrapDue,
+  canSpace,
+  finishSpace,
+  moveToSpace,
+  solarDue,
+  spaceBumpSeconds,
+  spaceCenter,
+  spaceClusters,
+  spaceLetterDue,
+  spaceReward,
+  spaceTurnMul,
   finishWorld,
   moveToHill,
   worldHoldSeconds,
@@ -135,7 +148,7 @@ import {
   type SaveData,
 } from './state.ts';
 
-export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'RESULT';
+export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SPACE' | 'RESULT';
 
 type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
@@ -334,7 +347,33 @@ const EARTH_WRAP: StoryStep[] = [
   { speaker: 'narration', text: 'ほこりちゃんは地球をそっと抱きしめて、ふかふかに包みこんだ。<br>空のホコリが、ぜんぶ毛並みにすいこまれていく……。', button: 'わあ……' },
   { speaker: 'agent', text: '観測史上もっとも空気のきれいな一日です。<br>機構を代表して、お礼を申し上げます。', button: 'えへへ' },
   { speaker: 'mother', text: '地球を包んだんですって？ えらいわね。<br>でも、ちゃんと元の大きさに戻ってから帰ってくるのよ。', button: 'はーい' },
-  { speaker: 'narration', text: '（4章 地球編 おしまい。5章「宇宙編」は準備中）', button: 'やったー！' },
+  { speaker: 'narration', text: '（4章 地球編 おしまい。つぎは5章「宇宙編」！）', button: 'やったー！' },
+];
+
+/** 5章のはじまり：宇宙ほこり管制センターから */
+const SPACE_LETTER: StoryStep[] = [
+  { speaker: 'narration', text: 'ある夜、丘の上に、オレンジの服の人がパラシュートでふわりと降りてきた。', button: '？' },
+  {
+    speaker: 'controller',
+    text: '<b>宇宙ほこり管制センター</b>の管制官です、どうぞ。<br>地球のまわりがきれいになったので、次は<b>宇宙のホコリ</b>をお願いしたいのです。',
+    button: 'うちゅう？',
+  },
+  { speaker: 'controller', text: '木星のまわりに、星くずがたまって困っています。<br>相棒さんの新しいおうちとして、<b>月のとなり</b>をご用意しました、どうぞ。', button: 'ありがとう！' },
+  { speaker: 'mother', text: 'あら、月のとなり。寒くないようにね。<br>夕ごはんまでには帰ってくるのよ。', button: 'はーい' },
+  {
+    speaker: 'narration',
+    text: 'ほこりちゃんは<b>月のとなり</b>にお引っこし！<br>「<b>宇宙へ</b>」で、ほこりちゃんは木星のまわりを回るよ。<b>指をおいた所の軌道</b>へ移って、星くずを集めよう。<br>内側ほど速く回るけど、小惑星帯の岩には気をつけて。',
+    button: 'やってみる！',
+  },
+];
+
+/** 5章の山場：太陽系をひと回り */
+const SOLAR_STORY: StoryStep[] = [
+  { speaker: 'narration', text: 'ほこりちゃんは、とうとう太陽系をひと回りできるほど大きくなった。', button: '次へ' },
+  { speaker: 'narration', text: 'ほこりちゃんは太陽系をぐるっとひと回り。<br>惑星のまわりの星くずが、ぜんぶ毛並みにすいこまれていく……。', button: 'わあ……' },
+  { speaker: 'controller', text: '観測史上もっとも見通しのいい夜空です、どうぞ。<br>町の天文台の電話が、鳴りやみません。', button: 'えへへ' },
+  { speaker: 'mother', text: 'ゆうべ、星がすごくきれいだったわね。あなたたちのおかげなんですって？<br>でも、夜ふかしはほどほどにね。', button: 'はーい' },
+  { speaker: 'narration', text: '（5章 宇宙編 おしまい。6章「銀河編」は準備中）', button: 'やったー！' },
 ];
 
 /** 丘に引っこしたあと、はじめてまちで一緒に掃除するとき（大きさを変えられる） */
@@ -388,6 +427,9 @@ export class Game {
   private earth: EarthScene | null = null;
   /** 世界のおそうじで吸い込んだ地域の数と種類 */
   private worldGot: { patches: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
+  private space: SpaceScene | null = null;
+  /** 宇宙のおそうじで吸い込んだ群れの数と種類 */
+  private spaceGot: { clusters: number; bumps: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
   /** 撮った写真（シェア画面を閉じたら捨てる） */
   private photo: Photo | null = null;
   /** 空で吸い込んだ雲の数と種類 */
@@ -493,8 +535,13 @@ export class Game {
       this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
       this.hud.setActions([
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
-        { action: 'walkHome', label: s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
+        { action: 'walkHome', label: s.habitat >= 7 ? '駅から宇宙へ帰る' : s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
+    } else if ((this.mode === 'SPACE' || this.mode === 'RESULT') && this.spaceGot && this.space) {
+      const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));
+      const all = this.spaceGot.clusters + this.space.remaining;
+      this.hud.setCleaningStatus(`宇宙のおそうじ ⏱ のこり${left}秒`, this.spaceGot.clusters, all, all);
+      this.hud.setActions([{ action: 'spaceEnd', label: 'おわる', sub: 'ここまでで帰る', variant: 'secondary' }]);
     } else if ((this.mode === 'WORLD' || this.mode === 'RESULT') && this.worldGot && this.earth) {
       const left = Math.max(0, Math.ceil((this.worldGot.endsAt - this.now) / 1000));
       const all = this.worldGot.patches + this.earth.remaining;
@@ -557,6 +604,10 @@ export class Game {
       const n = worldPatches(s, this.now, this.params.speed);
       buttons.push({ action: 'goWorld', label: '世界へ', sub: n > 0 ? `地域 ${n}か所` : 'ホコリを待っている', variant: 'accent', disabled: n === 0 });
     }
+    if (canSpace(s)) {
+      const n = spaceClusters(s, this.now, this.params.speed);
+      buttons.push({ action: 'goSpace', label: '宇宙へ', sub: n > 0 ? `星くず ${n}群れ` : '星くずを待っている', variant: 'primary', disabled: n === 0 });
+    }
     buttons.push({ action: 'goOut', label: 'おでかけ', sub: s.habitat >= 4 ? 'おうち・まちへ' : 'まちへ', variant: s.habitat >= 4 ? 'accent' : 'secondary' });
     buttons.push({ action: 'openPlay', label: 'あそぶ', variant: 'secondary' });
     return buttons;
@@ -576,6 +627,8 @@ export class Game {
     this.skyGot = null;
     this.earth = null;
     this.worldGot = null;
+    this.space = null;
+    this.spaceGot = null;
     this.town = null;
     this.pet = null;
     this.session = null;
@@ -623,6 +676,13 @@ export class Game {
         this.pet?.playHappy();
       });
     else if (earthWrapDue(s)) this.runStory(EARTH_WRAP, '地球をひと回り', () => this.commit(addEvent(this.save, 'earthWrap')));
+    else if (spaceLetterDue(s))
+      this.runStory(SPACE_LETTER, '宇宙ほこり管制センター', () => {
+        this.commit(moveToSpace(this.save));
+        this.pet?.setView(this.petView());
+        this.pet?.playHappy();
+      });
+    else if (solarDue(s)) this.runStory(SOLAR_STORY, '太陽系をひと回り', () => this.commit(addEvent(this.save, 'solar')));
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
@@ -731,7 +791,7 @@ export class Game {
         if (id === 'station' && this.save.habitat >= 6 && this.homeTrip) {
           this.homeTrip = false;
           this.sound.play('happy');
-          this.hud.toast('電車にゆられて、町はずれの丘へ……', 2200);
+          this.hud.toast(this.rideHomeText(), 2200);
           this.goHome();
           return;
         }
@@ -920,6 +980,74 @@ export class Game {
       title: '世界のおそうじ完了！',
       className: 'modal--result',
       body: worldResultBody({ hero: this.hero, patches: g.patches, reward, got: g.got, bag: bagTotal(this.save.bag) }),
+      buttons: [{ action: 'resultHome', label: 'ただいま！', variant: 'primary' }],
+    });
+  }
+
+  /** 駅から、ほこりちゃんの所へ帰るときのひとこと */
+  private rideHomeText(): string {
+    return this.save.habitat >= 7 ? '電車で丘の発射場へ。ロケットで、月のとなりへ……' : '電車にゆられて、町はずれの丘へ……';
+  }
+
+  /** 宇宙のおそうじ：ほこりちゃんは木星（太陽）のまわりを回る。指をおいた軌道へ移って星くずを吸い込む */
+  private startSpace(): void {
+    const n = spaceClusters(this.save, this.now, this.params.speed);
+    if (n <= 0) return;
+    this.sound.play('happy');
+    this.clearScenes();
+    this.sessionCount++;
+    const seed = (this.params.seed ?? Math.floor(this.random() * 1e9)) + this.sessionCount * 101;
+    const types = rollDustTypes({ dust: SPACE.mix }, n, createRandom(seed ^ 0x5ace));
+    const view = this.petView();
+    const scene = new SpaceScene({
+      element: this.hud.canvas,
+      seed,
+      clusters: types,
+      pet: { accessory: view.accessory, shape: view.shape, tint: view.tint },
+      center: spaceCenter(this.save),
+      turnMul: spaceTurnMul(this.save),
+      bumpSeconds: spaceBumpSeconds(this.save),
+      onCluster: (type) => this.onCluster(type),
+      onBump: () => {
+        if (this.spaceGot) this.spaceGot.bumps++;
+        this.sound.play('deny');
+      },
+    });
+    this.space = scene;
+    this.spaceGot = { clusters: 0, bumps: 0, got: {}, endsAt: this.now + SPACE.seconds * 1000, lastLeft: SPACE.seconds };
+    this.mode = 'SPACE';
+    this.setScene(scene);
+    this.syncInput();
+    this.hud.hint('指をおいた所の軌道へ移るよ\n内側ほど速く回る・岩にはごつん');
+    this.refreshHud();
+  }
+
+  private onCluster(type: DustType): void {
+    const g = this.spaceGot;
+    if (!g || this.mode !== 'SPACE') return;
+    g.clusters++;
+    g.got[type] = (g.got[type] ?? 0) + SPACE.perCluster;
+    this.hud.hint(null);
+    this.sound.play('collect');
+    const dex = dexAdd({ ...this.save, bag: { ...this.save.bag, [type]: this.save.bag[type] + SPACE.perCluster } }, 'dust', type);
+    this.commit(dex.save);
+    this.hud.bump('bag');
+    if (dex.added) this.hud.toast(`図鑑に「${DUSTS[type].name}」を記録した！`, 2000);
+  }
+
+  private endSpace(): void {
+    const g = this.spaceGot;
+    if (!g || !this.space || this.mode !== 'SPACE') return;
+    this.mode = 'RESULT';
+    this.space.setInputEnabled(false);
+    const reward = spaceReward(g.clusters);
+    this.commit({ ...finishSpace(this.save, this.space.remaining, this.now), coins: this.save.coins + reward });
+    this.hud.bump('coins');
+    this.sound.play('reward');
+    this.openOverlay('result', {
+      title: '宇宙のおそうじ完了！',
+      className: 'modal--result',
+      body: spaceResultBody({ hero: this.hero, clusters: g.clusters, reward, got: g.got, bag: bagTotal(this.save.bag), bumps: g.bumps }),
       buttons: [{ action: 'resultHome', label: 'ただいま！', variant: 'primary' }],
     });
   }
@@ -1271,7 +1399,7 @@ export class Game {
 
   /** まちの人に話しかける（前回と同じセリフは続けない） */
   private talkWith(id: CharacterId): void {
-    if (!PERSON_IDS.includes(id as PersonId) || id === 'mother' || id === 'agent') return;
+    if (!PERSON_IDS.includes(id as PersonId) || id === 'mother' || id === 'agent' || id === 'controller') return;
     const person = id as TownPerson;
     const text = pickTalk(person, this.save, this.random, this.lastTalk.get(person));
     this.lastTalk.set(person, text);
@@ -1317,7 +1445,7 @@ export class Game {
         area === 'station' && this.save.habitat >= 6
           ? [
               { action: 'closeModal', label: 'もどる', variant: 'secondary' },
-              { action: 'rideHome', label: '電車で丘へ', sub: 'ほこりちゃんの所へ', variant: 'accent' },
+              { action: 'rideHome', label: this.save.habitat >= 7 ? '電車とロケットで' : '電車で丘へ', sub: 'ほこりちゃんの所へ', variant: 'accent' },
             ]
           : [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
     });
@@ -1485,8 +1613,9 @@ export class Game {
     else if (this.mode === 'CLEANING') this.onCleaningAction(action);
     else if (this.mode === 'SKY' && action === 'skyEnd') this.endSky();
     else if (this.mode === 'WORLD' && action === 'worldEnd') this.endWorld();
+    else if (this.mode === 'SPACE' && action === 'spaceEnd') this.endSpace();
     else if (this.mode === 'RESULT' && action === 'resultHome') {
-      if (this.skyGot || this.worldGot) {
+      if (this.skyGot || this.worldGot || this.spaceGot) {
         this.closeModal();
         this.goHome();
       } else this.leaveCleaning();
@@ -1515,8 +1644,12 @@ export class Game {
         if (this.mode !== 'TOWN' || this.save.habitat < 6) return;
         this.sound.play('happy');
         this.closeModal();
-        this.hud.toast('電車にゆられて、町はずれの丘へ……', 2200);
+        this.hud.toast(this.rideHomeText(), 2200);
         this.goHome();
+        return;
+      case 'goSpace':
+        if (this.mode !== 'HOME' || !canSpace(this.save)) return;
+        this.startSpace();
         return;
       case 'goWorld':
         if (this.mode !== 'HOME' || !canWorld(this.save)) return;
@@ -1800,6 +1933,7 @@ export class Game {
     this.town?.setInputEnabled(this.mode === 'TOWN' && this.overlay === 'none');
     this.sky?.setInputEnabled(this.mode === 'SKY' && !this.hud.modalOpen);
     this.earth?.setInputEnabled(this.mode === 'WORLD' && !this.hud.modalOpen);
+    this.space?.setInputEnabled(this.mode === 'SPACE' && !this.hud.modalOpen);
   }
 
   private bindLifecycle(): void {
@@ -1856,7 +1990,7 @@ export class Game {
       lot: s.habitat >= 6 ? '写真と道具の倉庫（掃除）' : s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
       friend: '友だちの家の掃除',
       flower: '花粉が多い', bakery: '粉ぼこりが多い', grandma: '猫の毛が多い',
-      station: s.habitat >= 6 ? 'すす・電車で丘へ' : 'すすと砂ぼこり', school: 'チョークの粉',
+      station: s.habitat >= 7 ? 'すす・電車とロケットで月へ' : s.habitat >= 6 ? 'すす・電車で丘へ' : 'すすと砂ぼこり', school: 'チョークの粉',
     };
     const order: BuildingId[] =
       s.habitat >= 6
@@ -1903,6 +2037,14 @@ export class Game {
     if (this.autoFinishTimer > 0) {
       this.autoFinishTimer -= dt;
       if (this.autoFinishTimer <= 0 && this.mode === 'CLEANING' && !this.hud.modalOpen) this.enterResult();
+    }
+    if (this.spaceGot && this.space && this.mode === 'SPACE' && !this.hud.modalOpen) {
+      const left = Math.max(0, Math.ceil((this.spaceGot.endsAt - this.now) / 1000));
+      if (left !== this.spaceGot.lastLeft) {
+        this.spaceGot.lastLeft = left;
+        this.refreshHud();
+      }
+      if (left <= 0 || this.space.remaining === 0) this.endSpace();
     }
     if (this.worldGot && this.earth && this.mode === 'WORLD' && !this.hud.modalOpen) {
       const left = Math.max(0, Math.ceil((this.worldGot.endsAt - this.now) / 1000));

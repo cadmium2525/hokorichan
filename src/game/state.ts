@@ -22,6 +22,8 @@ import {
   RAINY,
   WORLD,
   EARTH_WRAP_XP,
+  SOLAR_XP,
+  SPACE,
   SHAPE_LIMITS,
   SKY,
   SPOT_IDS,
@@ -87,7 +89,10 @@ export type EventId =
   | 'worldLetter'
   | 'world'
   | 'earthWrap'
-  | 'shrink';
+  | 'shrink'
+  | 'spaceLetter'
+  | 'space'
+  | 'solar';
 
 export const EVENT_IDS: readonly EventId[] = [
   'town',
@@ -109,6 +114,9 @@ export const EVENT_IDS: readonly EventId[] = [
   'world',
   'earthWrap',
   'shrink',
+  'spaceLetter',
+  'space',
+  'solar',
 ];
 
 /** 図鑑：見つけたホコリ・落とし物・出会った人 */
@@ -152,6 +160,8 @@ export type SaveData = {
   rankDiet: Bag;
   /** 地球のホコリの地域の積もり具合（4章） */
   world: SpotState;
+  /** 宇宙の星くずの群れの積もり具合（5章） */
+  space: SpotState;
 };
 
 export const REWARD_PER_DUST = 2;
@@ -163,7 +173,7 @@ export const REQUEST_INTERVAL_MINUTES = 20;
 const MINUTE = 60_000;
 
 export function emptyBag(): Bag {
-  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0 };
+  return { cotton: 0, lint: 0, sand: 0, fur: 0, pollen: 0, flour: 0, kosa: 0, soot: 0, chalk: 0, ash: 0, star: 0, cosmic: 0 };
 }
 
 export function bagTotal(bag: Bag): number {
@@ -207,6 +217,7 @@ export function createInitialSave(): SaveData {
     sky: { fullness: 1, at: 0 },
     rankDiet: emptyBag(),
     world: { fullness: 1, at: 0 },
+    space: { fullness: 1, at: 0 },
   };
 }
 
@@ -286,8 +297,8 @@ export function contestResult(
 }
 
 /** 1章：おうち編、2章：ご近所編（空き地のコンテナに住んでから） */
-export function chapter(save: SaveData): 1 | 2 | 3 | 4 {
-  return save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
+export function chapter(save: SaveData): 1 | 2 | 3 | 4 | 5 {
+  return save.habitat >= 7 ? 5 : save.habitat >= 6 ? 4 : save.habitat >= 5 ? 3 : save.habitat >= 4 ? 2 : 1;
 }
 
 // ---- まちと場所の解禁 ----
@@ -524,6 +535,61 @@ export function worldHoldSeconds(save: SaveData): number {
 /** 4章の山場：丘がいっぱい（地球をひと回りできる大きさ）になった */
 export function earthWrapDue(save: SaveData): boolean {
   return save.habitat >= 6 && save.growthXp >= EARTH_WRAP_XP && !hasEvent(save, 'earthWrap');
+}
+
+// ---- 5章 宇宙編 ----
+
+/** 4章の山場のあと、宇宙ほこり管制センターから連絡が来る */
+export function spaceLetterDue(save: SaveData): boolean {
+  return save.habitat === 6 && hasEvent(save, 'earthWrap') && !hasEvent(save, 'spaceLetter');
+}
+
+/** 連絡を受けたら月のとなりへお引っこし（管制センターの手配なので無料） */
+export function moveToSpace(save: SaveData): SaveData {
+  if (save.habitat !== 6) return save;
+  return addEvent({ ...addEvent(save, 'spaceLetter'), habitat: 7 }, 'space');
+}
+
+/** 宇宙のおそうじができる（月のとなりに住んでから） */
+export function canSpace(save: SaveData): boolean {
+  return save.habitat >= 7;
+}
+
+/** いま宇宙に浮かんでいる星くずの群れの数 */
+export function spaceClusters(save: SaveData, now: number, speed = 1): number {
+  const elapsed = Math.max(0, now - save.space.at) * speed;
+  const fullness = Math.min(1, save.space.fullness + elapsed / (SPACE.regenMinutes * MINUTE));
+  return Math.floor(SPACE.maxClusters * fullness + 1e-9);
+}
+
+export function finishSpace(save: SaveData, remaining: number, now: number): SaveData {
+  return { ...save, space: { fullness: Math.max(0, Math.min(1, remaining / SPACE.maxClusters)), at: now } };
+}
+
+export function spaceReward(clusters: number): number {
+  return Math.max(0, Math.floor(clusters)) * SPACE.coinPerCluster;
+}
+
+/** 軌道を変える速さの倍率（星くずの毛並み「きらきら」で速くなる） */
+export function spaceTurnMul(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('star') ? 1 + r.star * 1.5 : 1;
+}
+
+/** 小惑星にぶつかったときにゆっくりになる秒数（宇宙のちりの毛並み「ふわり」で短くなる） */
+export function spaceBumpSeconds(save: SaveData): number {
+  const r = dietRatios(save.diet);
+  return activeTraits(save.diet).includes('cosmic') ? SPACE.bumpSeconds / (1 + r.cosmic * 3) : SPACE.bumpSeconds;
+}
+
+/** 宇宙のまんなかにあるのは、太陽級になるまでは木星、なってからは太陽 */
+export function spaceCenter(save: SaveData): 'jupiter' | 'sun' {
+  return save.growthXp >= (RANKS.find((r) => r.name === '太陽級')?.min ?? Infinity) ? 'sun' : 'jupiter';
+}
+
+/** 5章の山場：月のとなりがいっぱい（太陽系をひと回りできる大きさ）になった */
+export function solarDue(save: SaveData): boolean {
+  return save.habitat >= 7 && save.growthXp >= SOLAR_XP && !hasEvent(save, 'solar');
 }
 
 /** ほこりちゃんに乗って空へ行ける（倉庫に住んでから） */
@@ -847,6 +913,8 @@ export const RANKS: readonly Rank[] = [
   { name: '山級', min: 5000 },
   { name: '大陸級', min: 12000 },
   { name: '地球級', min: 22000 },
+  { name: '木星級', min: 40000 },
+  { name: '太陽級', min: 60000 },
 ];
 
 export function rankFor(xp: number): Rank {

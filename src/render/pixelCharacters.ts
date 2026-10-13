@@ -5,7 +5,7 @@
 export const CHAR_W = 32;
 export const CHAR_H = 32;
 
-export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent';
+export type CharacterId = 'boy' | 'girl' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller';
 export type Facing = 'down' | 'up' | 'left' | 'right';
 export type Pose = 'idle' | 'walk' | 'run' | 'clean' | 'wipe' | 'surprise' | 'joy' | 'talk' | 'give';
 /** 掃除ポーズで手に持つ道具。hand（素手）と rag（ぞうきん）はしゃがんで拭く */
@@ -84,6 +84,7 @@ const CLOTH = {
   coral: ['#f8e2a8', '#e8c070', '#c0944a', '#6a4a20'],
   capNavy: ['#6f84b0', '#3e5076', '#2c3a58', '#161e30'],
   suit: ['#8a8696', '#5a5664', '#43404c', '#22202a'],
+  flight: ['#fbe0c8', '#f0a870', '#c8784a', '#6a3a1e'],
 } as const satisfies Record<string, Ramp>;
 
 const LOOKS: Record<CharacterId, Look> = {
@@ -99,6 +100,8 @@ const LOOKS: Record<CharacterId, Look> = {
   stationMaster: { hair: HAIR.dark, top: CLOTH.uniform, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'cap' },
   teacher: { hair: HAIR.mom, top: CLOTH.coral, bottom: CLOTH.navy, shoes: CLOTH.shoeBrown, style: 'bob', glasses: true },
   agent: { hair: HAIR.dark, top: CLOTH.suit, bottom: CLOTH.suit, shoes: CLOTH.shoeBrown, style: 'short', glasses: true },
+  // 宇宙ほこり管制センターの管制官（オレンジの飛行服、ヘッドセットの水色ランプ）
+  controller: { hair: HAIR.plum, top: CLOTH.flight, bottom: CLOTH.flight, shoes: CLOTH.shoeBrown, style: 'bob', clip: '#7fd0d0' },
 };
 
 const TOOL_RAMPS: Record<StickTool, { stick: Ramp; head: Ramp }> = {

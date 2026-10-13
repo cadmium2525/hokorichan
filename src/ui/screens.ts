@@ -51,7 +51,7 @@ import { buttonHtml, escapeHtml } from './hud.ts';
 import { accessoryIcon, characterSprite, heroSprite, spotIcon, toolIcon, type SpriteOptions } from './sprites.ts';
 import type { CharacterId } from '../render/pixelCharacters.ts';
 
-export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'narration';
+export type Speaker = 'hero' | 'mother' | 'friend' | 'friendMom' | 'shopkeeper' | 'florist' | 'baker' | 'grandma' | 'stationMaster' | 'teacher' | 'agent' | 'controller' | 'narration';
 
 const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; id: CharacterId }> = {
   mother: { name: 'お母さん', id: 'mother' },
@@ -64,6 +64,7 @@ const SPEAKERS: Record<Exclude<Speaker, 'hero' | 'narration'>, { name: string; i
   stationMaster: { name: '駅長さん', id: 'stationMaster' },
   teacher: { name: '先生', id: 'teacher' },
   agent: { name: '世界ほこり機構の人', id: 'agent' },
+  controller: { name: '管制官さん', id: 'controller' },
 };
 
 function speakerOf(speaker: Speaker, hero: Hero, className: string, opts: SpriteOptions = {}): { name: string; sprite: string } {
@@ -174,7 +175,9 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
           buy('buyHome', String(next.level), next.price),
         )
       : `<p class="note">${
-          save.habitat >= 6
+          save.habitat >= 7
+            ? 'ほこりちゃんは月のとなりで暮らしています（宇宙ほこり管制センターの手配）'
+            : save.habitat >= 6
             ? 'ほこりちゃんは町はずれの丘で暮らしています（世界ほこり機構の手配）'
             : save.habitat >= 5
             ? 'ほこりちゃんは空き地の倉庫で暮らしています'
@@ -184,7 +187,7 @@ export function shopBody(save: SaveData, tab: ShopTab): string {
         }</p>`;
   } else {
     const ch = chapter(save);
-    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編', 4: '地球編' } as const;
+    const CHAPTER_NAMES = { 1: 'おうち編', 2: 'ご近所編', 3: 'まち編', 4: '地球編', 5: '宇宙編' } as const;
     items = ACCESSORIES.map((a) => {
       const has = save.accessories.includes(a.id);
       if (!has && a.chapter > ch) return row('<span class="px-icon px-icon--lg acc-locked">？</span>', '？？？', `${a.chapter}章（${CHAPTER_NAMES[a.chapter]}）で入荷`, owned('入荷待ち'));
@@ -493,6 +496,23 @@ export function worldResultBody(opts: { hero: Hero; patches: number; reward: num
     <div class="bubble bubble--mother">世界ほこり機構「${opts.patches}地域の清掃を確認しました。ご協力に感謝します」</div>
     <dl class="result">
       <dt>きれいにした地域</dt><dd>${opts.patches}か所</dd>
+      <dt>バッグ</dt><dd>${opts.bag}個</dd>
+    </dl>
+    <div class="chips chips--dust">${got}</div>`;
+}
+
+export function spaceResultBody(opts: { hero: Hero; clusters: number; reward: number; got: Partial<Record<DustType, number>>; bag: number; bumps: number }): string {
+  const got = DUST_TYPES.filter((t) => (opts.got[t] ?? 0) > 0).map((t) => dustChip(t, opts.got[t])).join('');
+  return `
+    <div class="allowance">
+      ${heroSprite(opts.hero, 'sprite sprite--lg', { pose: 'joy' })}
+      <div class="allowance__coin">+${opts.reward}</div>
+      ${characterSprite('controller', 'sprite sprite--lg', { pose: 'give', flip: true })}
+    </div>
+    <div class="bubble bubble--mother">管制官さん「星くず${opts.clusters}群れの回収を確認。軌道はきれいです、どうぞ」</div>
+    <dl class="result">
+      <dt>集めた群れ</dt><dd>${opts.clusters}こ</dd>
+      <dt>小惑星にごつん</dt><dd>${opts.bumps}回</dd>
       <dt>バッグ</dt><dd>${opts.bag}個</dd>
     </dl>
     <div class="chips chips--dust">${got}</div>`;
