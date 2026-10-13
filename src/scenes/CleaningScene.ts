@@ -12,6 +12,7 @@ import { createToolModel } from '../render/toolModels.ts';
 import { CharacterSprite, screenDelta } from '../render/characterSprite.ts';
 import type { HeldTool } from '../render/pixelCharacters.ts';
 import { createIsoCamera, disposeHierarchy, projectedExtents, type Extents } from '../render/threeUtils.ts';
+import { pushOutOfBlockers } from '../game/geometry.ts';
 import { setupStage } from './sceneKit.ts';
 import type { GameScene } from './types.ts';
 
@@ -366,7 +367,14 @@ export class CleaningScene implements GameScene {
     const hit = new THREE.Vector3();
     if (!this.raycaster.ray.intersectPlane(this.floorPlane, hit)) return;
     const s = this.surface;
-    this.point.set(THREE.MathUtils.clamp(hit.x, s.minX, s.maxX), s.y, THREE.MathUtils.clamp(hit.z, s.minZ, s.maxZ));
+    // 家具の上ではホコリがないので、吸い込む点は家具の外へ出す（めり込み防止）
+    const out = pushOutOfBlockers(
+      THREE.MathUtils.clamp(hit.x, s.minX, s.maxX),
+      THREE.MathUtils.clamp(hit.z, s.minZ, s.maxZ),
+      0.12 * this.scale,
+      this.opts.layout.blockers,
+    );
+    this.point.set(THREE.MathUtils.clamp(out.x, s.minX, s.maxX), s.y, THREE.MathUtils.clamp(out.z, s.minZ, s.maxZ));
   }
 
   /** 指が離れた・画面外・タブ切替などで吸引を安全に止める */
@@ -580,6 +588,10 @@ export class CleaningScene implements GameScene {
     const off = (hero.tipOffset ?? 0) * hero.dotSize;
     const right = new THREE.Vector3(1, 0, -1).normalize();
     hero.group.position.set(tip.x, this.surface.y, tip.z).addScaledVector(right, -off);
+    // 主人公も家具の外に立つ（板の横はばのぶん少し広めに）
+    const feet = pushOutOfBlockers(hero.group.position.x, hero.group.position.z, 0.3 * this.scale, this.opts.layout.blockers);
+    hero.group.position.x = feet.x;
+    hero.group.position.z = feet.z;
     hero.fitToPixels(this.camera, this.lowWidth);
   }
 
@@ -627,8 +639,10 @@ export class CleaningScene implements GameScene {
       }
     }
     const s = this.surface;
-    h.pos.x = THREE.MathUtils.clamp(h.pos.x, s.minX, s.maxX);
-    h.pos.z = THREE.MathUtils.clamp(h.pos.z, s.minZ, s.maxZ);
+    // 家具にめり込まないよう、体の半径ぶん外へ押し出す
+    const out = pushOutOfBlockers(h.pos.x, h.pos.z, h.size * 0.42, this.opts.layout.blockers);
+    h.pos.x = THREE.MathUtils.clamp(out.x, s.minX, s.maxX);
+    h.pos.z = THREE.MathUtils.clamp(out.z, s.minZ, s.maxZ);
     h.munch = Math.max(0, h.munch - dt);
     const bounce = moving ? Math.abs(Math.sin(time * 12)) * 0.08 * h.size : 0;
     h.model.group.position.set(h.pos.x, s.y + bounce, h.pos.z);

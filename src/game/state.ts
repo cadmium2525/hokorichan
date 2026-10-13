@@ -300,6 +300,8 @@ export function areaUnlocked(save: SaveData, area: Area): boolean {
   if (area === 'friend') return friendUnlocked(save);
   // 駅と学校は3章で、駅長さん・先生にたのまれてから
   if (area === 'station' || area === 'school') return chapter(save) >= 3 && hasEvent(save, 'cityTown');
+  // 丘に引っこしたあと、空いた倉庫を掃除できる
+  if (area === 'base') return save.habitat >= 6;
   return chapter(save) >= 2 && save.rep >= (AREA_REP[area] ?? 0);
 }
 
@@ -717,6 +719,7 @@ const AREA_CLIENT: Record<Area, string> = {
   grandma: 'おばあちゃん',
   station: '駅長さん',
   school: '先生',
+  base: 'お母さん',
 };
 
 /** 今のプレイヤーが行ける掃除場所（道具・解禁を満たす） */

@@ -352,6 +352,7 @@ const RESULT_GIVER: Record<Area, PersonId> = {
   grandma: 'grandma',
   station: 'stationMaster',
   school: 'teacher',
+  base: 'mother',
 };
 
 const AREA_BUILDING: Record<Area, BuildingId> = {
@@ -362,6 +363,7 @@ const AREA_BUILDING: Record<Area, BuildingId> = {
   grandma: 'grandma',
   station: 'station',
   school: 'school',
+  base: 'lot',
 };
 
 const BUILDING_IDS: readonly BuildingId[] = ['home', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma', 'board', 'station', 'school'];
@@ -373,6 +375,8 @@ export class Game {
   /** 大掃除大会の最中なら開始時刻 */
   private contest: { startedAt: number; lastLeft: number; wave: number; seed: number; missed: number } | null = null;
   private sky: SkyScene | null = null;
+  /** 「〇〇へ帰る」で歩いている（丘のときは駅に着いたらそのまま電車で帰る） */
+  private homeTrip = false;
   private earth: EarthScene | null = null;
   /** 世界のおそうじで吸い込んだ地域の数と種類 */
   private worldGot: { patches: number; got: Partial<Record<DustType, number>>; endsAt: number; lastLeft: number } | null = null;
@@ -445,6 +449,8 @@ export class Game {
 
   /** ほこりちゃんが今いる建物（ケースまでは自宅、コンテナからは空き地） */
   private get petBuilding(): BuildingId {
+    // 丘（4章）へは駅から電車で帰る
+    if (this.save.habitat >= 6) return 'station';
     return this.save.habitat >= 4 ? 'lot' : 'home';
   }
 
@@ -479,7 +485,7 @@ export class Game {
       this.hud.setTownStatus(`${hasEvent(s, 'contestWon') ? '町の清掃係 ・ ' : ''}評判 ★${s.rep} ・ 行きたい場所をタップしよう`);
       this.hud.setActions([
         { action: 'openDest', label: '行き先', sub: 'えらんで歩く', variant: 'secondary' },
-        { action: 'walkHome', label: s.habitat >= 6 ? '丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
+        { action: 'walkHome', label: s.habitat >= 6 ? '駅から丘へ帰る' : s.habitat >= 5 ? '倉庫へ帰る' : s.habitat >= 4 ? 'コンテナへ帰る' : 'おうちに帰る', variant: 'accent' },
       ]);
     } else if ((this.mode === 'WORLD' || this.mode === 'RESULT') && this.worldGot && this.earth) {
       const left = Math.max(0, Math.ceil((this.worldGot.endsAt - this.now) / 1000));
@@ -690,6 +696,11 @@ export class Game {
         return;
       case 'lot':
         this.sound.play('tap');
+        // 丘に引っこしたあとの倉庫は「思い出の倉庫」として掃除できる
+        if (this.save.habitat >= 6) {
+          this.openMap('base');
+          return;
+        }
         this.arriveLot();
         return;
       case 'friend':
@@ -708,6 +719,13 @@ export class Game {
         return;
       case 'station':
       case 'school':
+        if (id === 'station' && this.save.habitat >= 6 && this.homeTrip) {
+          this.homeTrip = false;
+          this.sound.play('happy');
+          this.hud.toast('電車にゆられて、町はずれの丘へ……', 2200);
+          this.goHome();
+          return;
+        }
         if (!areaUnlocked(this.save, id)) {
           this.sound.play('deny');
           this.hud.toast(id === 'station' ? '電車が通りすぎていった……（まだ用事はないみたい）' : 'チャイムが鳴っている……（まだ用事はないみたい）', 2600);
@@ -1271,7 +1289,13 @@ export class Game {
       title: area === 'home' ? (this.save.habitat >= 4 ? 'おうち：どこを掃除する？' : 'どこを掃除する？') : AREA_NAMES[area],
       className: 'modal--map',
       body: mapBody(this.save, area, this.now, this.params.speed),
-      buttons: [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
+      buttons:
+        area === 'station' && this.save.habitat >= 6
+          ? [
+              { action: 'closeModal', label: 'もどる', variant: 'secondary' },
+              { action: 'rideHome', label: '電車で丘へ', sub: 'ほこりちゃんの所へ', variant: 'accent' },
+            ]
+          : [{ action: 'closeModal', label: 'もどる', variant: 'secondary' }],
     });
   }
 
@@ -1459,7 +1483,16 @@ export class Game {
         return;
       case 'walkHome':
         this.sound.play('tap');
+        this.homeTrip = true;
         this.town?.goToBuilding(this.petBuilding);
+        return;
+      case 'rideHome':
+        // 駅から電車で丘へ
+        if (this.mode !== 'TOWN' || this.save.habitat < 6) return;
+        this.sound.play('happy');
+        this.closeModal();
+        this.hud.toast('電車にゆられて、町はずれの丘へ……', 2200);
+        this.goHome();
         return;
       case 'goWorld':
         if (this.mode !== 'HOME' || !canWorld(this.save)) return;
@@ -1490,6 +1523,7 @@ export class Game {
         });
         return;
       case 'walkTo':
+        this.homeTrip = false;
         if (this.overlay === 'dest') this.closeModal();
         if (this.overlay !== 'none') return;
         if (BUILDING_IDS.includes(arg as BuildingId)) {
@@ -1795,13 +1829,15 @@ export class Game {
       home: s.habitat >= 4 ? '家の掃除' : 'ほこりちゃんのいる家',
       shop: '道具・ケース・アクセサリー',
       board: s.requests.length > 0 ? `依頼 ${s.requests.length}件` : '依頼の掲示板',
-      lot: s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
+      lot: s.habitat >= 6 ? '写真と道具の倉庫（掃除）' : s.habitat >= 4 ? 'ほこりちゃんのいる所' : '売地',
       friend: '友だちの家の掃除',
       flower: '花粉が多い', bakery: '粉ぼこりが多い', grandma: '猫の毛が多い',
-      station: 'すすと砂ぼこり', school: 'チョークの粉',
+      station: s.habitat >= 6 ? 'すす・電車で丘へ' : 'すすと砂ぼこり', school: 'チョークの粉',
     };
     const order: BuildingId[] =
-      s.habitat >= 4
+      s.habitat >= 6
+        ? ['station', 'lot', 'home', 'board', 'shop', 'friend', 'flower', 'bakery', 'grandma', 'school']
+        : s.habitat >= 4
         ? ['lot', 'home', 'board', 'shop', 'friend', 'flower', 'bakery', 'grandma', 'station', 'school']
         : ['home', 'board', 'shop', 'friend', 'lot', 'flower', 'bakery', 'grandma'];
     const items = order
@@ -1821,7 +1857,7 @@ export class Game {
       case 'board':
         return s.requests.length > 0 ? `掲示板（${s.requests.length}）` : '掲示板';
       case 'lot':
-        return s.habitat >= 5 ? '倉庫' : s.habitat >= 4 ? 'コンテナ' : '空き地';
+        return s.habitat >= 6 ? '思い出の倉庫' : s.habitat >= 5 ? '倉庫' : s.habitat >= 4 ? 'コンテナ' : '空き地';
       case 'friend':
         return friendUnlocked(s) ? '友だちの家' : '？？？の家';
       case 'flower':

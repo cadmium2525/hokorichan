@@ -230,6 +230,7 @@ const AREA_GIVER: Record<Area, Speaker> = {
   grandma: 'grandma',
   station: 'stationMaster',
   school: 'teacher',
+  base: 'mother',
 };
 
 /** お小遣いをくれる人が言う「どこがきれいになったか」 */
@@ -237,6 +238,7 @@ function placeWord(area: Area, spotName: string): string {
   if (area === 'home') return spotName;
   if (area === 'friend') return spotName.replace(/^友だちの(家の)?/, '');
   if (area === 'station') return 'ホーム';
+  if (area === 'base') return '倉庫';
   if (area === 'school') return '教室';
   return area === 'grandma' ? 'お部屋' : 'お店';
 }

@@ -819,6 +819,102 @@ function classroomLayout(seed: number): SpotLayout {
   };
 }
 
+// ---- 4章：思い出の倉庫（丘へ引っこしたあとの倉庫） ----
+
+/** 壁に飾るほこりちゃんの写真（ドット絵）。seed で背景・大きさ・リボンが変わる */
+function photoTexture(seed: number): THREE.CanvasTexture {
+  const rng = createRandom(seed);
+  const [canvas, ctx] = makeCanvas(20, 16);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 20, 16);
+  const bgs = ['#cfe6f8', '#f6cfd8', '#e6e0f2', '#fbe9a0', '#d4f0e4'];
+  ctx.fillStyle = bgs[Math.floor(rng() * bgs.length)];
+  ctx.fillRect(1, 1, 18, 14);
+  // ほこりちゃん（だんだん大きくなる記念写真）
+  const r = 3 + Math.floor(rng() * 3);
+  const cx = 10;
+  const cy = 15 - r;
+  for (let y = -r; y <= r; y++) {
+    for (let x = -r - 1; x <= r + 1; x++) {
+      const d = (x * x) / ((r + 1) * (r + 1)) + (y * y) / (r * r);
+      if (d > 1) continue;
+      ctx.fillStyle = d > 0.75 ? '#c3b4cf' : y > r * 0.4 ? '#e6e0f2' : '#fffaf2';
+      ctx.fillRect(cx + x, cy + y, 1, 1);
+    }
+  }
+  ctx.fillStyle = '#3b2622';
+  ctx.fillRect(cx - 2, cy, 1, 1);
+  ctx.fillRect(cx + 1, cy, 1, 1);
+  ctx.fillStyle = '#f4a7b9';
+  ctx.fillRect(cx - 3, cy + 1, 1, 1);
+  ctx.fillRect(cx + 2, cy + 1, 1, 1);
+  if (rng() < 0.5) {
+    ctx.fillStyle = '#f08a9a';
+    ctx.fillRect(cx + r - 2, cy - r, 2, 1);
+  }
+  return toTexture(canvas);
+}
+
+function oldWarehouseLayout(seed: number): SpotLayout {
+  const g = new THREE.Group();
+  const half = 3.8;
+  buildShell(g, half, seed, { base: '#f2e2c6', stripe: '#e8d2b0' });
+  const blockers: Blocker[] = [];
+  const place = (obj: THREE.Object3D, x: number, z: number, ry = 0) => {
+    obj.position.set(x, 0, z);
+    obj.rotation.y += ry;
+    g.add(obj);
+    blockers.push(blockerOf(obj));
+  };
+  // 壁いっぱいの写真
+  for (let i = 0; i < 5; i++) wallDecal(g, half, 'back', -2.8 + i * 1.3, 1.3 + (i % 2) * 0.55, 0.9, 0.72, photoTexture(seed + i));
+  for (let i = 0; i < 4; i++) wallDecal(g, half, 'left', -2.6 + i * 1.4, 1.4 + ((i + 1) % 2) * 0.5, 0.9, 0.72, photoTexture(seed + 10 + i));
+  // 歴代の掃除道具の棚（素手の手ぶくろ・ぞうきん・モップ・掃除機）
+  const rack = new THREE.Group();
+  const shelf = box(2.6, 0.08, 0.5, lambert({ map: woodTexture(seed, PALETTE.wood) }));
+  shelf.position.y = 0.5;
+  rack.add(shelf);
+  for (const x of [-1.25, 1.25]) {
+    const leg = box(0.08, 0.5, 0.45, lambert({ color: PALETTE.woodDark }));
+    leg.position.set(x, 0.25, 0);
+    rack.add(leg);
+  }
+  const rag = box(0.4, 0.05, 0.3, lambert({ color: '#f3d27a' }));
+  rag.position.set(-0.9, 0.57, 0);
+  const mopStick = box(0.05, 1.3, 0.05, lambert({ color: '#9a86c6' }));
+  mopStick.position.set(-0.2, 1.15, -0.1);
+  mopStick.rotation.z = 0.15;
+  const mopHead = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 1), lambert({ color: '#ffffff' }));
+  mopHead.position.set(-0.3, 0.68, -0.1);
+  const vac = box(0.4, 0.35, 0.3, lambert({ color: '#f4a7b9' }));
+  vac.position.set(0.6, 0.72, 0);
+  const vacStick = box(0.05, 1.1, 0.05, lambert({ color: '#c8d8f0' }));
+  vacStick.position.set(0.95, 1.1, -0.12);
+  rack.add(rag, mopStick, mopHead, vac, vacStick);
+  place(rack, 1.2, -half + 0.35);
+  // むかしのケース（ガラス）と、大きなクッション
+  const caseGroup = new THREE.Group();
+  const base = box(1.1, 0.12, 1.1, lambert({ map: woodTexture(seed + 3, PALETTE.wood) }));
+  base.position.y = 0.06;
+  const glass = box(1.1, 0.8, 1.1, new THREE.MeshLambertMaterial({ color: '#dff3ff', transparent: true, opacity: 0.35 }));
+  glass.position.y = 0.52;
+  caseGroup.add(base, glass);
+  place(caseGroup, -half + 0.8, -0.8);
+  const cushion = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.0, 0.25, 16), lambert({ color: '#f6cfd8' }));
+  cushion.position.y = 0.125;
+  const cg = new THREE.Group();
+  cg.add(cushion);
+  place(cg, 1.3, 1.2);
+  return {
+    group: g,
+    surface: { minX: -half + 0.35, maxX: half - 0.35, minZ: -half + 0.35, maxZ: half - 0.35, y: 0 },
+    blockers,
+    view: new THREE.Box3(new THREE.Vector3(-half - 0.2, 0, -half - 0.2), new THREE.Vector3(half, 2.8, half)),
+    scale: 1,
+    lint: false,
+  };
+}
+
 export function buildSpot(id: SpotId, seed: number): SpotLayout {
   switch (id) {
     case 'window':
@@ -845,5 +941,7 @@ export function buildSpot(id: SpotId, seed: number): SpotLayout {
       return stationLayout(seed);
     case 'classroom':
       return classroomLayout(seed);
+    case 'oldWarehouse':
+      return oldWarehouseLayout(seed);
   }
 }

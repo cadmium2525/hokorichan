@@ -57,6 +57,10 @@ export function heroSprite(hero: Hero, className = 'sprite', opts: SpriteOptions
 // ---- アイコン（9×9） ----
 
 const SPOT_ICONS: Record<SpotId, [string[], Record<string, string>]> = {
+  oldWarehouse: [
+    ['....r....', '...rrr...', '..rrrrr..', '.rrrrrrr.', '.wwpwwbw.', '.wwwwwww.', '.wwddwww.', '.wwddwww.', 'ggggggggg'],
+    { r: '#a0644a', w: '#f2e2c6', p: '#f6cfd8', b: '#cfe6f8', d: '#b8754f', g: '#9cc97e' },
+  ],
   station: [
     ['.........', 'kkkkkkkkk', 'kwwkwwkwk', 'kwwkwwkwk', 'kkkkkkkkk', 'yyyyyyyyy', 'sssssssss', 'sssssssss', 'rrrrrrrrr'],
     { k: '#5d74a8', w: '#cfe6f8', y: '#f6d55c', s: '#c9c3bd', r: '#8a7a70' },

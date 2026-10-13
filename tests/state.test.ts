@@ -553,3 +553,14 @@ test('4章：倉庫がいっぱいで世界ほこり機構→丘へ。地域は�
   assert.equal(earthWrapDue({ ...s, growthXp: EARTH_WRAP_XP }), true);
   assert.equal(rankFor(EARTH_WRAP_XP).name, '地球級');
 });
+
+import { pushOutOfBlockers } from '../src/game/geometry.ts';
+
+test('家具の中の点は、いちばん近いふちの外へ押し出される', () => {
+  const b = [{ minX: 0, maxX: 2, minZ: 0, maxZ: 1 }];
+  assert.deepEqual(pushOutOfBlockers(0.2, 0.5, 0, b), { x: 0, z: 0.5 });
+  assert.deepEqual(pushOutOfBlockers(1.9, 0.5, 0.1, b), { x: 2.1, z: 0.5 });
+  assert.deepEqual(pushOutOfBlockers(1, 0.9, 0, b), { x: 1, z: 1 });
+  // 外の点はそのまま
+  assert.deepEqual(pushOutOfBlockers(3, 3, 0.2, b), { x: 3, z: 3 });
+});

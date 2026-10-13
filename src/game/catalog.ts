@@ -75,10 +75,11 @@ export type SpotId =
   | 'bakery'
   | 'grandmaRoom'
   | 'station'
-  | 'classroom';
+  | 'classroom'
+  | 'oldWarehouse';
 
 /** 掃除場所がある建物 */
-export type Area = 'home' | 'friend' | 'flower' | 'bakery' | 'grandma' | 'station' | 'school';
+export type Area = 'home' | 'friend' | 'flower' | 'bakery' | 'grandma' | 'station' | 'school' | 'base';
 
 export type SpotDef = {
   id: SpotId;
@@ -109,6 +110,7 @@ export const SPOTS: readonly SpotDef[] = [
   { id: 'bakery', area: 'bakery', name: 'パン屋さん', desc: '粉ぼこりで床がまっしろ', maxDust: 24, rewardBase: 40, regenMinutes: 45, minTier: 0, dust: { flour: 8, cotton: 2 } },
   { id: 'grandmaRoom', area: 'grandma', name: 'おばあちゃんの家', desc: '猫が5匹いるたたみの部屋', maxDust: 28, rewardBase: 45, regenMinutes: 55, minTier: 0, dust: { fur: 8, cotton: 2 } },
   { id: 'station', area: 'station', name: '駅のホーム', desc: '電車が運んでくるすすと砂ぼこり', maxDust: 30, rewardBase: 55, regenMinutes: 60, minTier: 0, dust: { soot: 7, sand: 2, cotton: 1 } },
+  { id: 'oldWarehouse', area: 'base', name: '思い出の倉庫', desc: 'ほこりちゃんの写真と歴代の掃除道具', maxDust: 30, rewardBase: 50, regenMinutes: 60, minTier: 0, dust: { cotton: 5, lint: 2, fur: 1, sand: 1, pollen: 1 } },
   { id: 'classroom', area: 'school', name: '学校の教室', desc: '黒板のチョークの粉がいっぱい', maxDust: 32, rewardBase: 60, regenMinutes: 60, minTier: 0, dust: { chalk: 7, cotton: 2, lint: 1 } },
 ];
 
@@ -120,6 +122,7 @@ export const AREA_NAMES: Record<Area, string> = {
   grandma: 'おばあちゃんの家',
   station: '駅',
   school: '学校',
+  base: '思い出の倉庫',
 };
 
 /** 商店街の店や家は、評判（★）がこれだけたまると紹介してもらえる（2章から） */
