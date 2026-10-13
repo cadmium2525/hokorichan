@@ -1,6 +1,8 @@
 // まち（オーバーワールド）。タップした場所や建物へ主人公が歩き、入口に着いたら中に入る。
 
 import * as THREE from 'three';
+import type { DayPhase } from '../game/clock.ts';
+import { glowTexture } from '../render/spaceArt.ts';
 import type { Hero } from '../game/catalog.ts';
 import { CharacterSprite, screenDelta } from '../render/characterSprite.ts';
 import { facingFromScreen, type CharacterId } from '../render/pixelCharacters.ts';
@@ -39,6 +41,8 @@ export type TownOptions = {
   onArrive: (id: BuildingId) => void;
   /** 町の人をタップして、そばまで歩いたら呼ばれる */
   onTalk?: (id: CharacterId) => void;
+  /** 時間帯（空の色と光） */
+  phase?: DayPhase;
 };
 
 export class TownScene implements GameScene {
@@ -71,7 +75,7 @@ export class TownScene implements GameScene {
 
   constructor(opts: TownOptions) {
     this.opts = opts;
-    this.background = setupStage(this.scene);
+    this.background = setupStage(this.scene, opts.phase);
     this.town = buildTown({ lotOwned: opts.lotOwned, warehouse: opts.warehouse, railway: opts.railway });
     this.scene.add(this.town.group);
     this.hero = new CharacterSprite(opts.hero);
@@ -82,6 +86,7 @@ export class TownScene implements GameScene {
     this.hero.group.position.copy(this.pos);
     this.scene.add(this.hero.group);
     for (const n of opts.npcs ?? []) this.addNpc(n.id, n.at);
+    if (opts.phase === 'evening' || opts.phase === 'night') this.addLights(opts.phase === 'night' ? 1 : 0.55);
 
     this.marker = new THREE.Mesh(
       new THREE.PlaneGeometry(0.8, 0.8),
@@ -93,6 +98,19 @@ export class TownScene implements GameScene {
 
     this.camCenter.copy(this.heroScreenCenter());
     this.bindInput();
+  }
+
+  /** 夕方と夜は、建物の入口にあたたかい明かりをともす */
+  private addLights(strength: number): void {
+    const tex = glowTexture('rgba(255,214,140,0.9)');
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: strength });
+    for (const b of Object.values(this.town.buildings)) {
+      const glow = new THREE.Sprite(mat);
+      glow.position.copy(b.door).setY(0.7);
+      glow.scale.setScalar(1.6);
+      glow.renderOrder = 2;
+      this.scene.add(glow);
+    }
   }
 
   /** 入口の横（道側）に町の人を立たせる */

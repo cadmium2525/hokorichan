@@ -490,3 +490,17 @@ export const SPACE = {
 
 /** 5章の山場：太陽系のおそうじ（月のとなりがいっぱいになったら） */
 export const SOLAR_XP = 80000;
+
+// ---- なつかしの味（4章から） ----
+
+/**
+ * 町の掃除場所だけで集まるホコリ。ほこりちゃんが大きくなっても「なつかしい」と喜んで食べ、
+ * 1個で何倍も育つ（空・世界・宇宙でも集まる黄砂・砂ぼこりなどは入れない）
+ */
+export const NOSTALGIC_DUSTS: readonly DustType[] = ['cotton', 'lint', 'fur', 'pollen', 'flour', 'soot', 'chalk'];
+
+/** 章ごとの、なつかしの味の成長の倍率 */
+export const NOSTALGIA_MUL: Partial<Record<number, number>> = { 4: 10, 5: 20 };
+
+/** きょうの好物（なつかしの味から1日1つ）はさらにこの倍 */
+export const FAVORITE_MUL = 2;

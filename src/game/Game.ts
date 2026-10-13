@@ -13,6 +13,7 @@ import { SpaceScene } from '../scenes/SpaceScene.ts';
 import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import { pickTalk, type TownPerson } from './talk.ts';
+import { dayPhase, isSleepTime } from './clock.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
 import { canShareImage, makePhotoCard, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
@@ -132,6 +133,9 @@ import {
   dry,
   feed,
   feedableAmount,
+  favoriteDust,
+  localDay,
+  nostalgiaActive,
   findRequest,
   finishSpot,
   friendUnlocked,
@@ -159,17 +163,20 @@ export type Mode = 'BOOT' | 'HOME' | 'TOWN' | 'CLEANING' | 'SKY' | 'WORLD' | 'SP
 type Overlay = 'none' | 'dest' | 'photo' | 'hero' | 'story' | 'map' | 'shop' | 'play' | 'feed' | 'board' | 'land' | 'confirm' | 'result' | 'help' | 'lot';
 
 /** URLパラメータによるテスト用設定（?seed=123&damp=1&fast=1 など） */
-type DebugParams = { seed: number | null; damp: boolean | null; speed: number };
+type DebugParams = { seed: number | null; damp: boolean | null; speed: number; hour: number | null };
 
 function readParams(): DebugParams {
   const q = new URLSearchParams(location.search);
   const seed = q.get('seed');
   const damp = q.get('damp');
+  const hour = q.get('hour');
   return {
     seed: seed !== null && /^\d+$/.test(seed) ? Number(seed) : null,
     damp: damp === '1' ? true : damp === '0' ? false : null,
     // ホコリが積もる速さ・依頼が届く速さを60倍にする（1分で1時間分）
     speed: q.get('fast') === '1' ? 60 : 1,
+    // 時刻を決めて確かめる（例：?hour=23 で夜）
+    hour: hour !== null && /^\d{1,2}(\.\d+)?$/.test(hour) && Number(hour) < 24 ? Number(hour) : null,
   };
 }
 
@@ -502,6 +509,18 @@ export class Game {
     return Date.now();
   }
 
+  /** きょうの好物（なつかしの味が効く4章から） */
+  private get favorite(): DustType | null {
+    return nostalgiaActive(this.save) ? favoriteDust(localDay(this.now)) : null;
+  }
+
+  /** いまの時（現実の時刻。?hour= で上書き） */
+  private get hour(): number {
+    if (this.params.hour !== null) return this.params.hour;
+    const d = new Date(this.now);
+    return d.getHours() + d.getMinutes() / 60;
+  }
+
   private get hero(): Hero {
     return this.save.hero ?? 'boy';
   }
@@ -600,7 +619,7 @@ export class Game {
     buttons.push({
       action: 'openFeed',
       label: '餌をあげる',
-      sub: total === 0 ? 'バッグが空' : isFull(s) ? 'いっぱい' : `${feedableAmount(s)}個`,
+      sub: total === 0 ? 'バッグが空' : isFull(s) ? 'いっぱい' : `${feedableAmount(s, 'all', this.favorite)}個`,
       variant: 'primary',
       disabled: total === 0,
     });
@@ -659,13 +678,20 @@ export class Game {
       writeSave(this.save);
     }
     this.pendingDamp = false;
+    const sleepy = this.save.tutorialDone && isSleepTime(this.hour);
     this.pet = new PetScene(this.petView(), {
       element: this.hud.canvas,
+      phase: dayPhase(this.hour),
+      sleepy,
       onPet: () => {
         if (this.lastTime - this.lastPetSound > 0.4) {
           this.lastPetSound = this.lastTime;
           this.sound.play('happy');
         }
+      },
+      onWake: () => {
+        this.sound.play('happy');
+        this.hud.toast('ふわぁ……おきた！（ほうっておくと、またねむっちゃうよ）', 2400);
       },
     });
     this.setScene(this.pet);
@@ -692,6 +718,7 @@ export class Game {
         this.pet?.playHappy();
       });
     else if (solarDue(s)) this.runStory(SOLAR_STORY, '太陽系をひと回り', () => this.commit(addEvent(this.save, 'solar')));
+    else if (sleepy) this.hud.toast('ほこりちゃんは、すやすやねむっている……（タップで起きるよ）', 2800);
     else if (isFull(s) && s.habitat < 3) this.hud.toast(s.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : 'ケースがいっぱい！ショップで大きくしよう');
   }
 
@@ -722,6 +749,7 @@ export class Game {
       warehouse: this.save.habitat >= 5,
       railway: areaUnlocked(this.save, 'station'),
       npcs: this.townNpcs(),
+      phase: dayPhase(this.hour),
       onArrive: (id) => this.onArrive(id),
       onTalk: (id) => this.talkWith(id),
     });
@@ -1566,10 +1594,10 @@ export class Game {
       title: 'どのホコリをあげる？',
       className: 'modal--sheet',
       sheet: true,
-      body: feedBody(this.save),
+      body: feedBody(this.save, this.favorite),
       buttons: [
         { action: 'closeModal', label: 'とじる', variant: 'secondary' },
-        { action: 'feedType', arg: 'all', label: 'ぜんぶあげる', variant: 'primary', disabled: feedableAmount(this.save) === 0 },
+        { action: 'feedType', arg: 'all', label: 'ぜんぶあげる', variant: 'primary', disabled: feedableAmount(this.save, 'all', this.favorite) === 0 },
       ],
     });
   }
@@ -1848,7 +1876,7 @@ export class Game {
   private doFeed(type: DustType | 'all'): void {
     const before = rankFor(this.save.growthXp);
     const beforeTraits = helperStats(this.save);
-    const { save, fed, furs } = feed(this.save, type);
+    const { save, fed, growth, furs } = feed(this.save, type, this.favorite);
     if (fed === 0) {
       this.sound.play('deny');
       return;
@@ -1859,12 +1887,12 @@ export class Game {
     this.sound.play('feed');
     window.setTimeout(() => this.sound.play('happy'), 1600);
     if (this.overlay === 'feed') {
-      if (bagTotal(save.bag) === 0 || feedableAmount(save) === 0) this.closeModal();
+      if (bagTotal(save.bag) === 0 || feedableAmount(save, 'all', this.favorite) === 0) this.closeModal();
       else this.openFeed();
     }
     const after = rankFor(save.growthXp);
     const afterTraits = helperStats(save);
-    const friendCall = friendUnlocked(save) && !friendUnlocked({ ...save, growthXp: save.growthXp - fed });
+    const friendCall = friendUnlocked(save) && !friendUnlocked({ ...save, growthXp: save.growthXp - growth });
     if (friendCall) window.setTimeout(() => this.hud.toast('友だちから電話！「うちに遊びにおいでよ」 おでかけしてみよう', 3600), after !== before ? 3400 : 0);
     if (friendCall && after === before) {
       // 電話のお知らせだけ
@@ -1874,6 +1902,8 @@ export class Game {
       else this.hud.toast(`${after.name}に成長した！`);
     } else if (afterTraits.sneeze && !beforeTraits.sneeze) {
       this.hud.toast(`毛並みが変わった！「${DUSTS.pollen.trait}」が使えるようになった`);
+    } else if (growth > fed && !isFull(save)) {
+      this.hud.toast(`なつかしの味！ ${fed}個で 成長+${growth}`, 2200);
     } else if (isFull(save)) {
       this.hud.toast(
         save.habitat === 0 ? '机の上ではもう育てない…ショップでケースを買おう' : save.habitat < 3 ? 'ケースがいっぱい！ショップで大きくしよう' : 'すみかがいっぱい！',

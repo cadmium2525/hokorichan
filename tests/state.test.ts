@@ -620,3 +620,35 @@ test('宝物は保存して読み直しても残る', async () => {
   const s = { ...createInitialSave(), dex: { dust: [], items: ['t_window1', 'ring', 'bogus'], people: [], fur: [] } };
   assert.deepEqual(sanitize(JSON.parse(JSON.stringify(s))).dex.items, ['t_window1', 'ring']);
 });
+
+test('なつかしの味：4章から町のホコリは1個で何倍も育ち、好物はさらに倍', async () => {
+  const { feed, feedableAmount, dustValue, favoriteDust, localDay, emptyBag, createInitialSave, furOf } = await import('../src/game/state.ts');
+  const { NOSTALGIA_MUL, FAVORITE_MUL, NOSTALGIC_DUSTS } = await import('../src/game/catalog.ts');
+  const base = createInitialSave();
+  // 3章まではふつう
+  const ch3 = { ...base, habitat: 5 as const, growthXp: 1000, bag: { ...emptyBag(), cotton: 10 } };
+  assert.equal(dustValue(ch3, 'cotton'), 1);
+  assert.equal(feed(ch3, 'cotton').growth, 10);
+  // 4章：綿ぼこりは×10、黄砂（世界でも集まる）はふつう
+  const ch4 = { ...base, habitat: 6 as const, growthXp: 10000, bag: { ...emptyBag(), cotton: 10, kosa: 10 } };
+  const mul = NOSTALGIA_MUL[4] ?? 1;
+  assert.equal(dustValue(ch4, 'cotton'), mul);
+  assert.equal(dustValue(ch4, 'kosa'), 1);
+  assert.equal(dustValue(ch4, 'cotton', 'cotton'), mul * FAVORITE_MUL);
+  const r = feed(ch4, 'cotton');
+  assert.equal(r.fed, 10);
+  assert.equal(r.growth, 10 * mul);
+  assert.equal(r.save.diet.cotton, 10 * mul);
+  // いっぱい近くでは、必要な個数だけ食べて容量で止まる
+  const near = { ...ch4, growthXp: 30000 - 25 };
+  assert.equal(feedableAmount(near, 'cotton'), 3);
+  const r2 = feed(near, 'all');
+  assert.equal(r2.save.growthXp, 30000);
+  assert.equal(r2.save.bag.cotton, 7);
+  // 好物は毎日、なつかしの味のどれか
+  for (let d = 0; d < 30; d++) assert.ok(NOSTALGIC_DUSTS.includes(favoriteDust(d)));
+  assert.notEqual(new Set(Array.from({ length: 14 }, (_, d) => favoriteDust(d))).size, 1);
+  assert.equal(localDay(Date.UTC(2026, 0, 2, 0, 30), -540), localDay(Date.UTC(2026, 0, 2, 14, 0), -540));
+  // 毛並みは育った量で数える
+  assert.equal(furOf({ ...emptyBag(), cotton: 100, star: 10 }), 'pure:cotton');
+});

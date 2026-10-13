@@ -290,6 +290,11 @@ export function sparkleTexture(): THREE.CanvasTexture {
   );
 }
 
+/** ねむっているときの「Z」 */
+export function sleepTexture(): THREE.CanvasTexture {
+  return pixelShape(['aaaaa', 'bbbab', '..ab.', '.ab..', 'abbbb', 'aaaaa'], { a: '#9a86c6', b: '#c7b4e6' });
+}
+
 export function dropTexture(): THREE.CanvasTexture {
   return pixelShape(
     ['..a..', '..a..', '.aba.', 'abbba', 'abbba', '.aaa.'],

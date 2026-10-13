@@ -7,7 +7,8 @@ import { petDisplaySize } from '../game/state.ts';
 import { createRandom } from '../game/rng.ts';
 import { HokorichanModel, type Expression } from '../render/hokorichan.ts';
 import { Particles } from '../render/particles.ts';
-import { dropTexture, heartTexture, PALETTE, sparkleTexture, woodTexture } from '../render/proceduralArt.ts';
+import { dropTexture, heartTexture, PALETTE, sleepTexture, sparkleTexture, woodTexture } from '../render/proceduralArt.ts';
+import type { DayPhase } from '../game/clock.ts';
 import { buildPetRoom, studyDesk } from '../render/roomBuilder.ts';
 import { buildMoon, starfieldTexture } from '../render/spaceArt.ts';
 import { clamp01, createIsoCamera, disposeHierarchy, easeOutBack, fitOrthoToBox, ISO_VIEW_DIR } from '../render/threeUtils.ts';
@@ -28,7 +29,15 @@ export type PetOptions = {
   /** なでる操作を受け取る要素（canvas） */
   element: HTMLElement;
   onPet?: () => void;
+  /** 時間帯（空の色と光） */
+  phase?: DayPhase;
+  /** 夜おそく：ねむっている。タップで起き、しばらくほうっておくとまたねむる */
+  sleepy?: boolean;
+  onWake?: () => void;
 };
+
+/** 夜、起こしてからまたねむるまでの秒数 */
+const DOZE_SECONDS = 15;
 
 type ActionKind = 'none' | 'eat' | 'happy' | 'dry' | 'pet' | 'wake';
 type Action = { kind: ActionKind; t: number; duration: number };
@@ -314,7 +323,7 @@ export class PetScene implements GameScene {
   private readonly opts: PetOptions;
   private readonly pet = new HokorichanModel();
   private readonly particles = new Particles();
-  private readonly textures = { heart: heartTexture(), sparkle: sparkleTexture(), drop: dropTexture() };
+  private readonly textures = { heart: heartTexture(), sparkle: sparkleTexture(), drop: dropTexture(), z: sleepTexture() };
   private readonly background: THREE.Texture;
   private habitatGroup: THREE.Group | null = null;
   private readonly room: THREE.Group;
@@ -326,6 +335,10 @@ export class PetScene implements GameScene {
   private size: number;
   private dampTint: number;
   private sleeping = false;
+  /** 夜のおやすみモード（起こしても、しばらくするとまたねむる） */
+  private dozing = false;
+  private awake = 0;
+  private zTimer = 0;
   private action: Action = { kind: 'none', t: 0, duration: 0 };
   private blinkTimer = 2;
   private dripTimer = 1;
@@ -359,7 +372,9 @@ export class PetScene implements GameScene {
     this.camera.far = 200;
     this.camera.lookAt(0, 0, 0);
     this.camera.updateMatrixWorld();
-    this.background = setupStage(this.scene);
+    this.background = setupStage(this.scene, opts.phase);
+    this.dozing = opts.sleepy ?? false;
+    this.sleeping = this.dozing;
     this.room = buildPetRoom(3).group;
     this.scene.add(this.room);
     this.buildHabitat(view.habitat);
@@ -463,8 +478,16 @@ export class PetScene implements GameScene {
       this.listeners.push([type, listener]);
     };
     on('pointerdown', (e) => {
-      if (!this.inputEnabled || this.strokePointer !== null || !e.isPrimary || this.sleeping) return;
+      if (!this.inputEnabled || this.strokePointer !== null || !e.isPrimary) return;
       if (!this.hitsPet(e)) return;
+      if (this.sleeping) {
+        // 夜はタップで起きる（出会いの演出中は起きない）
+        if (this.dozing) {
+          this.playWake();
+          this.opts.onWake?.();
+        }
+        return;
+      }
       this.strokePointer = e.pointerId;
       this.strokeDistance = 0;
       this.lastStroke = { x: e.clientX, y: e.clientY };
@@ -559,11 +582,14 @@ export class PetScene implements GameScene {
   /** 目を覚ましてぴょんと跳ねる */
   playWake(): void {
     this.sleeping = false;
+    this.awake = 0;
     this.action = { kind: 'wake', t: 0, duration: 1.6 };
     this.particles.burst(this.textures.sparkle, this.pet.group.position.clone().setY(this.seat.y + this.size), 8, 1.2, 0.18);
   }
 
   playFeed(amount: number): void {
+    this.sleeping = false;
+    this.awake = 0;
     this.action = { kind: 'eat', t: 0, duration: 1.6 };
     this.foodQueue = Math.min(12, Math.max(1, amount));
     this.foodTimer = 0;
@@ -602,6 +628,21 @@ export class PetScene implements GameScene {
     this.pet.tick(dt);
     this.camCurrent.lerp(this.camTarget, Math.min(1, dt * 3));
     this.applyCamera();
+
+    // 夜：ほうっておくと、またうとうと
+    if (this.dozing && !this.sleeping) {
+      this.awake = this.action.kind === 'none' && this.strokePointer === null ? this.awake + dt : 0;
+      if (this.awake > DOZE_SECONDS) this.sleeping = true;
+    }
+    if (this.sleeping && this.dozing) {
+      this.zTimer -= dt;
+      if (this.zTimer <= 0) {
+        this.zTimer = 1.1;
+        const s = Math.max(0.5, this.size);
+        const p = this.pet.group.position.clone().add(new THREE.Vector3(s * 0.35, s * 0.95, 0));
+        this.particles.spawn(this.textures.z, p, new THREE.Vector3(0.15 * s, 0.35 * s, 0), { life: 1.6, scale: 0.16 + 0.08 * s });
+      }
+    }
 
     const a = this.action;
     if (a.kind !== 'none') {

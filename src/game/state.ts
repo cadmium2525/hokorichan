@@ -15,6 +15,9 @@ import {
   HABITATS,
   LAND_PRICE,
   LOST_ITEMS,
+  NOSTALGIA_MUL,
+  NOSTALGIC_DUSTS,
+  FAVORITE_MUL,
   TREASURES,
   TREASURE_CHANCE,
   TREASURE_MIN_FULLNESS,
@@ -360,10 +363,37 @@ export function isFull(save: SaveData): boolean {
 }
 
 /** 今あげられる量。容量の残りと（その種類の）バッグの少ない方 */
-export function feedableAmount(save: SaveData, type: DustType | 'all' = 'all'): number {
+export function feedableAmount(save: SaveData, type: DustType | 'all' = 'all', favorite: DustType | null = null): number {
   const room = capacityOf(save.habitat) - save.growthXp;
-  const have = type === 'all' ? bagTotal(save.bag) : save.bag[type];
-  return Math.max(0, Math.min(have, room));
+  if (room <= 0) return 0;
+  if (type === 'all') return feed(save, 'all', favorite).fed;
+  return Math.max(0, Math.min(save.bag[type], Math.ceil(room / dustValue(save, type, favorite))));
+}
+
+// ---- なつかしの味 ----
+
+/** ローカル時刻での日付の番号（日が変わるとかわる） */
+export function localDay(now: number, tzOffsetMinutes = new Date(now).getTimezoneOffset()): number {
+  return Math.floor((now - tzOffsetMinutes * MINUTE) / (24 * 60 * MINUTE));
+}
+
+/** きょうの好物（日ごとに、なつかしの味から1つ） */
+export function favoriteDust(day: number): DustType {
+  let h = Math.imul(day ^ 0x9e3779b9, 2654435761) >>> 0;
+  h = (h ^ (h >>> 15)) >>> 0;
+  return NOSTALGIC_DUSTS[h % NOSTALGIC_DUSTS.length];
+}
+
+/** なつかしの味が効いているか（4章から） */
+export function nostalgiaActive(save: SaveData): boolean {
+  return (NOSTALGIA_MUL[chapter(save)] ?? 1) > 1;
+}
+
+/** ホコリ1個で育つ量。4章からは、なつかしの味が何倍にもなる（きょうの好物はさらに倍） */
+export function dustValue(save: SaveData, type: DustType, favorite: DustType | null = null): number {
+  const mul = NOSTALGIA_MUL[chapter(save)] ?? 1;
+  if (mul <= 1 || !NOSTALGIC_DUSTS.includes(type)) return 1;
+  return type === favorite ? mul * FAVORITE_MUL : mul;
 }
 
 /**
@@ -383,9 +413,17 @@ export function furOf(rankDiet: Bag): string | null {
   return furId(top, second);
 }
 
-export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: SaveData; fed: number; furs: FurRecord[] } {
+/**
+ * fed は食べた個数、growth は育った量（なつかしの味は1個で何倍にも育つ）。
+ * 毛並みの割合（diet・rankDiet）は育った量で数える。
+ */
+export function feed(
+  save: SaveData,
+  type: DustType | 'all' = 'all',
+  favorite: DustType | null = null,
+): { save: SaveData; fed: number; growth: number; furs: FurRecord[] } {
   let room = capacityOf(save.habitat) - save.growthXp;
-  if (room <= 0) return { save, fed: 0, furs: [] };
+  if (room <= 0) return { save, fed: 0, growth: 0, furs: [] };
   const bag = { ...save.bag };
   const diet = { ...save.diet };
   let rankDiet = { ...save.rankDiet };
@@ -395,12 +433,16 @@ export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: Sa
   const order = type === 'all' ? [...DUST_TYPES].sort((a, b) => bag[b] - bag[a]) : [type];
   let fed = 0;
   for (const t of order) {
-    let n = Math.min(bag[t], room);
-    if (n <= 0) continue;
-    bag[t] -= n;
+    if (room <= 0) break;
+    const value = dustValue(save, t, favorite);
+    const count = Math.min(bag[t], Math.ceil(room / value));
+    if (count <= 0) continue;
+    // いっぱいを超える分は育たない（最後の1個は少しだけ）
+    let n = Math.min(count * value, room);
+    bag[t] -= count;
     diet[t] += n;
     room -= n;
-    fed += n;
+    fed += count;
     // ランクの境目で区切り、そこまでに食べた分で毛並みを確定する
     while (n > 0) {
       const next = RANKS.find((r) => r.min > xp);
@@ -419,8 +461,8 @@ export function feed(save: SaveData, type: DustType | 'all' = 'all'): { save: Sa
       }
     }
   }
-  if (fed === 0) return { save, fed: 0, furs: [] };
-  return { save: { ...save, bag, diet, rankDiet, growthXp: xp, dex: { ...save.dex, fur: furDex } }, fed, furs };
+  if (fed === 0) return { save, fed: 0, growth: 0, furs: [] };
+  return { save: { ...save, bag, diet, rankDiet, growthXp: xp, dex: { ...save.dex, fur: furDex } }, fed, growth: xp - save.growthXp, furs };
 }
 
 // ---- 毛並み（食べ合わせ） ----

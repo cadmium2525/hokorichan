@@ -41,6 +41,7 @@ import {
   dexProgress,
   dietRatios,
   feedableAmount,
+  dustValue,
   nextHabitat,
   rainyActive,
   REQUEST_MAX,
@@ -296,14 +297,20 @@ function lockedAreaNote(area: Area): string {
 
 // ---- 餌をあげる（種類をえらぶ） ----
 
-export function feedBody(save: SaveData): string {
-  const room = Math.max(0, feedableAmount(save, 'all'));
+export function feedBody(save: SaveData, favorite: DustType | null = null): string {
+  const room = Math.max(0, feedableAmount(save, 'all', favorite));
   const rows = DUST_TYPES.filter((t) => save.bag[t] > 0)
     .map((t) => {
-      const n = feedableAmount(save, t);
-      return `<div class="item">${dustChip(t)}<span class="item__text"><b>${save.bag[t]}個</b><small>${escapeHtml(DUSTS[t].trait)}：${escapeHtml(DUSTS[t].traitDesc)}</small></span>${buttonHtml({ action: 'feedType', arg: t, label: 'あげる', sub: `${n}個`, variant: 'primary', disabled: n === 0 })}</div>`;
+      const n = feedableAmount(save, t, favorite);
+      const value = dustValue(save, t, favorite);
+      const tag =
+        value > 1 ? `<span class="feed-tag ${t === favorite ? 'feed-tag--fav' : ''}">${t === favorite ? 'きょうの好物' : 'なつかしの味'} 成長×${value}</span>` : '';
+      return `<div class="item">${dustChip(t)}<span class="item__text"><b>${save.bag[t]}個${tag}</b><small>${escapeHtml(DUSTS[t].trait)}：${escapeHtml(DUSTS[t].traitDesc)}</small></span>${buttonHtml({ action: 'feedType', arg: t, label: 'あげる', sub: `${n}個`, variant: 'primary', disabled: n === 0 })}</div>`;
     })
     .join('');
+  const fav = favorite
+    ? `<p class="note note--left">きょうの好物：${dustChip(favorite)}（成長×${dustValue(save, favorite, favorite)}）<br><small>町で集まるなつかしいホコリは、1個で何倍も育つよ。好物は毎日かわる</small></p>`
+    : '';
   const ratios = dietRatios(save.diet);
   const eaten = DUST_TYPES.filter((t) => ratios[t] > 0)
     .map((t) => `${dustChip(t)}<small>${Math.round(ratios[t] * 100)}%</small>`)
@@ -311,6 +318,7 @@ export function feedBody(save: SaveData): string {
   const traits = activeTraits(save.diet);
   const traitText = traits.length ? traits.map((t) => `<b>${escapeHtml(DUSTS[t].trait)}</b>`).join('・') : 'まだ目立った毛並みはない';
   return `
+    ${fav}
     ${rows || '<p class="note">バッグが空っぽ。掃除に行こう</p>'}
     ${room === 0 && bagTotal(save.bag) > 0 ? '<p class="note">おなかいっぱい（すみかがせまい）</p>' : ''}
     <div class="row-title">これまで食べたもの</div>

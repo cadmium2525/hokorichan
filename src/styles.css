@@ -1518,3 +1518,21 @@ body {
 .dex-page {
   min-height: 52vh;
 }
+
+/* 餌：なつかしの味・きょうの好物 */
+.feed-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #ece4f8;
+  color: #6b56a0;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.feed-tag--fav {
+  background: #ffe3ea;
+  color: #c0506a;
+}
