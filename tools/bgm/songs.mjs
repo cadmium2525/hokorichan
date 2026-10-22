@@ -127,8 +127,9 @@ function home() {
     tracks: [
       tr('mbox', 'オルゴール（旋律）', 'musicbox', melody(`${HOME_A}|${HOME_B}`), { volume: 3, sends: { reverb: 0.3, delay: 0.08 }, humanize: { time: 0.006, vel: 0.05 } }),
       tr('uke', 'ナイロンギター（ウクレレ風）', 'nylon', strums(prog, [[0, 0.9, 0.5], [1.5, 0.4, 0.35], [2, 0.9, 0.45], [3, 0.4, 0.3], [3.5, 0.4, 0.35]], { oct: 4 }), { volume: -4, pan: -0.25, strum: 0.018, transpose: 0, humanize: { time: 0.008, vel: 0.06 } }),
-      tr('pizz', 'ピチカート（低音）', 'pizz', bassline(prog, [[0, 'r', 0.8, 0.75], [2, '5', 0.8, 0.6], [3, 'o', 0.4, 0.45]]), {
-        volume: -2, fx: [{ type: 'eq', bands: [{ type: 'hp', freq: 60 }, { type: 'lowshelf', freq: 160, gain: -4 }] }],
+      // 低音はひかえめに：1 オクターブ上で、1 小節に 2 回だけ、そっとはじく
+      tr('pizz', 'ピチカート（低音）', 'pizz', bassline(prog, [[0, 'r', 0.8, 0.5], [2, '5', 0.8, 0.4]]), {
+        volume: -9, transpose: 12, fx: [{ type: 'eq', bands: [{ type: 'hp', freq: 110 }, { type: 'lowshelf', freq: 220, gain: -4 }] }],
       }),
       tr('glock', 'グロッケン', 'glock', arpeggio(prog, [3, 4, 5, 4], { oct: 5, step: 1, vel: 0.3, accent: 0.05 }).filter(([t]) => t % 8 >= 4), { volume: -9, pan: 0.3, sends: { reverb: 0.35, delay: 0.15 } }),
       tr('pad', 'パッド', 'airpad', pads(prog, { oct: 4, vel: 0.4 }), { volume: -14, sends: { reverb: 0.3 } }),
