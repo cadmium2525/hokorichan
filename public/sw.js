@@ -21,14 +21,34 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
   if (req.mode === 'navigate') {
+    // ゲーム本体だけを index.html としてしまう（dev.html・bgm.html はしまわない）
+    const isGame = /\/(index\.html)?$/.test(new URL(req.url).pathname);
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          if (isGame && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          }
           return res;
         })
-        .catch(() => caches.match('./index.html')),
+        .catch(() => caches.match(isGame ? './index.html' : req)),
+    );
+    return;
+  }
+
+  // BGM はファイル名が変わらないので、ネット優先（作り直した曲がすぐ届く）
+  if (new URL(req.url).pathname.includes('/bgm/')) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req)),
     );
     return;
   }

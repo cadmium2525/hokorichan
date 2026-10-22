@@ -1,0 +1,136 @@
+{
+ "tracks": [
+  {
+   "id": "home",
+   "title": "ほこりちゃんのへや",
+   "scene": "おうち（朝〜夕方）",
+   "bpm": 85,
+   "key": "F major",
+   "duration": 45.676,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 45.42648,
+   "kb": 625
+  },
+  {
+   "id": "night",
+   "title": "おひるねのこもりうた",
+   "scene": "おうち（夜・ほこりちゃんがねているとき）",
+   "bpm": 60,
+   "key": "F major",
+   "duration": 48.5,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 48.25,
+   "kb": 664
+  },
+  {
+   "id": "town",
+   "title": "まちをさんぽ",
+   "scene": "まち",
+   "bpm": 108,
+   "key": "C major",
+   "duration": 53.833,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 53.58333,
+   "kb": 737
+  },
+  {
+   "id": "cleaning",
+   "title": "おそうじタイム",
+   "scene": "おそうじ（家・町の掃除場所）",
+   "bpm": 120,
+   "key": "G major",
+   "duration": 32.5,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 32.25,
+   "kb": 445
+  },
+  {
+   "id": "contest",
+   "title": "大そうじ大会",
+   "scene": "町内会の大そうじ大会",
+   "bpm": 140,
+   "key": "A minor",
+   "duration": 27.929,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 27.67856,
+   "kb": 383
+  },
+  {
+   "id": "sky",
+   "title": "ふわふわ雲にのって",
+   "scene": "空へ",
+   "bpm": 100,
+   "key": "D major",
+   "duration": 38.9,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 38.65,
+   "kb": 533
+  },
+  {
+   "id": "world",
+   "title": "ちいさな地球儀",
+   "scene": "世界へ",
+   "bpm": 96,
+   "key": "A major",
+   "duration": 40.5,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 40.25,
+   "kb": 555
+  },
+  {
+   "id": "space",
+   "title": "ほしくずの軌道",
+   "scene": "宇宙へ",
+   "bpm": 104,
+   "key": "E minor",
+   "duration": 37.423,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 37.17308,
+   "kb": 513
+  },
+  {
+   "id": "galaxy",
+   "title": "銀河のうずまき",
+   "scene": "銀河へ",
+   "bpm": 90,
+   "key": "D major (lydian)",
+   "duration": 43.167,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 42.91667,
+   "kb": 591
+  },
+  {
+   "id": "bubbles",
+   "title": "しゃぼん玉のうちゅう",
+   "scene": "しゃぼん玉へ（終章）",
+   "bpm": 92,
+   "key": "G major",
+   "duration": 42.239,
+   "loop": true,
+   "loopStart": 0.25,
+   "loopEnd": 41.98913,
+   "kb": 578
+  },
+  {
+   "id": "finale",
+   "title": "まだおなかがすいてる",
+   "scene": "おしまいの場面（ループしない）",
+   "bpm": 70,
+   "key": "F major",
+   "duration": 84.466,
+   "loop": false,
+   "loopStart": null,
+   "loopEnd": null,
+   "kb": 1156
+  }
+ ]
+}
