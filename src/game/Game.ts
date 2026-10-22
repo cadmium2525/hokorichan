@@ -16,6 +16,7 @@ import { SkyScene } from '../scenes/SkyScene.ts';
 import { TownScene } from '../scenes/TownScene.ts';
 import { pickTalk, type TownPerson } from './talk.ts';
 import { dayPhase, isSleepTime } from './clock.ts';
+import { bgmFor } from './music.ts';
 import type { GameScene } from '../scenes/types.ts';
 import { Hud, type ButtonSpec } from '../ui/hud.ts';
 import { canShareImage, makePhotoCard, savePhoto, shareImage, type Photo } from '../ui/photo.ts';
@@ -549,6 +550,8 @@ const BUILDING_IDS: readonly BuildingId[] = ['home', 'shop', 'friend', 'lot', 'f
 export class Game {
   private save: SaveData;
   private mode: Mode = 'BOOT';
+  /** おしまいの曲を流している（最後のお話 〜 夢からさめるか選ぶまで） */
+  private finaleMusic = false;
   private overlay: Overlay = 'none';
   /** 大掃除大会の最中なら開始時刻 */
   private contest: { startedAt: number; lastLeft: number; wave: number; seed: number; missed: number } | null = null;
@@ -1268,6 +1271,7 @@ export class Game {
 
   /** 最後の場面：お話 → 画面が真っ白に → 小さな綿ぼこり → 「……まだ、たべられるよ？」 */
   private startFinale(): void {
+    this.finaleMusic = true;
     this.runStory(FINALE_STORY, 'すべてのほこり級', () => {
       this.hud.finale('もう、\nこれ以上おおきくなれないみたい。', '……まだ、たべられるよ？', 'ほこりちゃん', () => {
         this.commit(addEvent(this.save, 'finale'));
@@ -1299,6 +1303,7 @@ export class Game {
   private doWakeUp(): void {
     if (!canWakeUp(this.save)) return;
     this.closeModal();
+    this.finaleMusic = false;
     this.commit(wakeUp(this.save));
     this.sound.play('happy');
     this.goHome();
@@ -2224,6 +2229,7 @@ export class Game {
         this.doWakeUp();
         return;
       case 'stayDream':
+        this.finaleMusic = false;
         this.sound.play('tap');
         this.closeModal();
         this.refreshHud();
@@ -2614,6 +2620,7 @@ export class Game {
     };
     window.addEventListener('blur', pause);
     document.addEventListener('visibilitychange', () => {
+      this.sound.setPaused(document.hidden);
       if (document.hidden) {
         pause();
         writeSave(this.save);
@@ -2701,6 +2708,14 @@ export class Game {
     const time = timeMs / 1000;
     const dt = this.lastTime === 0 ? 0 : Math.min(0.05, time - this.lastTime);
     this.lastTime = time;
+
+    const bgm = bgmFor({
+      mode: this.mode,
+      contest: !!this.contest,
+      sleepy: this.mode === 'HOME' && this.save.tutorialDone && isSleepTime(this.hour),
+      finale: this.finaleMusic,
+    });
+    if (bgm) this.sound.music(bgm);
 
     if (this.autoFinishTimer > 0 && !this.hud.modalOpen) {
       this.autoFinishTimer -= dt;

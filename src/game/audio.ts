@@ -1,4 +1,5 @@
-// 効果音はすべてWeb Audioで合成する。音源ファイルは使わない。
+// 効果音はすべてWeb Audioで合成する。BGMだけは public/bgm/ の mp3（tools/bgm で作曲）を鳴らす。
+import type { BgmId } from './music.ts';
 
 export type SoundName = 'collect' | 'reward' | 'feed' | 'happy' | 'upgrade' | 'dry' | 'tap' | 'deny';
 
@@ -22,10 +23,29 @@ const SOUNDS: Record<SoundName, Note[]> = {
   deny: [{ freq: 200, at: 0, dur: 0.12, type: 'square', gain: 0.05, slide: 150 }],
 };
 
+/** public/bgm/bgm.json の1曲ぶん（ループの位置は秒） */
+interface BgmInfo {
+  id: string;
+  loop: boolean;
+  loopStart: number | null;
+  loopEnd: number | null;
+}
+
+/** BGMの音量（効果音より控えめに） */
+const MUSIC_GAIN = 0.5;
+/** 曲の切りかえのクロスフェード（秒） */
+const MUSIC_FADE = 1.0;
+
 export class Sound {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
   private hum: { osc: OscillatorNode; gain: GainNode } | null = null;
+  private manifest: Promise<Map<string, BgmInfo>> | null = null;
+  /** mp3 のまま持っておく（デコード済みは大きいので、いま鳴らす曲だけ） */
+  private encoded = new Map<string, Promise<ArrayBuffer | null>>();
+  private wantMusic: BgmId | null = null;
+  private current: { id: BgmId; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private musicToken = 0;
   enabled: boolean;
 
   constructor(enabled: boolean) {
@@ -44,6 +64,7 @@ export class Sound {
         this.master.connect(this.ctx.destination);
       }
       if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (this.wantMusic && !this.current) void this.startMusic();
     } catch {
       this.ctx = null;
     }
@@ -51,7 +72,94 @@ export class Sound {
 
   setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (!enabled) this.stopHum();
+    if (!enabled) {
+      this.stopHum();
+      this.fadeOutMusic(0.3);
+    } else if (this.wantMusic) void this.startMusic();
+  }
+
+  /** アプリが裏に回ったら止め、もどったら続きから */
+  setPaused(paused: boolean): void {
+    if (!this.ctx) return;
+    if (paused && this.ctx.state === 'running') void this.ctx.suspend();
+    else if (!paused && this.ctx.state === 'suspended') void this.ctx.resume();
+  }
+
+  /** この曲を流す（同じ曲ならそのまま。ちがえばクロスフェード） */
+  music(id: BgmId): void {
+    if (this.wantMusic === id) return;
+    this.wantMusic = id;
+    void this.startMusic();
+  }
+
+  private async startMusic(): Promise<void> {
+    const id = this.wantMusic;
+    if (!id || !this.enabled || !this.ctx || !this.master || this.current?.id === id) return;
+    const token = ++this.musicToken;
+    const [info, bytes] = await Promise.all([this.bgmInfo(id), this.bgmBytes(id)]);
+    if (token !== this.musicToken || !info || !bytes || !this.ctx || !this.master) return;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.ctx.decodeAudioData(bytes.slice(0));
+    } catch {
+      return;
+    }
+    // 読みこむあいだに曲が変わったり、音を消されたりしたら鳴らさない
+    if (token !== this.musicToken || !this.enabled || this.wantMusic !== id) return;
+    this.fadeOutMusic(MUSIC_FADE);
+    const ctx = this.ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    if (info.loop && info.loopStart !== null && info.loopEnd !== null) {
+      src.loop = true;
+      src.loopStart = info.loopStart;
+      src.loopEnd = info.loopEnd;
+    }
+    const gain = ctx.createGain();
+    const now = ctx.currentTime;
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(MUSIC_GAIN, now + MUSIC_FADE);
+    src.connect(gain).connect(this.master);
+    src.start(now, info.loopStart ?? 0);
+    // ループしない曲（おしまい）は鳴り終わっても current に残し、タップでまた始まらないようにする
+    this.current = { id, src, gain };
+  }
+
+  private fadeOutMusic(seconds: number): void {
+    const cur = this.current;
+    this.current = null;
+    if (!cur || !this.ctx) return;
+    const t = this.ctx.currentTime;
+    cur.gain.gain.cancelScheduledValues(t);
+    cur.gain.gain.setValueAtTime(cur.gain.gain.value, t);
+    cur.gain.gain.linearRampToValueAtTime(0, t + seconds);
+    cur.src.stop(t + seconds + 0.05);
+  }
+
+  private bgmInfo(id: BgmId): Promise<BgmInfo | undefined> {
+    this.manifest ??= fetch('bgm/bgm.json')
+      .then((r) => (r.ok ? (r.json() as Promise<{ tracks: BgmInfo[] }>) : { tracks: [] }))
+      .then((m) => new Map(m.tracks.map((t) => [t.id, t])))
+      .catch(() => {
+        this.manifest = null; // 通信できなかったら、次の曲のときにもう一度
+        return new Map<string, BgmInfo>();
+      });
+    return this.manifest.then((m) => m.get(id));
+  }
+
+  private bgmBytes(id: BgmId): Promise<ArrayBuffer | null> {
+    let p = this.encoded.get(id);
+    if (!p) {
+      p = fetch(`bgm/${id}.mp3`)
+        .then((r) => (r.ok ? r.arrayBuffer() : null))
+        .catch(() => null)
+        .then((b) => {
+          if (!b) this.encoded.delete(id);
+          return b;
+        });
+      this.encoded.set(id, p);
+    }
+    return p;
   }
 
   play(name: SoundName): void {

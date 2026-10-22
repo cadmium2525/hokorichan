@@ -38,6 +38,19 @@ npm test           # ルールとセーブデータのユニットテスト（No
 リポジトリの Settings → Pages → Build and deployment → Source を **GitHub Actions** にしてください
 （「Deploy from a branch」のままだとビルド前のソースが配信され、ゲームが起動しません）。
 
+### BGM
+
+BGM は [かなでる](https://github.com/cadmium2525/mp4mp3)（`daw/`）のエンジンで作曲しています。曲は `tools/bgm/songs.mjs`。
+試聴ページは `bgm.html`（公開先の `/bgm.html`）。作り直すときは：
+
+```bash
+git clone https://github.com/cadmium2525/mp4mp3 ../mp4mp3
+node tools/bgm/build.mjs ../mp4mp3/daw          # 全曲（曲 id を並べるとその曲だけ）
+```
+
+`public/bgm/<id>.mp3` とループ位置の `public/bgm/bgm.json` ができます（ffmpeg が必要）。
+どの場面でどの曲かは `src/game/music.ts`。
+
 ### テスト用 URL パラメータ
 
 - `?seed=123` … 部屋の配置・ホコリ・湿気判定の乱数を固定
