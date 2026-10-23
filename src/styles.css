@@ -1795,3 +1795,78 @@ body {
 .modal-layer--sheet .modal__actions {
   flex-shrink: 0;
 }
+
+/* ---- タイトル画面（真ん中はあけて、後ろのほこりちゃんを見せる） ---- */
+
+.title-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: calc(var(--safe-top) + 12vh) 24px calc(var(--safe-bottom) + 10vh);
+  background: linear-gradient(to bottom, rgba(255, 246, 234, 0.96) 0%, rgba(255, 246, 234, 0.75) 30%, rgba(255, 246, 234, 0) 48%, rgba(255, 246, 234, 0) 66%, rgba(255, 246, 234, 0.9) 86%);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.45s ease;
+}
+
+.title-screen--out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.title-screen__logo {
+  text-align: center;
+}
+
+.title-screen__logo h1 {
+  margin: 0;
+  font-size: clamp(38px, 12vw, 52px);
+  letter-spacing: 0.04em;
+  color: var(--pink-deep);
+  text-shadow:
+    3px 3px 0 #fff,
+    -3px 3px 0 #fff,
+    3px -3px 0 #fff,
+    -3px -3px 0 #fff,
+    0 6px 0 var(--lavender);
+}
+
+.title-screen__logo p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.title-screen__tap {
+  padding: 12px 26px;
+  border-radius: 999px;
+  background: var(--paper);
+  border: 2px solid var(--pink);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 16px;
+  animation: title-tap 1.6s ease-in-out infinite;
+}
+
+@keyframes title-tap {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.55;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-screen__tap {
+    animation: none;
+  }
+}

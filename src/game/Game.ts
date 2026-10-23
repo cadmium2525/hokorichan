@@ -648,12 +648,17 @@ export class Game {
   }
 
   start(): void {
+    // タイトル画面を先に出す（このあとのお知らせは、タイトルを閉じてから出る）
+    const note = this.save.loop > 0 ? `${this.save.loop + 1}周目` : 'おそうじして、ごはんをあげて、そだてよう';
+    this.hud.title(note, () => {
+      this.sound.unlock();
+      if (!this.save.hero) this.showHeroSelect();
+      else if (!this.save.tutorialDone) this.startStory();
+    });
     if (this.save.tutorialDone) this.protectStorage();
     this.resize();
     this.tickRequests(false);
     this.goHome();
-    if (!this.save.hero) this.showHeroSelect();
-    else if (!this.save.tutorialDone) this.startStory();
     this.renderer.renderer.setAnimationLoop((t) => this.frame(t));
   }
 

@@ -67,6 +67,9 @@ export class Hud {
   readonly stage: HTMLElement;
   private readonly el: Record<string, HTMLElement> = {};
   private toastTimer = 0;
+  /** タイトル画面のあいだに来たお知らせ（閉じてから出す） */
+  private titleOpen = false;
+  private pendingToast: [string, number] | null = null;
   private lastActions = '';
   private modalBody = '';
 
@@ -98,6 +101,7 @@ export class Hud {
         </main>
         <footer class="hud-bottom"><div class="actions" data-ref="actions"></div></footer>
         <div class="modal-layer" data-ref="modal" hidden></div>
+        <div class="title-screen" data-ref="title" hidden></div>
       </div>`;
     root.querySelectorAll<HTMLElement>('[data-ref]').forEach((node) => {
       this.el[node.dataset.ref as string] = node;
@@ -309,7 +313,43 @@ export class Hud {
     el.hidden = false;
   }
 
+  /**
+   * タイトル画面。後ろにはおうちのほこりちゃんが見えている。
+   * スマホは最初のタップまで音を出せないので、ここでタップしてもらってから始める
+   */
+  title(note: string, onStart: () => void): void {
+    const el = this.el.title;
+    el.innerHTML = `
+      <div class="title-screen__logo">
+        <h1>ほこりちゃん</h1>
+        <p>${escapeHtml(note)}</p>
+      </div>
+      <div class="title-screen__tap">タップしてはじめる</div>`;
+    el.hidden = false;
+    this.titleOpen = true;
+    el.addEventListener(
+      'click',
+      () => {
+        this.titleOpen = false;
+        const pending = this.pendingToast;
+        this.pendingToast = null;
+        if (pending) this.toast(...pending);
+        el.classList.add('title-screen--out');
+        window.setTimeout(() => {
+          el.hidden = true;
+          el.classList.remove('title-screen--out');
+        }, 450);
+        onStart();
+      },
+      { once: true },
+    );
+  }
+
   toast(text: string, ms = 2200): void {
+    if (this.titleOpen) {
+      this.pendingToast = [text, ms];
+      return;
+    }
     const el = this.el.toast;
     el.textContent = text;
     el.hidden = false;

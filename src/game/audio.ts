@@ -89,6 +89,11 @@ export class Sound {
   music(id: BgmId): void {
     if (this.wantMusic === id) return;
     this.wantMusic = id;
+    // 音を出せる前（タイトル画面）から読みこんでおき、タップしたらすぐ鳴らす
+    if (this.enabled) {
+      void this.bgmInfo(id);
+      void this.bgmBytes(id);
+    }
     void this.startMusic();
   }
 
