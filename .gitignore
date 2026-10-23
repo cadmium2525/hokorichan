@@ -1,3 +1,5 @@
 node_modules
 dist
 tools/bgm/out/
+tools/pv/*.mp4
+tools/pv/frames_*/

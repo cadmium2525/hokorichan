@@ -1,0 +1,325 @@
+{
+ "version": 1,
+ "name": "ほこりちゃん PV",
+ "width": 1080,
+ "height": 1920,
+ "fps": 30,
+ "background": "#fff6ea",
+ "fadeOut": 0.8,
+ "media": {
+  "bgm1": {
+   "name": "home.mp3"
+  },
+  "bgm2": {
+   "name": "sky.mp3"
+  },
+  "c_titleDesk": {
+   "name": "titleDesk.webm"
+  },
+  "c_clean": {
+   "name": "clean.webm"
+  },
+  "c_feed": {
+   "name": "feed.webm"
+  },
+  "c_town": {
+   "name": "town.webm"
+  },
+  "c_sky": {
+   "name": "sky.webm"
+  },
+  "c_world": {
+   "name": "world.webm"
+  },
+  "c_space": {
+   "name": "space.webm"
+  },
+  "c_galaxy": {
+   "name": "galaxy.webm"
+  },
+  "c_bubbles": {
+   "name": "bubbles.webm"
+  }
+ },
+ "clips": [
+  {
+   "media": "c_titleDesk",
+   "in": 0,
+   "out": 2.6,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_clean",
+   "in": 0.8,
+   "out": 5,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_feed",
+   "in": 0.6,
+   "out": 4.6,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_town",
+   "in": 0.8,
+   "out": 4.2,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_sky",
+   "in": 0.8,
+   "out": 3.8,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_world",
+   "in": 0.6,
+   "out": 3.6,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_space",
+   "in": 0.8,
+   "out": 3.8,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_galaxy",
+   "in": 0.6,
+   "out": 3.8,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_bubbles",
+   "in": 0.8,
+   "out": 3.6,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  },
+  {
+   "media": "c_titleDesk",
+   "in": 0,
+   "out": 2.7,
+   "speed": 1,
+   "volume": 0,
+   "fit": "cover",
+   "transition": {
+    "type": "none",
+    "duration": 0
+   }
+  }
+ ],
+ "overlays": [],
+ "motions": [],
+ "texts": [
+  {
+   "text": "ちいさな綿ぼこりを\n育てよう",
+   "start": 0,
+   "end": 2.5,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.06,
+   "y": 0.68,
+   "anim": "pop"
+  },
+  {
+   "text": "① おそうじ",
+   "start": 2.75,
+   "end": 6.700000000000001,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.072,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "② ごはん",
+   "start": 6.950000000000001,
+   "end": 10.700000000000001,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.072,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "③ おおきく！",
+   "start": 8.700000000000001,
+   "end": 10.700000000000001,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.072,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "町づくり",
+   "start": 10.950000000000001,
+   "end": 14.100000000000001,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.072,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "空へ",
+   "start": 14.350000000000001,
+   "end": 17.1,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.09,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "世界へ",
+   "start": 17.35,
+   "end": 20.1,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.09,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "宇宙へ",
+   "start": 20.35,
+   "end": 23.1,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.09,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "銀河へ",
+   "start": 23.35,
+   "end": 26.3,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.09,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "そのさきは……？",
+   "start": 26.55,
+   "end": 29.1,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.075,
+   "y": 0.29,
+   "anim": "pop"
+  },
+  {
+   "text": "スマホですぐ遊べる\n完全無料",
+   "start": 29.400000000000002,
+   "end": 31.900000000000002,
+   "style": "pop",
+   "font": "rounded",
+   "size": 0.06,
+   "y": 0.67,
+   "anim": "pop"
+  },
+  {
+   "text": "cadmium2525.github.io/hokorichan",
+   "start": 29.900000000000002,
+   "end": 31.900000000000002,
+   "style": "subtitle",
+   "font": "gothic",
+   "size": 0.04,
+   "y": 0.76,
+   "anim": "fade"
+  }
+ ],
+ "shapes": [],
+ "effects": [
+  {
+   "type": "sparkle",
+   "start": 27.000000000000004,
+   "end": 29.200000000000003,
+   "intensity": 0.5
+  },
+  {
+   "type": "sparkle",
+   "start": 29.500000000000004,
+   "end": 31.900000000000002,
+   "intensity": 0.5
+  }
+ ],
+ "audios": [
+  {
+   "media": "bgm1",
+   "start": 0,
+   "in": 0.25,
+   "out": 18.650000000000002,
+   "volume": 1.35,
+   "fadeIn": 0,
+   "fadeOut": 1.2
+  },
+  {
+   "media": "bgm2",
+   "start": 17.200000000000003,
+   "in": 0.25,
+   "volume": 1.35,
+   "fadeIn": 1.2,
+   "fadeOut": 1.2,
+   "loop": true
+  }
+ ]
+}
